@@ -1,0 +1,21 @@
+body.carousel-view{overflow:hidden;background:#f7faff}
+body.carousel-view .sidebar,body.carousel-view .sidebar-overlay,body.carousel-view .topbar{display:none!important}
+body.carousel-view .main{margin-left:0!important;min-height:100dvh}
+body.carousel-view .content{padding:8px 14px 0!important;height:100dvh;overflow:hidden}
+body.carousel-view #page-bombeiro,body.carousel-view #page-sprint-panel{height:100%;overflow:hidden}
+body.carousel-view #page-bombeiro.active,body.carousel-view #page-sprint-panel.active{animation:carousel-show .35s ease-out}
+@keyframes carousel-show{from{opacity:.35;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+#carousel-controls[hidden]{display:none!important}
+#carousel-controls{position:fixed;top:17px;right:28px;z-index:100;display:flex;align-items:center;gap:6px;max-width:calc(100vw - 260px);padding:6px 8px;border:1px solid rgba(255,255,255,.45);border-radius:11px;background:rgba(10,32,93,.86);color:#fff;box-shadow:0 7px 24px rgba(17,37,91,.22);backdrop-filter:blur(9px);font:600 11px 'DM Sans',sans-serif}
+#carousel-controls button,#carousel-controls select{border:1px solid rgba(255,255,255,.22);border-radius:7px;background:rgba(255,255,255,.13);color:#fff;padding:6px 8px;font:700 11px 'DM Sans',sans-serif;cursor:pointer;white-space:nowrap}
+#carousel-controls button:hover,#carousel-controls select:hover{background:rgba(255,255,255,.25)}
+#carousel-controls select option{color:#14264a;background:#fff}
+#carousel-controls label{display:flex;align-items:center;gap:5px;white-space:nowrap}
+#carousel-current{font-weight:800;white-space:nowrap;padding:0 5px}
+#carousel-status{position:absolute;top:100%;right:8px;padding:4px 8px;border-radius:0 0 7px 7px;background:rgba(10,32,93,.72);color:#fff;font-size:9px;white-space:nowrap}
+body.carousel-view #page-bombeiro .fire-hero,body.carousel-view #page-sprint-panel .fire-hero{min-height:102px}
+body.carousel-view #page-bombeiro .fire-hero::before,body.carousel-view #page-sprint-panel .fire-hero::before{right:210px}
+body.carousel-view #page-bombeiro .fire-hero::after,body.carousel-view #page-sprint-panel .fire-hero::after{right:180px}
+@media(max-width:1050px){#carousel-controls{top:auto;bottom:10px;right:10px;max-width:calc(100vw - 20px);flex-wrap:wrap;justify-content:center}#carousel-status{display:none}}
+@media(max-width:620px){#carousel-controls{font-size:10px}#carousel-controls button,#carousel-controls select{font-size:10px;padding:5px}#carousel-current{width:100%;text-align:center}}
+@media(prefers-reduced-motion:reduce){body.carousel-view #page-bombeiro.active,body.carousel-view #page-sprint-panel.active{animation:none}}
