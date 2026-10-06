@@ -15,7 +15,7 @@ window.Bombeiro = (() => {
   }
   function statusBucket(status) {
     const value = normalized(status);
-    return value === 'backlog' ? 'backlog' : value === 'implementado' ? 'done' : 'progress';
+    return value === 'backlog' ? 'backlog' : ['implementado', 'cancelado'].includes(value) ? 'done' : 'progress';
   }
   function priorityMeta(priority) {
     const label = String(priority ?? '').trim() || 'Não informada';
@@ -64,12 +64,13 @@ window.Bombeiro = (() => {
     return tag;
   }
   function card(row, bucket) {
+    const cancelled = normalized(row.Status) === 'cancelado';
     const node = document.createElement('article');
-    node.className = 'fire-task' + (state.newIds.has(String(row.Id)) ? ' new' : '');
+    node.className = 'fire-task' + (cancelled ? ' cancelled' : '') + (state.newIds.has(String(row.Id)) ? ' new' : '');
     const title = document.createElement('div');
     title.className = 'fire-task-title';
     title.append(document.createTextNode(String(row.Nome || 'Sem título')));
-    if (bucket === 'progress') {
+    if (bucket === 'progress' || cancelled) {
       const suffix = document.createElement('span');
       suffix.className = 'fire-original-status';
       suffix.textContent = ` (${String(row.Status || '').trim() || 'Status não informado'})`;

@@ -146,6 +146,8 @@ GRAPHQL;
                     'ValorAgregado' => $this->flag($this->text($item, $map['ValorAgregado'] ?? null)),
                     'EstH' => $this->hours($item, $map['EstH'] ?? null),
                     'RealH' => $this->hours($item, $map['RealH'] ?? null),
+                    'RemainingH' => $this->hours($item, $map['RemainingH'] ?? null),
+                    'Impedimento' => $this->text($item, $map['Impedimento'] ?? null),
                 ];
             }
         }

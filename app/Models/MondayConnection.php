@@ -14,6 +14,7 @@ class MondayConnection extends Model
             'token' => 'encrypted',
             'column_map' => 'array',
             'capacity_overrides' => 'array',
+            'forecast_settings' => 'array',
             'refresh_minutes' => 'integer',
         ];
     }

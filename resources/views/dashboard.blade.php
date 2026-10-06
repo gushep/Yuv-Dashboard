@@ -209,6 +209,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="sprint-panel.css">
 <link rel="stylesheet" href="panel-carousel.css">
 <link rel="stylesheet" href="capacity.css">
+<link rel="stylesheet" href="forecast.css">
 </head>
 <body>
 <aside class="sidebar" id="sidebar">
@@ -258,6 +259,10 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <div class="nav-item" onclick="navigate('capacity')" id="nav-capacity">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18M6 17V9m6 8V4m6 13v-6"/><circle cx="6" cy="7" r="1"/><circle cx="12" cy="2" r="1"/><circle cx="18" cy="9" r="1"/></svg>
       Capacity
+    </div>
+    <div class="nav-item" onclick="navigate('forecast')" id="nav-forecast">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M6 15l5-6 4 3 6-8"/></svg>
+      Previsibilidade
     </div>
     <div class="nav-item" onclick="navigate('settings')" id="nav-settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
@@ -438,6 +443,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       </div>
     </div>
 
+    @include('forecast')
     <!-- CAPACITY -->
     <div class="page" id="page-capacity">
       <header class="cap-hero">
@@ -684,13 +690,14 @@ function navigate(page,sp=null){
   if(previousPage==='sprint-panel'&&page!=='sprint-panel') window.SprintPanel?.leave();
   if(previousPage==='carousel'&&page!=='carousel') window.PanelCarousel?.leave();
   if(previousPage==='capacity'&&page!=='capacity') window.Capacity?.leave();
+  if(previousPage==='forecast'&&page!=='forecast') window.Forecast?.leave();
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   currentPage=page; currentSprint=sp;
   const ni=document.getElementById('nav-'+page);
   if(ni) ni.classList.add('active');
   document.getElementById('page-'+page)?.classList.add('active');
-  const titles={dashboard:['Dashboard',`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`],sprint:[`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],settings:['Configurações','integração com Monday']};
+  const titles={dashboard:['Dashboard',`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`],sprint:[`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],settings:['Configurações','integração com Monday']};
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
@@ -705,6 +712,7 @@ function navigate(page,sp=null){
   else if(page==='sprint-panel') window.SprintPanel?.enter(previousPage==='sprint'?previousSprint:null);
   else if(page==='carousel') window.PanelCarousel?.enter(previousPage==='sprint-panel'?1:0,previousPage==='sprint'?previousSprint:null);
   else if(page==='capacity') window.Capacity?.enter(previousPage==='sprint'?previousSprint:null);
+  else if(page==='forecast') window.Forecast?.enter(previousPage==='sprint'?previousSprint:null);
   if(page==='carousel') scheduleMondayRefresh();
   if((previousPage==='bombeiro'&&page!=='bombeiro')||(previousPage==='sprint-panel'&&page!=='sprint-panel')||(previousPage==='carousel'&&page!=='carousel')) scheduleMondayRefresh();
 }
@@ -1249,6 +1257,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   else if(location.hash==='#sprint-panel') navigate('sprint-panel');
   else if(location.hash==='#carousel') navigate('carousel');
   else if(location.hash==='#capacity') navigate('capacity');
+  else if(location.hash==='#forecast') navigate('forecast');
 });
 </script>
 <script src="monday-client.js"></script>
@@ -1256,5 +1265,6 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script src="sprint-panel.js"></script>
 <script src="panel-carousel.js"></script>
 <script src="capacity.js"></script>
+<script src="forecast.js"></script>
 </body></html>
 

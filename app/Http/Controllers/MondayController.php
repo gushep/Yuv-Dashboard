@@ -17,7 +17,7 @@ class MondayController extends Controller
 
     private const FIELDS = [
         'Responsavel', 'Status', 'Prioridade', 'Tipo', 'EstH', 'RealH',
-        'Epico', 'Sprint', 'Planejada', 'Retrabalho', 'BugProducao', 'ValorAgregado',
+        'Epico', 'Sprint', 'Planejada', 'Retrabalho', 'BugProducao', 'ValorAgregado', 'RemainingH', 'Impedimento',
     ];
 
     public function config(): JsonResponse

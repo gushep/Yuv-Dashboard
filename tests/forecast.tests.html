@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Previsibilidade · testes</title>
+<link rel="stylesheet" href="../public/capacity.css"><link rel="stylesheet" href="../public/forecast.css">
+<div id="fixture"></div><select id="cap-sprint" hidden></select><select id="cap-developer" hidden></select>
+<pre id="test-result">RUNNING</pre>
+<script>
+const DATA = [], dates = {start:'2026-09-28',end:'2026-10-09'};
+let failed = false, refreshed = 0, writes = 0;
+const row = (Id, Responsavel='Ana', Status='Em progresso', EstH=10, RealH=2, extra={}) => ({Id,Nome:`Tarefa ${Id}`,Responsavel,Status,EstH,RealH,Sprint:17,Tipo:'Melhoria',Planejada:'Planejada',...extra});
+window.mondayRequest = async (path, body) => {
+  if (body) { writes++; throw new Error('Esta tela não pode gravar dados.'); }
+  if (failed) throw new Error('Falha de teste');
+  if (path !== '/api/capacity') throw new Error('Capacidade deve usar a leitura existente.');
+  return {overrides:{'17|Bia':2400},settings:{revisions:{'17|20|Ana':{minutes:0}},adjustments:{'17|Ana':[{date:'2026-10-08',minutes:480}]},thresholds:{low:99,limit:100}}};
+};window.syncMonday = async () => { refreshed++; Forecast.onLoading(); Forecast.onDataUpdated(); Forecast.onSyncComplete(); };
+window.MONDAY_SPRINT_DATES={17:dates,18:dates};
+window.MONDAY_LIVE_SPRINTS=new Set([17,18]);
+window.MONDAY_LAST_SYNC='2026-10-06T12:00:00-03:00';
+(async () => {
+  const checks=[];
+  const check = (name,condition) => { checks.push(`${condition?'PASS':'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+  try {
+    document.getElementById('fixture').innerHTML=await (await fetch('../resources/views/forecast.blade.php')).text();
+    const dashboard= new DOMParser().parseFromString(await (await fetch('../resources/views/dashboard.blade.php')).text(),'text/html');
+    document.head.insertBefore(dashboard.querySelector('style').cloneNode(true),document.head.querySelector('link'));
+    document.querySelector('#page-forecast img').src='../public/yuv-logo.png';
+    for (const source of ['bombeiro','sprint-panel','capacity','forecast']) await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=`../public/${source}.js`;script.onload=resolve;script.onerror=reject;document.body.append(script);});
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    check('Normalização em minutos',Forecast.duration('1h30')===90 && Forecast.duration('1,5')===90 && Forecast.duration('1:30')===90 && Forecast.duration('90m')===90 && Forecast.format(90)==='1h 30min');
+    check('Ausência e duração inválida',Forecast.duration(null)===null && Forecast.duration(' ' )===null && Forecast.duration('1h90')===null && Forecast.duration(-1)===null && Forecast.duration(0)===0);
+    check('Calendário com fim do dia como corte',Forecast.capacity(4800,dates,'2026-10-06').remaining===1440 && Forecast.capacity(4800,dates,'2026-10-06').days===3);
+    check('Antes, depois, fim de semana e datas inválidas',Forecast.capacity(4800,dates,'2026-09-27').remaining===4800 && Forecast.capacity(4800,dates,'2026-10-10').remaining===0 && Forecast.workingDays('2026-10-03','2026-10-04').length===0 && Forecast.capacity(4800,null,'2026-10-06').remaining===null && Forecast.workingDays('2026-02-30','2026-03-01')===null);
+    check('Feriado',Forecast.capacity(4800,dates,'2026-10-06',['2026-10-08']).remaining===1067);
+    const fixtures=[row('1','Ana','Implementado'),row('2','Ana','Cancelado'),row('3','Ana','Backlog',4,null),row('4','Ana','Em progresso',10,2),row('4','Ana','Em progresso',10,2),row('5','Ana','Em progresso',5,5),row('6','Ana','Em progresso',5,null),row('7','Ana','Em progresso',null,1),row('8','Ana, Bia','Backlog',10,0),row('9','Ana','Em progresso',4,1,{Sprint:18}),row('9','Ana','Em progresso',4,1),row('10','','Backlog',1,0),row('11','Bia','Backlog',2,null,{Planejada:'Não Planejado',Tipo:'Suporte'}),row('12','Ana','Em progresso',2,3,{RemainingH:1.5}),row('13','Ana','Em progresso',0,0)];
+    let result=Forecast.model(fixtures,17,dates,{},'2026-10-06'), ana=result.developers.find(dev=>dev.name==='Ana'), bia=result.developers.find(dev=>dev.name==='Bia');
+    check('Concluídos excluídos e IDs deduplicados',ana.tasks.length===9 && ana.tasks.every(task=>!['1','2'].includes(task.row.Id)));
+    check('Somar não iniciadas, estimativa menos apontamento e esforço revisado',ana.known===810 && ana.missing===6 && bia.known===120 && bia.missing===1);
+    check('Consumidas, sem apontamento, compartilhadas e acumuladas exigem revisão',ana.tasks.find(task=>task.row.Id==='5').remainingEffort===null && ana.tasks.find(task=>task.row.Id==='6').remainingEffort===null && ana.tasks.find(task=>task.row.Id==='8').remainingEffort===null && ana.tasks.find(task=>task.row.Id==='9').remainingEffort===null && result.unassigned.length===1);
+    check('Previsão incompleta não declara folga',ana.status==='unknown' && Forecast.balance(ana)==='Revisar estimativas');
+    for (const [known,status] of [[49,'low'],[50,'within'],[89,'within'],[90,'limit'],[100,'limit'],[101,'over']]) check(`Faixa ${known}%`,Forecast.classify(known,100,0,1)===status);
+    check('Capacidade zero e sem divisão',Forecast.classify(1,0,0,1)==='over' && Forecast.classify(0,0,1,1)==='unknown' && Forecast.classify(0,0,0,0)==='empty' && Forecast.classify(0,0,0,1)==='unknown');
+    check('Excesso conhecido com previsão incompleta',Forecast.balance({status:'over',known:180,available:120,missing:1})==='pelo menos 1h a mais' && Forecast.classify(180,120,1,2)==='over');
+    check('Folga e empate com texto',Forecast.balance({status:'within',known:60,available:120,missing:0})==='1h de folga' && Forecast.balance({status:'limit',known:120,available:120,missing:0})==='Sem folga');
+    check('Apontamento ausente em andamento não vira zero',Forecast.model([row(undefined,'Ana','Em progresso',10,null)],17,dates,{},'2026-10-06').developers[0].missing===1);
+    check('Status não iniciado usa o mapeamento da sprint',Forecast.model([row('14','Ana','Pronto pra começar',2,null)],17,dates,{},'2026-10-06').developers[0].known===120);
+    check('Pessoa duplicada não divide nem duplica esforço',Forecast.model([row('15','Ana, Ana','Backlog',2,0)],17,dates,{},'2026-10-06').developers[0].known===120);
+    check('Esforço restante revisado no Monday tem prioridade',Forecast.model([row('16','Ana','Em progresso',1,2,{RemainingH:0})],17,dates,{},'2026-10-06').developers[0].missing===0);
+    check('10h estimadas menos 4h apontadas resulta em 6h',Forecast.model([row('17','Ana','Em progresso',10,4)],17,dates,{},'2026-10-06').developers[0].known===360);
+    DATA.push(row('20','Ana','Backlog',30,null,{Impedimento:'Aguardando acesso',Nome:'<img src=x onerror="window.injection=true">',Url:'javascript:alert(1)'}),row('21','Bia','Backlog',8,null),row('22','Cris','Backlog',2,null,{Sprint:18}));
+    Forecast.enter(17);await tick();document.getElementById('page-forecast').classList.add('active');
+    const ref=document.getElementById('forecast-reference');ref.value='2026-10-06';ref.dispatchEvent(new Event('change'));
+    check('Render real, ordenação de excesso e impedimento',document.querySelector('#forecast-body tr').textContent.includes('Ana') && document.getElementById('forecast-body').textContent.includes('6h a mais') && document.getElementById('forecast-body').textContent.includes('1 impedimento'));
+    document.querySelector('#forecast-body .cap-dev-button').click();
+    check('Expansão, segurança e origem detalhada',document.querySelector('.forecast-detail') && !document.querySelector('.forecast-detail img') && !document.querySelector('.forecast-detail a') && document.querySelector('.forecast-detail').textContent.includes('Estimativa total · tarefa não iniciada'));
+    check('Rolagem horizontal fica restrita à tabela',document.documentElement.scrollWidth<=window.innerWidth);
+    if (new URLSearchParams(location.search).has('preview')) { document.getElementById('test-result').hidden=true; return; }
+    check('Sem edição local na interface',!document.querySelector('#page-forecast form') && !document.getElementById('forecast-configure'));
+    check('Revisão e reserva locais ignoradas, capacidade herdada',document.getElementById('forecast-body').textContent.includes('6h a mais') && document.getElementById('forecast-body').textContent.includes('12h'));    const filter=document.getElementById('forecast-developer');filter.value='Bia';filter.dispatchEvent(new Event('change'));
+    check('Filtro por desenvolvedor',document.querySelectorAll('#forecast-body>.forecast-dev-row').length===1 && document.getElementById('forecast-body').textContent.includes('Bia'));
+    const sprint=document.getElementById('forecast-sprint');sprint.value='18';sprint.dispatchEvent(new Event('change'));
+    check('Filtro sprint e reset do desenvolvedor',document.getElementById('forecast-body').textContent.includes('Cris') && !document.getElementById('forecast-body').textContent.includes('Bia'));
+    document.getElementById('forecast-refresh').click();await tick();check('Atualização preserva a seleção da sprint',refreshed===1 && document.getElementById('forecast-sprint').value==='18');
+    Forecast.onError('Sem conexão');check('Falha de atualização é visível',!document.getElementById('forecast-error').hidden && document.getElementById('forecast-error').textContent.includes('Sem conexão'));
+    Forecast.onDataUpdated();await tick();check('Nova atualização limpa o aviso de falha',document.getElementById('forecast-error').hidden);
+    failed=true;Forecast.enter();await tick();check('Falha ao carregar configurações não inventa capacidade',document.getElementById('forecast-body').textContent.includes('Aguardando configurações'));
+    check('Nenhuma gravação pelo dashboard',writes===0);
+    document.getElementById('test-result').textContent=checks.join('\n')+'\nALL PASSED';
+  } catch(error) {document.getElementById('test-result').textContent=checks.join('\n')+'\nERROR '+error.stack;}
+})();
+</script></html>

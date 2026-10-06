@@ -7,6 +7,8 @@ let mondayRefreshMinutes = 5;
 let mondayRefreshTimer = null;
 let mondaySyncInFlight = false;
 const mondayFields = [
+  ['RemainingH', 'Esforço restante revisado (h)', ['Esforço restante', 'Horas restantes', 'Tempo restante', 'RemainingH']],
+  ['Impedimento', 'Impedimento', ['Impedimento', 'Bloqueio']],
   ['Responsavel', 'Responsável', ['Resp.', 'Responsável', 'Responsavel', 'Pessoa', 'Pessoas']],
   ['Status', 'Status', ['Status']],
   ['Prioridade', 'Prioridade', ['Prioridade']],
@@ -193,7 +195,7 @@ function useMondayRows(rows) {
   sprintSelect.length = 1;
   timeInited = false;
   rawPage = 0;
-  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity') navigate('dashboard');
+  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast') navigate('dashboard');
   else {
     document.getElementById('tb-right').textContent = `S${SPRINTS[0]}–S${SPRINTS.at(-1)}`;
   }
@@ -203,6 +205,7 @@ async function syncMonday(force = true) {
   if (mondaySyncInFlight) return;
   mondaySyncInFlight = true;
   window.Capacity?.onLoading();
+  window.Forecast?.onLoading();
   const button = document.getElementById('monday-sync');
   button.disabled = true;
   mondayMessage('monday-sync-status', 'Buscando tarefas no Monday...');
@@ -210,14 +213,17 @@ async function syncMonday(force = true) {
     const result = await mondayRequest('/api/sync', { force });
     useMondayRows(result.rows);
     window.Capacity?.onDataUpdated(result);
+    window.Forecast?.onDataUpdated(result);
     const time = new Date(result.syncedAt).toLocaleString('pt-BR');
     mondayMessage('monday-sync-status', `${result.rows.length} registros carregados de ${result.fetched} tarefas · ${result.skipped} sem Sprint reconhecida · ${time}.`, 'success');
   } catch (error) {
     mondayMessage('monday-sync-status', error.message, 'error');
     window.Capacity?.onError(error.message);
+    window.Forecast?.onError(error.message);
   } finally {
     button.disabled = false;
     mondaySyncInFlight = false;
+    window.Forecast?.onSyncComplete();
     scheduleMondayRefresh();
   }
 }
