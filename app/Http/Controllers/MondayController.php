@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\MondayConnection;
-use App\Models\SprintCommitment;
 use App\Services\ControlTowerService;
 use App\Services\MondayActivityImporter;
 use App\Services\MondayService;
@@ -227,21 +226,6 @@ class MondayController extends Controller
 
             return $tower->build($snapshot, $connection, isset($data['sprint']) ? (int) $data['sprint'] : null);
         });
-    }
-
-    public function saveCommitment(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'sprint' => ['required', 'integer', 'between:1,999999'],
-            'itemId' => ['required', 'string', 'regex:/^\d{1,20}$/'],
-            'committed' => ['required', 'boolean'],
-        ]);
-        SprintCommitment::query()->updateOrCreate(
-            ['sprint' => (int) $data['sprint'], 'item_id' => $data['itemId']],
-            ['committed' => (bool) $data['committed']],
-        );
-
-        return response()->json(['saved' => true, 'commitments' => SprintCommitment::forSprint((int) $data['sprint'])]);
     }
 
     /**

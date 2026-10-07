@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\SprintCommitment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -15,10 +14,9 @@ class ControlTowerTest extends TestCase
     use RefreshDatabase;
     use SprintHistoryScenario;
 
-    public function test_control_tower_and_commitments_require_login(): void
+    public function test_control_tower_requires_login(): void
     {
         $this->getJson('/api/control-tower')->assertUnauthorized();
-        $this->postJson('/api/commitments', ['sprint' => 17, 'itemId' => '1', 'committed' => true])->assertUnauthorized();
     }
 
     public function test_dashboard_includes_the_control_tower_page_and_alert_badge(): void
@@ -64,27 +62,6 @@ class ControlTowerTest extends TestCase
 
         $this->getJson('/api/control-tower?sprint=16')->assertOk()->assertJsonPath('sprint', 16)->assertJsonPath('remainingDays', 0);
         $this->getJson('/api/control-tower?sprint=abc')->assertUnprocessable()->assertJsonValidationErrors('sprint');
-    }
-
-    public function test_marking_a_card_as_commitment_changes_the_commitment_totals(): void
-    {
-        $this->prepareScenario();
-
-        $this->postJson('/api/commitments', ['sprint' => 17, 'itemId' => '7', 'committed' => true])
-            ->assertOk()->assertJsonPath('commitments.7', true);
-        $this->postJson('/api/commitments', ['sprint' => 17, 'itemId' => '4', 'committed' => false])->assertOk();
-
-        $this->getJson('/api/control-tower')->assertJsonPath('totals.committed', 3)->assertJsonPath('totals.committedDone', 1);
-        $this->assertEquals(['4' => false, '7' => true], SprintCommitment::forSprint(17));
-    }
-
-    public function test_invalid_commitment_is_rejected(): void
-    {
-        $this->actingAs(User::factory()->create());
-
-        $this->postJson('/api/commitments', ['sprint' => 0, 'itemId' => 'abc', 'committed' => 'talvez'])
-            ->assertUnprocessable()->assertJsonValidationErrors(['sprint', 'itemId', 'committed']);
-        $this->assertSame(0, SprintCommitment::query()->count());
     }
 
     public function test_dashboard_sync_returns_closed_sprints_frozen_at_their_end(): void

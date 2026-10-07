@@ -1,4 +1,4 @@
-<div class="page" id="page-control-tower" data-url="{{ route('control-tower.show') }}" data-commit-url="{{ route('commitments.store') }}">
+<div class="page" id="page-control-tower" data-url="{{ route('control-tower.show') }}">
   <header class="cap-hero">
     <div class="cap-heading"><img src="yuv-logo.png" alt="YUV"><span class="cap-divider"></span><div><h1>Torre de controle</h1><p>Para onde a sprint está indo e quanto tempo resta para manobrar</p></div></div>
     <div class="cap-filters"><label>Sprint <select id="tower-sprint" aria-label="Selecionar sprint da torre de controle"></select></label><span id="tower-dates"></span></div>
@@ -42,7 +42,7 @@
     </div>
     <section class="tower-card tower-commitment">
       <h2>Compromisso da sprint</h2>
-      <p class="tower-note">Marque o que é compromisso; o restante é desejável. Sem marcação, os cards planejados contam como compromisso. A marcação fica salva no dashboard e não altera o Monday.</p>
+      <p class="tower-note">Somente visualização: o compromisso da sprint são os cards marcados como "Planejada" no Monday. Para mudar o compromisso, ajuste a coluna Planejada no Monday e atualize os dados.</p>
       <div class="tower-filters" role="search" aria-label="Filtrar cards da sprint">
         <label class="tower-search">Buscar<input type="search" id="tower-filter-q" placeholder="Nome do card"></label>
         <fieldset class="tower-situations"><legend>Situação <button type="button" id="tower-filter-open" class="tower-link-button">Em aberto</button></legend>
@@ -54,19 +54,18 @@
         </fieldset>
         <label>Responsável<select id="tower-filter-owner"></select></label>
         <label>Prioridade<select id="tower-filter-priority"></select></label>
-        <label>Compromisso<select id="tower-filter-commitment"><option value="">Todos</option><option value="yes">Compromisso</option><option value="no">Desejável</option></select></label>
+        <label>Planejamento<select id="tower-filter-commitment"><option value="">Todos</option><option value="yes">Planejada (compromisso)</option><option value="no">Não planejado</option></select></label>
         <button type="button" id="tower-filter-clear" class="tower-link-button">Limpar filtros</button>
         <span id="tower-filter-count" role="status"></span>
       </div>
       <div class="cap-table-scroll"><table class="tower-table"><thead><tr>
-        <th aria-sort="none"><button type="button" data-sort="committed">Compromisso</button></th>
+        <th aria-sort="none"><button type="button" data-sort="committed">Planejamento</button></th>
         <th aria-sort="none"><button type="button" data-sort="name">Card</button></th>
         <th aria-sort="none"><button type="button" data-sort="status">Status</button></th>
         <th aria-sort="none"><button type="button" data-sort="owner">Responsável</button></th>
         <th aria-sort="none"><button type="button" data-sort="priority">Prioridade</button></th>
         <th aria-sort="none"><button type="button" data-sort="estimate">Estimativa</button></th>
       </tr></thead><tbody id="tower-items"></tbody></table></div>
-      <span id="tower-commit-status" role="status"></span>
     </section>
     <footer class="tower-note" id="tower-footer"></footer>
   </div>

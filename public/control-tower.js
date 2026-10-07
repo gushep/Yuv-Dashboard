@@ -82,13 +82,11 @@ window.ControlTower = (() => {
       th.setAttribute('aria-sort', sortKey === key ? (dir === 1 ? 'ascending' : 'descending') : 'none');
     });
     el('tower-items').innerHTML = shown.length ? shown.map(item => `<tr class="${item.done ? 'tower-done' : ''}">
-      <td><input type="checkbox" data-item="${escape(item.id)}" ${item.committed ? 'checked' : ''} aria-label="Compromisso: ${escape(item.name)}"></td>
+      <td>${item.committed ? '<span class="b bq" title="Compromisso da sprint">Planejada</span>' : `<span class="b bo">${escape(item.planned || 'Sem planejamento')}</span>`}</td>
       <td>${link(item)}${item.type ? `<small>${escape(item.type)}</small>` : ''}</td>
       <td>${statusBadge(item)}</td><td>${ownerCell(item)}</td><td>${priorityBadge(item)}</td>
       <td>${item.estimate === null ? '<span class="tower-muted">Sem estimativa</span>' : `${String(item.estimate).replace('.', ',')}h`}</td></tr>`).join('')
-      : '<tr><td colspan="6" class="tower-muted">Nenhum card com os filtros selecionados.</td></tr>';
-    el('tower-items').querySelectorAll('input[type=checkbox]').forEach(input => { input.onchange = () => saveCommitment(input.dataset.item, input.checked); });
-  }
+      : '<tr><td colspan="6" class="tower-muted">Nenhum card com os filtros selecionados.</td></tr>';  }
 
   const day = value => value ? value.split('-').reverse().slice(0, 2).join('/') : '—';
   const link = item => {
@@ -153,7 +151,7 @@ window.ControlTower = (() => {
     renderChart(data);
 
     el('tower-maneuvers-text').textContent = data.maneuvers.text;
-    el('tower-maneuvers').innerHTML = data.maneuvers.suggestions.map(item => `<li>${link(item)} <small>${escape(item.status || 'Sem status')} · ${escape(item.priority || 'sem prioridade')} · ${item.committed ? 'compromisso' : 'desejável'}</small></li>`).join('');
+    el('tower-maneuvers').innerHTML = data.maneuvers.suggestions.map(item => `<li>${link(item)} <small>${escape(item.status || 'Sem status')} · ${escape(item.priority || 'sem prioridade')} · ${item.committed ? 'planejada (compromisso)' : 'não planejado'}</small></li>`).join('');
 
     el('tower-alerts').innerHTML = data.alerts.length ? data.alerts.map(alert => `<li class="tower-alert tower-${alert.level}">${escape(alert.text)}</li>`).join('') : '<li>Nenhum alerta no momento.</li>';
 
@@ -186,14 +184,6 @@ window.ControlTower = (() => {
     state.chart?.destroy();
     state.chart = new Chart(el('tower-burnup-chart').getContext('2d'), {type:'line', data:{labels:labels.map(day), datasets},
       options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false}, plugins:{legend:{labels:{boxWidth:12, font:{size:11}}}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}}}});
-  }
-
-  async function saveCommitment(itemId, committed) {
-    try {
-      await mondayRequest(el('page-control-tower').dataset.commitUrl, {sprint:state.sprint, itemId, committed});
-      el('tower-commit-status').textContent = 'Compromisso atualizado.';
-      load();
-    } catch (error) { el('tower-commit-status').textContent = `Falha ao salvar: ${error.message}`; }
   }
 
   function seenAlerts() { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch { return new Set(); } }

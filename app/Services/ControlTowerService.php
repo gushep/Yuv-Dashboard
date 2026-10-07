@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\MondayConnection;
-use App\Models\SprintCommitment;
 use App\Support\SprintRules;
 
 /**
@@ -52,7 +51,6 @@ class ControlTowerService
         $workingDays = SprintRules::workingDays($range['start'], $range['end']);
         $remainingDays = count(array_filter($workingDays, fn (string $day): bool => $day >= $today));
         $members = $timeline->membersAt($sprint, SprintRules::endOfDay(min($range['end'], $today)));
-        $marks = SprintCommitment::forSprint($sprint);
         $items = [];
         foreach ($members as $id => $state) {
             if (SprintRules::isRemoved($state['Status'] ?? '')) {
@@ -62,7 +60,8 @@ class ControlTowerService
                 'done' => SprintRules::isDone($state['Status'] ?? ''),
                 'doneNotDelivered' => SprintRules::isDoneNotDelivered($state['Status'] ?? ''),
                 'notStarted' => SprintRules::isNotStarted($state['Status'] ?? ''),
-                'committed' => $marks[$id] ?? SprintRules::normalize($state['Planejada'] ?? '') === 'planejada',
+                // Compromisso da sprint = card marcado como Planejada no Monday.
+                'committed' => SprintRules::normalize($state['Planejada'] ?? '') === 'planejada',
                 'type' => (string) ($state['Tipo'] ?? ''),
             ];
         }
