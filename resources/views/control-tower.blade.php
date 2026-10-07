@@ -43,7 +43,25 @@
     <section class="tower-card tower-commitment">
       <h2>Compromisso da sprint</h2>
       <p class="tower-note">Marque o que é compromisso; o restante é desejável. Sem marcação, os cards planejados contam como compromisso. A marcação fica salva no dashboard e não altera o Monday.</p>
-      <div class="cap-table-scroll"><table class="cap-table tower-table"><thead><tr><th>Compromisso</th><th>Card</th><th>Status</th><th>Responsável</th><th>Prioridade</th></tr></thead><tbody id="tower-items"></tbody></table></div>
+      <div class="tower-filters" role="search" aria-label="Filtrar cards da sprint">
+        <label class="tower-search">Buscar<input type="search" id="tower-filter-q" placeholder="Nome do card"></label>
+        <label>Situação<select id="tower-filter-status">
+          <option value="">Todas</option><option value="open">Em aberto</option><option value="notStarted">Não iniciados</option><option value="progress">Em andamento</option><option value="blocked">Impedidos</option><option value="waiting">Feitos, não entregues</option><option value="done">Concluídos</option>
+        </select></label>
+        <label>Responsável<select id="tower-filter-owner"></select></label>
+        <label>Prioridade<select id="tower-filter-priority"></select></label>
+        <label>Compromisso<select id="tower-filter-commitment"><option value="">Todos</option><option value="yes">Compromisso</option><option value="no">Desejável</option></select></label>
+        <button type="button" id="tower-filter-clear" class="tower-link-button">Limpar filtros</button>
+        <span id="tower-filter-count" role="status"></span>
+      </div>
+      <div class="cap-table-scroll"><table class="tower-table"><thead><tr>
+        <th aria-sort="none"><button type="button" data-sort="committed">Compromisso</button></th>
+        <th aria-sort="none"><button type="button" data-sort="name">Card</button></th>
+        <th aria-sort="none"><button type="button" data-sort="status">Status</button></th>
+        <th aria-sort="none"><button type="button" data-sort="owner">Responsável</button></th>
+        <th aria-sort="none"><button type="button" data-sort="priority">Prioridade</button></th>
+        <th aria-sort="none"><button type="button" data-sort="estimate">Estimativa</button></th>
+      </tr></thead><tbody id="tower-items"></tbody></table></div>
       <span id="tower-commit-status" role="status"></span>
     </section>
     <footer class="tower-note" id="tower-footer"></footer>

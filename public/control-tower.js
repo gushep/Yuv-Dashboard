@@ -9,7 +9,79 @@ window.ControlTower = (() => {
     red: ['Risco alto: manobra necessária', 'Há sinais vermelhos; decida as manobras abaixo.']
   };
   const LEVEL = {green:'Verde', yellow:'Amarelo', red:'Vermelho', unknown:'Sem dados'};
-  const state = {active:false, sprint:null, data:null, loading:false, error:'', request:0, chart:null};
+  const state = {active:false, sprint:null, data:null, loading:false, error:'', request:0, chart:null,
+    filters:{q:'', status:'', owner:'', priority:'', commitment:''}, sort:{key:null, dir:1}};
+
+  /* Tabela de compromisso: situação, etiquetas e ordenação. */
+  const AVATAR_COLORS = ['#ff7a21','#0871e9','#9d75df','#16a96b','#e1306c','#0d9488','#d97706','#475569'];
+  const SITUATION = {blocked:['Impedido',0], progress:['Em andamento',1], notStarted:['Não iniciado',2], waiting:['Feito, não entregue',3], done:['Concluído',4]};
+  const PRIORITY = {critica:['bs',0], alta:['bn',1], media:['bw',2], baixa:['bo',3]};
+  const situation = item => item.done ? 'done' : item.doneNotDelivered ? 'waiting' : window.SprintRules.isBlocked(item.status) ? 'blocked' : item.notStarted ? 'notStarted' : 'progress';
+  const owners = item => String(item.owner || '').split(',').map(name => name.trim()).filter(Boolean);
+  const priorityKey = item => window.SprintRules.normalize(item.priority);
+  const priorityRank = item => PRIORITY[priorityKey(item)]?.[1] ?? 4;
+  function statusBadge(item) {
+    const kind = situation(item);
+    const css = {done:'bd', waiting:'bw', blocked:'bs', notStarted:'bo'}[kind] || (/^(qa|cr)\b/.test(window.SprintRules.normalize(item.status)) ? 'bq' : 'bn');
+    return `<span class="b ${css}" title="${escape(SITUATION[kind][0])}">${escape(item.status || 'Sem status')}</span>`;
+  }
+  function priorityBadge(item) {
+    return item.priority ? `<span class="b ${PRIORITY[priorityKey(item)]?.[0] || 'bo'}">${escape(item.priority)}</span>` : '<span class="tower-muted">Sem prioridade</span>';
+  }
+  function avatar(name) {
+    const initials = name.split(/\s+/).filter(Boolean).map(part => part[0]).filter((_, index, all) => index === 0 || index === all.length - 1).join('').toLocaleUpperCase('pt-BR');
+    const color = AVATAR_COLORS[[...name].reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_COLORS.length];
+    return `<span class="tower-avatar" style="background:${color}" aria-hidden="true">${escape(initials)}</span>`;
+  }
+  function ownerCell(item) {
+    const names = owners(item);
+    if (!names.length) return '<span class="tower-muted">Sem responsável</span>';
+    return `<span class="tower-owner">${names.map(avatar).join('')}<span>${escape(names.join(', '))}</span></span>`;
+  }
+  const SORTS = {
+    committed: (a, b) => Number(b.committed) - Number(a.committed),
+    name: (a, b) => a.name.localeCompare(b.name, 'pt-BR'),
+    status: (a, b) => SITUATION[situation(a)][1] - SITUATION[situation(b)][1] || a.status.localeCompare(b.status, 'pt-BR'),
+    owner: (a, b) => (owners(a)[0] ? 0 : 1) - (owners(b)[0] ? 0 : 1) || (owners(a)[0] || '').localeCompare(owners(b)[0] || '', 'pt-BR'),
+    priority: (a, b) => priorityRank(a) - priorityRank(b),
+    estimate: (a, b) => (a.estimate === null) - (b.estimate === null) || (a.estimate ?? 0) - (b.estimate ?? 0),
+  };
+  /** Ordem padrão: em aberto antes dos concluídos, compromisso primeiro, maior prioridade primeiro. */
+  const defaultOrder = (a, b) => Number(a.done) - Number(b.done) || SORTS.committed(a, b) || SORTS.priority(a, b) || SORTS.name(a, b);
+  function matches(item) {
+    const f = state.filters;
+    const kind = situation(item);
+    return (!f.q || window.SprintRules.normalize(item.name).includes(window.SprintRules.normalize(f.q)))
+      && (!f.status || (f.status === 'open' ? !['done','waiting'].includes(kind) : kind === f.status))
+      && (!f.owner || (f.owner === '-' ? !owners(item).length : owners(item).includes(f.owner)))
+      && (!f.priority || (f.priority === '-' ? !item.priority : item.priority === f.priority))
+      && (!f.commitment || item.committed === (f.commitment === 'yes'));
+  }
+  function fillSelect(id, values, emptyLabel, selected) {
+    const select = el(id);
+    select.replaceChildren(new Option('Todos', ''), ...values.map(value => new Option(value, value)), new Option(emptyLabel, '-'));
+    select.value = [...select.options].some(option => option.value === selected) ? selected : '';
+    return select.value;
+  }
+  function renderItems() {
+    const items = state.data.items;
+    state.filters.owner = fillSelect('tower-filter-owner', [...new Set(items.flatMap(owners))].sort((a, b) => a.localeCompare(b, 'pt-BR')), 'Sem responsável', state.filters.owner);
+    state.filters.priority = fillSelect('tower-filter-priority', [...new Set(items.map(item => item.priority).filter(Boolean))].sort((a, b) => priorityRank({priority:a}) - priorityRank({priority:b})), 'Sem prioridade', state.filters.priority);
+    const {key, dir} = state.sort;
+    const shown = items.filter(matches).sort(key ? (a, b) => SORTS[key](a, b) * dir || defaultOrder(a, b) : defaultOrder);
+    el('tower-filter-count').textContent = `${shown.length} de ${items.length} card(s)`;
+    document.querySelectorAll('#page-control-tower .tower-table th').forEach(th => {
+      const sortKey = th.querySelector('button').dataset.sort;
+      th.setAttribute('aria-sort', sortKey === key ? (dir === 1 ? 'ascending' : 'descending') : 'none');
+    });
+    el('tower-items').innerHTML = shown.length ? shown.map(item => `<tr class="${item.done ? 'tower-done' : ''}">
+      <td><input type="checkbox" data-item="${escape(item.id)}" ${item.committed ? 'checked' : ''} aria-label="Compromisso: ${escape(item.name)}"></td>
+      <td>${link(item)}${item.type ? `<small>${escape(item.type)}</small>` : ''}</td>
+      <td>${statusBadge(item)}</td><td>${ownerCell(item)}</td><td>${priorityBadge(item)}</td>
+      <td>${item.estimate === null ? '<span class="tower-muted">Sem estimativa</span>' : `${String(item.estimate).replace('.', ',')}h`}</td></tr>`).join('')
+      : '<tr><td colspan="6" class="tower-muted">Nenhum card com os filtros selecionados.</td></tr>';
+    el('tower-items').querySelectorAll('input[type=checkbox]').forEach(input => { input.onchange = () => saveCommitment(input.dataset.item, input.checked); });
+  }
 
   const day = value => value ? value.split('-').reverse().slice(0, 2).join('/') : '—';
   const link = item => {
@@ -85,9 +157,7 @@ window.ControlTower = (() => {
     el('tower-removed-summary').textContent = `${scope.removed.length} card(s) retirados`;
     el('tower-removed').innerHTML = scope.removed.map(item => `<li>${link(item)} <small>${escape(item.reason)}</small></li>`).join('') || '<li>Nenhum.</li>';
 
-    const items = [...data.items].sort((a, b) => Number(a.done) - Number(b.done) || Number(b.committed) - Number(a.committed) || a.name.localeCompare(b.name, 'pt-BR'));
-    el('tower-items').innerHTML = items.map(item => `<tr class="${item.done ? 'tower-done' : ''}"><td><input type="checkbox" data-item="${escape(item.id)}" ${item.committed ? 'checked' : ''} aria-label="Compromisso: ${escape(item.name)}"></td><td>${link(item)}</td><td>${escape(item.status || '—')}</td><td>${escape(item.owner || '—')}</td><td>${escape(item.priority || '—')}</td></tr>`).join('');
-    el('tower-items').querySelectorAll('input[type=checkbox]').forEach(input => { input.onchange = () => saveCommitment(input.dataset.item, input.checked); });
+    renderItems();
 
     const t = data.thresholds;
     el('tower-footer').textContent = `Regras: card parado = ${t.stalledDays}+ dias úteis no mesmo status; impedimento vermelho a partir de ${t.blockedRedDays} dias úteis; escopo adicionado amarelo acima de ${t.scopeYellow}% e vermelho acima de ${t.scopeRed}% da linha de base (suporte fora da conta); entrega verde a partir de ${t.probabilityGreen}% de chance e vermelha abaixo de ${t.probabilityRed}%. Histórico do Monday disponível desde ${data.historyStart ? new Date(data.historyStart).toLocaleDateString('pt-BR') : '—'}.`;
@@ -158,6 +228,22 @@ window.ControlTower = (() => {
     if (!el('page-control-tower')) return;
     el('tower-sprint').onchange = event => { state.sprint = Number(event.target.value); load(); };
     el('tower-refresh').onclick = () => syncMonday(true);
+    const filters = {q:'tower-filter-q', status:'tower-filter-status', owner:'tower-filter-owner', priority:'tower-filter-priority', commitment:'tower-filter-commitment'};
+    for (const [key, id] of Object.entries(filters)) {
+      el(id).addEventListener(key === 'q' ? 'input' : 'change', event => { state.filters[key] = event.target.value; if (state.data?.available) renderItems(); });
+    }
+    el('tower-filter-clear').onclick = () => {
+      state.filters = {q:'', status:'', owner:'', priority:'', commitment:''};
+      for (const id of Object.values(filters)) el(id).value = '';
+      if (state.data?.available) renderItems();
+    };
+    document.querySelectorAll('#page-control-tower .tower-table th button').forEach(button => {
+      button.onclick = () => {
+        const key = button.dataset.sort;
+        state.sort = state.sort.key === key ? {key, dir:-state.sort.dir} : {key, dir:1};
+        if (state.data?.available) renderItems();
+      };
+    });
   });
 
   return {enter, leave, load, refreshAlerts, updateBadge};
