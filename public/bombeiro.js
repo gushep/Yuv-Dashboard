@@ -16,7 +16,7 @@ window.Bombeiro = (() => {
   }
   function statusBucket(status) {
     const value = normalized(status);
-    return value === 'backlog' ? 'backlog' : ['implementado', 'cancelado'].includes(value) ? 'done' : 'progress';
+    return value === 'backlog' ? 'backlog' : window.SprintRules.isClosed(status) ? 'done' : 'progress';
   }
   function priorityMeta(priority) {
     const label = String(priority ?? '').trim() || 'Não informada';
@@ -345,7 +345,7 @@ window.Bombeiro = (() => {
   }
   function enter(sprintHint = null) {
     state.active = true;
-    document.body.classList.add('fire-view', 'sidebar-collapsed');
+    document.body.classList.add('fire-view');
     if (Number.isInteger(sprintHint)) state.pendingSprint = sprintHint;
     if (state.allRows.length) updateSprintOptions();
     render();
@@ -355,7 +355,7 @@ window.Bombeiro = (() => {
     state.active = false;
     stopSound();
     stopAlertPulse();
-    document.body.classList.remove('fire-view', 'sidebar-collapsed');
+    document.body.classList.remove('fire-view');
     clearTimeout(state.timer);
     state.timer = null;
   }

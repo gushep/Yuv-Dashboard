@@ -63,7 +63,7 @@
 /* Layout de acompanhamento: largura total e hierarquia visual do painel de referência. */
 body.capacity-view,body.capacity-view .content{background:#fff}
 body.capacity-view .content{padding:12px 22px 34px}
-body.capacity-view .topbar{height:42px;min-height:42px;padding:4px 22px;background:#fff;border-bottom:0}
+body.capacity-view .topbar{background:#fff;border-bottom:0}
 body.capacity-view .topbar>div:not(.topbar-right){display:none}
 body.capacity-view .topbar-right{display:none}
 #page-capacity{max-width:none;font-size:14px}
@@ -131,3 +131,4 @@ body.capacity-view .topbar-right{display:none}
 .cap-extra ul{margin-top:8px}
 @media(max-width:1050px){.cap-hero{align-items:flex-start}.cap-info{gap:9px}.cap-dev-filter{margin-left:0}#cap-last-sync{width:100%;margin-left:41px}}
 @media(max-width:700px){body.capacity-view .content{padding:10px 12px 28px}.cap-heading{gap:12px}.cap-heading img{width:85px}.cap-divider{height:41px}.cap-heading h1{font-size:22px}.cap-heading p{font-size:13px}.cap-filters{width:100%;justify-content:space-between}.cap-info{font-size:11px}.cap-formulas{grid-template-columns:1fr;gap:8px}.cap-formulas>div{min-height:65px}.cap-note{display:block;width:100%}.cap-note+.cap-note{text-align:left}}
+.cap-pace{margin:-12px 0 16px;padding:0 3px;font-size:12px;color:#385274}

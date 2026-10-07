@@ -3,7 +3,7 @@ window.Consumption = (() => {
   const el = id => document.getElementById(id);
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalize = value => String(value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
-  const state = {active:false, wasCollapsed:false, rows:null, dates:{}, sprint:null, developer:'', updated:null, reserves:{}, defaultMinutes:null, loaded:false, saving:false, loading:false, error:'', configError:'', expanded:new Set()};
+  const state = {active:false, rows:null, dates:{}, sprint:null, developer:'', updated:null, reserves:{}, defaultMinutes:null, loaded:false, saving:false, loading:false, error:'', configError:'', expanded:new Set()};
   const duration = value => window.Forecast.duration(value);
   function format(minutes) {
     if (minutes === null) return 'Sem registro';
@@ -20,7 +20,7 @@ window.Consumption = (() => {
     let missingType = 0, missingReal = 0, missingId = 0, multiSprint = 0;
     for (const row of rows) {
       const id = String(row.Id ?? '').trim();
-      if (id) { const values = seenSprints.get(id) || new Set(); values.add(Number(row.Sprint)); seenSprints.set(id,values); }
+      if (id && !row.AsOf) { const values = seenSprints.get(id) || new Set(); values.add(Number(row.Sprint)); seenSprints.set(id,values); }
       if (Number(row.Sprint) !== Number(sprint)) continue;
       if (!id) { missingId++; continue; }
       if (!unique.has(id)) unique.set(id,row);
@@ -32,7 +32,7 @@ window.Consumption = (() => {
       const task = {row, group, minutes};
       if (!normalize(row.Tipo)) missingType++;
       if (minutes === null) missingReal++;
-      if (seenSprints.get(String(row.Id).trim()).size > 1) multiSprint++;
+      if (seenSprints.get(String(row.Id).trim())?.size > 1) multiSprint++;
       add(macro,task);
       if (people.length === 1) {
         if (!groups.has(people[0])) groups.set(people[0],{name:people[0],...emptyTotals()});
@@ -46,6 +46,19 @@ window.Consumption = (() => {
   function reserveModel(support, reserve) {
     if (!reserve) return {consumed:null, available:null, excess:null, balance:-support, scale:Math.max(support,1), marker:null};
     return {consumed:support/reserve*100, available:Math.max(0,(reserve-support)/reserve*100), excess:support > reserve ? (support-reserve)/reserve*100 : 0, balance:reserve-support, scale:Math.max(reserve,support)*1.15, marker:reserve/(Math.max(reserve,support)*1.15)*100};
+  }
+  /** Ritmo da reserva: projeta o consumo de suporte até o fim da sprint e a data em que a reserva acaba. */
+  function paceText(support, dates, reserve, today = window.SprintRules.today()) {
+    const pace = window.SprintRules.pace(support, dates, today, reserve);
+    const day = value => value.split('-').reverse().slice(0, 2).join('/');
+    if (pace.status === 'unavailable') return {text:'Ritmo indisponível: datas da sprint ausentes no Monday.', risk:false};
+    if (pace.status === 'not-started') return {text:'Sprint ainda não começou: sem ritmo de consumo.', risk:false};
+    if (pace.status === 'finished') return {text:`Sprint encerrada: média de ${format(pace.daily)} de suporte por dia útil.`, risk:false};
+    if (!reserve) return {text:`Ritmo atual: ${format(pace.daily)} por dia útil · ${format(pace.projected)} previstas até o fim da sprint.`, risk:false};
+    const risk = pace.exhaustionDate !== null && pace.exhaustionDate < pace.sprintEnd;
+    const ending = pace.exhaustionDate === null ? 'a reserva é suficiente até o fim da sprint'
+      : risk ? `a reserva acaba em ${day(pace.exhaustionDate)}, antes do fim da sprint (${day(pace.sprintEnd)})` : 'a reserva acaba no último dia da sprint';
+    return {text:`No ritmo atual (${format(pace.daily)} por dia útil): ${format(pace.projected)} até o fim da sprint, ${percent(pace.projectedPercent)} da reserva; ${ending}.`, risk};
   }
   function bar(totals) {
     const parts = shares(totals);
@@ -95,6 +108,9 @@ window.Consumption = (() => {
     el('cons-reserve-percent').textContent = !state.loaded ? 'Reserva ainda indisponível' : reserve ? `${percent(comparison.consumed)} da reserva consumida` : 'Sem reserva configurada';
     el('cons-reserve-bar').innerHTML = !state.loaded ? '' : `<div class="cons-reserve-track" role="img" aria-label="${escape(el('cons-reserve-percent').textContent)}"><span class="cons-red" style="width:${totals.support/comparison.scale*100}%"></span>${comparison.marker === null ? '' : `<span class="cons-marker" style="left:${comparison.marker}%"><small>100% · ${format(reserve)}</small></span>`}</div>`;
     el('cons-reserve-balance').textContent = !state.loaded ? '' : !reserve ? (totals.support ? `${format(totals.support)} consumidas sem reserva` : 'Sem reserva configurada') : comparison.balance > 0 ? `${format(comparison.balance)} restantes · ${percent(comparison.available)} da reserva disponível` : comparison.balance === 0 ? 'Reserva totalmente consumida' : `${format(-comparison.balance)} acima da reserva · Excesso de ${percent(comparison.excess)}`;
+    const reservePace = paceText(totals.support, dates, reserve);
+    el('cons-reserve-pace').textContent = state.loaded ? reservePace.text : '';
+    el('cons-reserve-pace').classList.toggle('cons-pace-risk', state.loaded && reservePace.risk);
     const names = result.developers.map(dev => dev.name);
     if (!names.includes(state.developer)) state.developer = '';
     el('cons-developer').replaceChildren(new Option('Todos os desenvolvedores',''), ...names.map(name => new Option(name,name)));
@@ -139,9 +155,8 @@ window.Consumption = (() => {
   function onLoading() { state.loading = true; render(); }
   function onSyncComplete() { state.loading = false; render(); }
   function enter(hint = null) {
-    if (!state.active) state.wasCollapsed = document.body.classList.contains('sidebar-collapsed');
     state.active = true;
-    document.body.classList.add('consumption-view','sidebar-collapsed');
+    document.body.classList.add('consumption-view');
     if (Number.isInteger(hint)) state.sprint = hint;
     render(); loadReserves();
     if (typeof mondayReady !== 'undefined' && mondayReady) syncMonday(false);
@@ -149,7 +164,6 @@ window.Consumption = (() => {
   function leave() {
     state.active = false;
     document.body.classList.remove('consumption-view');
-    if (!state.wasCollapsed) document.body.classList.remove('sidebar-collapsed');
     document.querySelectorAll('#page-consumption details[open]').forEach(node => { node.open = false; });
   }
   document.addEventListener('DOMContentLoaded', () => {

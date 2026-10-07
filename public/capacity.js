@@ -1,7 +1,7 @@
 /* Capacity usa os dados já carregados pelo dashboard; cálculos internos em minutos. */
 window.Capacity = (() => {
-  const DEFAULT_MINUTES = 80 * 60;
-  const state = { sprint: null, userSelectedSprint: false, developer: 'all', expanded: new Set(), overrides: {}, loadedOverrides: false, error: '', active: false, loading: false, wasCollapsed: false };
+  const defaultMinutes = () => window.SprintRules.capacityMinutes();
+  const state = { sprint: null, userSelectedSprint: false, developer: 'all', expanded: new Set(), overrides: {}, loadedOverrides: false, error: '', active: false, loading: false };
   const el = id => document.getElementById(id);
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalized = value => String(value ?? '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -58,10 +58,10 @@ window.Capacity = (() => {
     if (today >= dates.end) return totalMinutes;
     return Math.round(totalMinutes * weekdays(dates.start, today) / all);
   }
-  const isDone = status => window.Bombeiro?.statusBucket(status) === 'done';
+  const isDone = status => window.SprintRules.isDone(status);
   function model(allRows, sprint, dates, overrides = {}, today = todaySaoPaulo()) {
     const sprintById = new Map();
-    for (const row of allRows) if (row.Id) {
+    for (const row of allRows) if (row.Id && !row.AsOf) {
       const key = String(row.Id);
       if (!sprintById.has(key)) sprintById.set(key, new Set());
       sprintById.get(key).add(Number(row.Sprint));
@@ -85,7 +85,7 @@ window.Capacity = (() => {
     }
     const developers = [...groups.entries()].map(([name, rows]) => {
       const key = `${sprint}|${name}`;
-      const capacity = Number.isInteger(overrides[key]) ? overrides[key] : DEFAULT_MINUTES;
+      const capacity = Number.isInteger(overrides[key]) ? overrides[key] : defaultMinutes();
       const elapsed = elapsedMinutes(capacity, dates, today);
       const result = {name, rows, capacity, elapsed, plannedEstimate:0, completedEstimate:0, missingEstimate:0,
         realPlanned:0, realUnplanned:0, realSupport:0, otherUnplanned:0, registered:0, knownReal:0, missingReal:0,
@@ -93,7 +93,7 @@ window.Capacity = (() => {
       for (const row of rows) {
         const category = planning(row.Planejada);
         const estimate = minutes(row.EstH), real = minutes(row.RealH);
-        if (category === 'planned') {
+        if (category === 'planned' && !window.SprintRules.isRemoved(row.Status)) {
           if (estimate === null) result.missingEstimate++;
           else { result.plannedEstimate += estimate; if (isDone(row.Status)) result.completedEstimate += estimate; }
         }
@@ -153,6 +153,18 @@ window.Capacity = (() => {
     }).join('');
     node.innerHTML = `<details><summary>${title} · ${items.length} item(ns)</summary><ul>${list}</ul></details>`;
   }
+  /** Ritmo do time: horas registradas por dia útil projetadas até o fim da sprint, contra a capacidade somada. */
+  function teamPaceText(developers, dates, today = todaySaoPaulo()) {
+    const tracked = developers.filter(dev => dev.knownReal);
+    if (!tracked.length) return 'Ritmo do time: sem horas registradas.';
+    const registered = tracked.reduce((sum, dev) => sum + dev.registered, 0);
+    const capacity = tracked.reduce((sum, dev) => sum + dev.capacity, 0);
+    const pace = window.SprintRules.pace(registered, dates, today, capacity);
+    if (pace.status === 'unavailable') return 'Ritmo do time: datas da sprint indisponíveis.';
+    if (pace.status === 'not-started') return 'Ritmo do time: a sprint ainda não começou.';
+    if (pace.status === 'finished') return `Ritmo do time: sprint encerrada com ${formatMinutes(registered)} registradas (${formatPct(capacity ? registered / capacity * 100 : null)} da capacidade).`;
+    return `Ritmo do time: ${formatMinutes(registered)} registradas em ${pace.elapsedDays} de ${pace.totalDays} dias úteis; mantido o ritmo, ${formatMinutes(pace.projected)} ao fim da sprint (${formatPct(pace.projectedPercent)} da capacidade de ${formatMinutes(capacity)}).`;
+  }
   function render() {
     if (!el('page-capacity')) return;
     const sprints = [...new Set(DATA.map(row => Number(row.Sprint)).filter(number => Number.isInteger(number) && number > 0))].sort((a,b)=>b-a);
@@ -196,8 +208,9 @@ window.Capacity = (() => {
     }
     renderExtra('cap-pending','Pendências de atribuição',result.pending,true);
     renderExtra('cap-unassigned','Sem responsável',result.unassigned);
-    const standardElapsed = elapsedMinutes(DEFAULT_MINUTES,dates,todaySaoPaulo());
-    el('cap-reference').textContent = `Referência: ${formatMinutes(DEFAULT_MINUTES)} por dev · até hoje: ${formatMinutes(standardElapsed)}`;
+    const standardElapsed = elapsedMinutes(defaultMinutes(),dates,todaySaoPaulo());
+    el('cap-reference').textContent = `Referência: ${formatMinutes(defaultMinutes())} por dev · até hoje: ${formatMinutes(standardElapsed)}`;
+    el('cap-pace').textContent = teamPaceText(result.developers, dates);
     el('cap-calendar').textContent = 'Dias úteis: segunda a sexta; hoje completo';
     el('cap-calendar').title = 'Capacidade até hoje = capacidade total × dias úteis transcorridos ÷ dias úteis totais. Inclui o dia atual completo no fuso America/Sao_Paulo; não há feriados configurados.';
     const updated = window.MONDAY_LAST_SYNC ? `Última atualização: ${new Date(window.MONDAY_LAST_SYNC).toLocaleString('pt-BR')}` : 'Base incorporada disponível';
@@ -237,9 +250,8 @@ window.Capacity = (() => {
     } catch (error) { state.error = `Não foi possível salvar a capacidade: ${error.message}`; render(); }
   }
   function enter(sprintHint = null) {
-    if (!state.active) state.wasCollapsed = document.body.classList.contains('sidebar-collapsed');
     state.active = true;
-    document.body.classList.add('capacity-view','sidebar-collapsed');
+    document.body.classList.add('capacity-view');
     if (Number.isInteger(sprintHint)) { state.sprint = sprintHint; state.userSelectedSprint = true; }
     if (!window.MONDAY_LAST_SYNC && location.protocol !== 'file:') state.loading = true;
     render();
@@ -249,7 +261,6 @@ window.Capacity = (() => {
   function leave() {
     state.active = false;
     document.body.classList.remove('capacity-view');
-    if (!state.wasCollapsed) document.body.classList.remove('sidebar-collapsed');
   }
   function onDataUpdated(result) {
     window.MONDAY_SPRINT_DATES = Object.fromEntries((result.sprints || []).map(item => [Number(item.number),item]));

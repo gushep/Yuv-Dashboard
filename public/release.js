@@ -1,7 +1,7 @@
 /* O backend prepara o documento; a interface apenas apresenta os dados da release. */
 window.SprintRelease = (() => {
   const el = id => document.getElementById(id);
-  const state = {active:false, wasCollapsed:false, sprint:null, data:null, loading:false, error:'', request:0, expanded:new Set(), printing:false, printGroups:[]};
+  const state = {active:false, sprint:null, data:null, loading:false, error:'', request:0, expanded:new Set(), printing:false, printGroups:[]};
   const normalize = value => String(value ?? '').trim().replace(/\s+/g,' ').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   function typeVisual(type) {
     const name = normalize(type);
@@ -99,13 +99,12 @@ window.SprintRelease = (() => {
     }
   }
   function enter(hint = null) {
-    if (!state.active) state.wasCollapsed = document.body.classList.contains('sidebar-collapsed');
     state.expanded.clear();
-    state.active = true;document.body.classList.add('release-view','sidebar-collapsed');
+    state.active = true;document.body.classList.add('release-view');
     if (Number.isInteger(hint)) state.sprint=hint;
     load();
   }
-  function leave() { state.active=false;state.request++;state.loading=false;document.body.classList.remove('release-view');if (!state.wasCollapsed) document.body.classList.remove('sidebar-collapsed'); }
+  function leave() { state.active=false;state.request++;state.loading=false;document.body.classList.remove('release-view'); }
   function onDataUpdated() { if (state.active && !state.loading && !state.printing) load(); }
   function preparePrint() {
     if (!state.active || state.printing) return;

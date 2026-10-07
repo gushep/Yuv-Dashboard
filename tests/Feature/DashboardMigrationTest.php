@@ -99,6 +99,6 @@ class DashboardMigrationTest extends TestCase
             ->assertJsonPath('rows.0.RealH', 1.5)
             ->assertJsonPath('unassignedSupport.0.Id', '102');
         $this->postJson('/api/sync', ['sprintPanel' => true])->assertOk();
-        Http::assertSentCount(1);
+        $this->assertCount(1, Http::recorded(fn ($request): bool => ! str_contains($request['query'], 'activity_logs')));
     }
 }

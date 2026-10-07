@@ -2,7 +2,7 @@
 window.SprintPanel = (() => {
   const CYCLE_MS = 60_000;
   const state = { active:false, timer:null, inFlight:false, rows:[], sprint:null, pendingSprint:null,
-    boardName:'', lastSuccess:null, stale:false, error:'', wasCollapsed:false };
+    boardName:'', lastSuccess:null, stale:false, error:'' };
   const el = id => document.getElementById(id);
   const normalized = value => String(value ?? '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 
@@ -10,10 +10,8 @@ window.SprintPanel = (() => {
     return rows.filter(row => String(row.Id ?? '').trim() && Number.isInteger(Number(row.Sprint)) && Number(row.Sprint) > 0 && normalized(row.Tipo) !== 'suporte');
   }
   function statusBucket(status) {
-    const value = normalized(status);
-    if (value === 'implementado') return 'done';
-    if (value === 'backlog' || value === 'pronto pra iniciar' || value === 'pronto para iniciar' ||
-        value === 'pronto pra comecar' || value === 'pronto para comecar') return 'backlog';
+    if (window.SprintRules.isClosed(status)) return 'done';
+    if (window.SprintRules.isNotStarted(status)) return 'backlog';
     return 'progress';
   }
   function selectedRows(rows, sprint) {
@@ -174,9 +172,8 @@ window.SprintPanel = (() => {
     }
   }
   function enter(sprintHint = null) {
-    if (!state.active) state.wasCollapsed = document.body.classList.contains('sidebar-collapsed');
     state.active = true;
-    document.body.classList.add('sprint-panel-view','sidebar-collapsed');
+    document.body.classList.add('sprint-panel-view');
     if (Number.isInteger(sprintHint)) state.pendingSprint = sprintHint;
     if (state.rows.length) updateSprintOptions();
     render();
@@ -187,7 +184,6 @@ window.SprintPanel = (() => {
     clearTimeout(state.timer);
     state.timer = null;
     document.body.classList.remove('sprint-panel-view');
-    if (!state.wasCollapsed) document.body.classList.remove('sidebar-collapsed');
   }
   document.addEventListener('DOMContentLoaded',() => {
     if (!el('page-sprint-panel')) return;

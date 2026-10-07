@@ -4,7 +4,7 @@ window.PanelCarousel = (() => {
     {page:'page-bombeiro',module:() => window.Bombeiro,label:'Sustentação'},
     {page:'page-sprint-panel',module:() => window.SprintPanel,label:'Sprint'}
   ];
-  const state = {active:false,index:0,paused:false,seconds:30,timer:null,wasCollapsed:false};
+  const state = {active:false,index:0,paused:false,seconds:30,timer:null};
   const el = id => document.getElementById(id);
 
   function clearCycle() { clearTimeout(state.timer); state.timer = null; }
@@ -31,7 +31,6 @@ window.PanelCarousel = (() => {
     const selected = panels[state.index];
     el(selected.page).classList.add('active');
     selected.module()?.enter(sprintHint);
-    document.body.classList.add('sidebar-collapsed');
     updateControls();
     scheduleCycle();
   }
@@ -54,14 +53,13 @@ window.PanelCarousel = (() => {
   }
   function enter(startIndex = 0, sprintHint = null) {
     if (state.active) return;
-    state.wasCollapsed = document.body.classList.contains('sidebar-collapsed');
     state.active = true;
     state.paused = false;
     try {
       const saved = Number(localStorage.getItem('yuv-carousel-seconds'));
       if ([15,30,45,60,90].includes(saved)) state.seconds = saved;
     } catch { }
-    document.body.classList.add('carousel-view','sidebar-collapsed');
+    document.body.classList.add('carousel-view');
     el('carousel-controls').hidden = false;
     state.index = null;
     show(startIndex,sprintHint);
@@ -75,7 +73,6 @@ window.PanelCarousel = (() => {
     state.active = false;
     el('carousel-controls').hidden = true;
     document.body.classList.remove('carousel-view');
-    if (!state.wasCollapsed) document.body.classList.remove('sidebar-collapsed');
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
   }
   document.addEventListener('DOMContentLoaded',() => {

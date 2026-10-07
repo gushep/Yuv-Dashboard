@@ -40,6 +40,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/config', [MondayController::class, 'saveConfig']);
     Route::post('/api/refresh', [MondayController::class, 'saveRefresh']);
     Route::post('/api/capacity', [MondayController::class, 'saveCapacity']);
+    Route::post('/api/metric-settings', [MondayController::class, 'saveMetricSettings'])->name('metric-settings.store');
     Route::post('/api/sync', [MondayController::class, 'sync']);
     Route::post('/api/release', [MondayController::class, 'release'])->name('release.data');
+    Route::get('/api/control-tower', [MondayController::class, 'controlTower'])->name('control-tower.show');
 });

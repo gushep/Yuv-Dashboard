@@ -21,7 +21,7 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
  try{
   const dashboard=await(await fetch('../resources/views/dashboard.blade.php')).text();const style=document.createElement('style');style.textContent=dashboard.match(/<style>([\s\S]*?)<\/style>/)[1];document.head.prepend(style);
   document.getElementById('fixture').innerHTML=await(await fetch('../resources/views/release.blade.php')).text();document.getElementById('page-release').classList.add('active');document.querySelector('.cap-heading img').src='../public/yuv-logo.png';
-  await load('../public/sprint-panel.js');await load('../public/release.js');document.dispatchEvent(new Event('DOMContentLoaded'));
+  await load('../public/sprint-rules.js');await load('../public/sprint-panel.js');await load('../public/release.js');document.dispatchEvent(new Event('DOMContentLoaded'));
   SprintRelease.enter();check('Carregamento visível',!document.getElementById('release-loading').hidden);check('Exportação bloqueada durante carregamento',document.getElementById('release-export').disabled);await tick();
   check('Grupos dinâmicos e contagem reconciliada',document.querySelectorAll('.release-delivery').length===6 && document.querySelectorAll('.release-group').length===4 && document.getElementById('release-count').textContent.includes('6 itens'));
   check('Cores por Tipo e fallback consistente',SprintRelease.typeVisual('MELHORIA').color==='green' && SprintRelease.typeVisual('Suporte').color==='red' && SprintRelease.typeVisual('Homologação').color==='purple' && SprintRelease.typeVisual('Novo tipo').color===SprintRelease.typeVisual('Novo tipo').color);
@@ -52,7 +52,8 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
   mode='success';SprintRelease.enter(17);await tick();
   check('Datas e última atualização presentes',document.getElementById('release-dates').textContent.includes('28/09/2026') && document.getElementById('release-updated').textContent.includes('Última atualização'));
   document.querySelector('.release-group summary').click();await tick();
-  SprintRelease.leave();check('Navegação restaurada ao sair',!document.body.classList.contains('release-view') && !document.body.classList.contains('sidebar-collapsed'));SprintRelease.enter(17);await tick();
+  check('Release não recolhe o menu lateral',!document.body.classList.contains('sidebar-collapsed'));
+  SprintRelease.leave();check('Saída remove modo release',!document.body.classList.contains('release-view'));SprintRelease.enter(17);await tick();
   check('Ao retornar à tela todas as categorias estão fechadas',!document.querySelector('.release-group[open]'));
   check('Logo oficial carregado',document.querySelector('.cap-heading img').getAttribute('src')==='../public/yuv-logo.png');
   if(new URLSearchParams(location.search).has('pages')){

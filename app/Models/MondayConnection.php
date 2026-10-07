@@ -15,7 +15,23 @@ class MondayConnection extends Model
             'column_map' => 'array',
             'capacity_overrides' => 'array',
             'forecast_settings' => 'array',
+            'metric_settings' => 'array',
             'refresh_minutes' => 'integer',
+        ];
+    }
+
+    /**
+     * Regras configuráveis dos indicadores, com os padrões aplicados.
+     *
+     * @return array{capacityHours: float|int, excludedPeople: list<string>}
+     */
+    public function metricSettings(): array
+    {
+        $settings = $this->metric_settings ?? [];
+
+        return [
+            'capacityHours' => $settings['capacityHours'] ?? 80,
+            'excludedPeople' => array_values($settings['excludedPeople'] ?? []),
         ];
     }
 

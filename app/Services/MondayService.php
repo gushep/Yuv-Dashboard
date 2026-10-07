@@ -51,6 +51,19 @@ class MondayService
         return $boards;
     }
 
+    /**
+     * Uma página do log de atividades do quadro, do evento mais recente para o mais antigo.
+     *
+     * @return list<array{id: string, event: string, user_id: ?string, created_at: string, data: string}>
+     */
+    public function activityLogs(string $token, string $boardId, ?string $from, string $to, int $page, int $limit): array
+    {
+        $query = 'query ($board: [ID!]!, $from: ISO8601DateTime, $to: ISO8601DateTime, $page: Int!, $limit: Int!) { boards(ids: $board) { activity_logs(from: $from, to: $to, page: $page, limit: $limit) { id event user_id created_at data } } }';
+        $data = $this->query($token, $query, ['board' => [$boardId], 'from' => $from, 'to' => $to, 'page' => $page, 'limit' => $limit]);
+
+        return $data['boards'][0]['activity_logs'] ?? throw new RuntimeException('Quadro não encontrado ou sem permissão de leitura.');
+    }
+
     public function sync(string $token, string $boardId, array $map): array
     {
         $first = <<<'GRAPHQL'
@@ -93,18 +106,45 @@ GRAPHQL;
         }
         $converted = $this->convertItems($items, $map);
         try {
-            $sprints = $this->sprintDates($board, $token, (string) ($map['Sprint'] ?? ''));
+            $sprintBoard = $this->sprintDates($board, $token, (string) ($map['Sprint'] ?? ''));
         } catch (\Throwable) {
-            $sprints = [];
+            $sprintBoard = ['dates' => [], 'items' => []];
         }
 
         return [
             'boardName' => $board['name'],
             'fetched' => count($items),
             ...$converted,
-            'sprints' => $sprints,
+            'sprints' => $sprintBoard['dates'],
+            'sprintItems' => $sprintBoard['items'],
+            'labels' => $this->statusLabels($board['columns'] ?? []),
             'syncedAt' => now()->toIso8601String(),
         ];
+    }
+
+    /**
+     * Texto de cada índice das colunas de status. Mudanças em lote no log do Monday trazem só o índice.
+     *
+     * @return array<string, array<string, string>>
+     */
+    private function statusLabels(array $columns): array
+    {
+        $labels = [];
+        foreach ($columns as $column) {
+            $settings = json_decode($column['settings_str'] ?? '', true);
+            if (! is_array($settings['labels'] ?? null)) {
+                continue;
+            }
+            foreach ($settings['labels'] as $index => $label) {
+                $text = is_array($label) ? ($label['name'] ?? $label['label'] ?? null) : $label;
+                $key = is_array($label) ? ($label['id'] ?? $index) : $index;
+                if (is_string($text) && $text !== '') {
+                    $labels[(string) $column['id']][(string) $key] = $text;
+                }
+            }
+        }
+
+        return $labels;
     }
 
     public function convertItems(array $items, array $map): array
@@ -265,21 +305,28 @@ GRAPHQL;
         return (int) (bool) preg_match('/^(v|x|sim|yes|true|1|checked)$/i', trim($value));
     }
 
+    /**
+     * Datas de cada sprint e o número da sprint de cada item do quadro de sprints (usado para ler o log de atividades).
+     *
+     * @return array{dates: list<array{number: int, name: string, start: string, end: string, source: string}>, items: array<string, int>}
+     */
     private function sprintDates(array $taskBoard, string $token, string $sprintColumnId): array
     {
         $column = collect($taskBoard['columns'] ?? [])->firstWhere('id', $sprintColumnId);
         $settings = json_decode($column['settings_str'] ?? '{}', true);
         $boardId = $settings['boardIds'][0] ?? null;
         if (! $boardId) {
-            return [];
+            return ['dates' => [], 'items' => []];
         }
         $query = 'query ($board: [ID!]!) { boards(ids: $board) { items_page(limit: 500) { items { id name column_values { id type ... on TimelineValue { from to } } } } } }';
         $data = $this->query($token, $query, ['board' => [(string) $boardId]]);
         $dates = [];
+        $sprintItems = [];
         foreach ($data['boards'][0]['items_page']['items'] ?? [] as $item) {
             if (! preg_match('/\bSprint\s*(\d+)\b/iu', $item['name'], $matches)) {
                 continue;
             }
+            $sprintItems[(string) $item['id']] = (int) $matches[1];
             foreach ($item['column_values'] ?? [] as $value) {
                 if (($value['type'] ?? '') === 'timeline' && ! empty($value['from']) && ! empty($value['to'])) {
                     $dates[] = [
@@ -292,6 +339,6 @@ GRAPHQL;
             }
         }
 
-        return $dates;
+        return ['dates' => $dates, 'items' => $sprintItems];
     }
 }

@@ -147,6 +147,29 @@ async function saveMonday() {
   }
 }
 
+function applyMetricSettings(metrics = {}) {
+  SprintRules.applySettings(metrics);
+  document.getElementById('metric-capacity').value = String(SprintRules.settings.capacityHours);
+  document.getElementById('metric-excluded').value = SprintRules.settings.excludedPeople.join('\n');
+}
+
+async function saveMetricSettings() {
+  const button = document.getElementById('metric-save');
+  button.disabled = true;
+  try {
+    const capacityHours = Number(String(document.getElementById('metric-capacity').value).replace(',', '.'));
+    const excludedPeople = document.getElementById('metric-excluded').value.split('\n').map(name => name.trim()).filter(Boolean);
+    const result = await mondayRequest('/api/metric-settings', { capacityHours, excludedPeople });
+    applyMetricSettings(result.metrics);
+    if (DATA.length) useMondayRows(DATA.slice());
+    mondayMessage('metric-status', 'Regras salvas. Os indicadores já usam os novos valores.', 'success');
+  } catch (error) {
+    mondayMessage('metric-status', error.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function scheduleMondayRefresh() {
   clearTimeout(mondayRefreshTimer);
   mondayRefreshTimer = null;
@@ -187,7 +210,7 @@ function useMondayRows(rows) {
   DATA.splice(0, DATA.length, ...SNAPSHOT_DATA.filter(row => !liveSprints.has(row.Sprint)), ...valid);
   SPRINTS.splice(0, SPRINTS.length, ...[...new Set(DATA.map(row => row.Sprint).filter(Number.isInteger))].sort((a, b) => a - b));
   EPICOS_LIST.splice(0, EPICOS_LIST.length, ...[...new Set(DATA.map(row => row.Epico).filter(Boolean))].sort((a, b) => a.localeCompare(b)));
-  DEVS.splice(0, DEVS.length, ...[...new Set(DATA.flatMap(row => devPeople(row)).filter(name => name !== QA_DEV))].sort((a, b) => a.localeCompare(b)));
+  DEVS.splice(0, DEVS.length, ...[...new Set(DATA.flatMap(row => devPeople(row)).filter(name => !SprintRules.isExcludedPerson(name)))].sort((a, b) => a.localeCompare(b)));
   initSprintNav();
   const devSelect = document.getElementById('timeDevSel');
   const sprintSelect = document.getElementById('timeSpSel');
@@ -195,9 +218,9 @@ function useMondayRows(rows) {
   sprintSelect.length = 1;
   timeInited = false;
   rawPage = 0;
-  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast' && currentPage !== 'consumption' && currentPage !== 'release') navigate('dashboard');
+  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast' && currentPage !== 'consumption' && currentPage !== 'release' && currentPage !== 'control-tower') navigate('dashboard');
   else {
-    document.getElementById('tb-right').textContent = `S${SPRINTS[0]}–S${SPRINTS.at(-1)}`;
+    document.getElementById('tb-right').textContent = sprintRangeLabel();
   }
 }
 
@@ -217,6 +240,7 @@ async function syncMonday(force = true) {
     window.Forecast?.onDataUpdated(result);
     window.Consumption?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);
+    window.ControlTower?.refreshAlerts();
     const time = new Date(result.syncedAt).toLocaleString('pt-BR');
     mondayMessage('monday-sync-status', `${result.rows.length} registros carregados de ${result.fetched} tarefas · ${result.skipped} sem Sprint reconhecida · ${time}.`, 'success');
   } catch (error) {
@@ -241,6 +265,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   try {
     const config = await mondayRequest('/api/config');
+    applyMetricSettings(config.metrics);
     document.getElementById('monday-board').value = config.boardId || '';
     mondayRefreshMinutes = config.refreshMinutes ?? 5;
     document.getElementById('monday-refresh').value = String(mondayRefreshMinutes);
