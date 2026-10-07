@@ -16,7 +16,7 @@ window.Bombeiro = (() => {
   }
   function statusBucket(status) {
     const value = normalized(status);
-    return value === 'backlog' ? 'backlog' : ['implementado', 'cancelado'].includes(value) ? 'done' : 'progress';
+    return value === 'backlog' ? 'backlog' : window.SprintRules.isClosed(status) ? 'done' : 'progress';
   }
   function priorityMeta(priority) {
     const label = String(priority ?? '').trim() || 'Não informada';

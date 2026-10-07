@@ -21,7 +21,7 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
  try{
   const dashboard=await(await fetch('../resources/views/dashboard.blade.php')).text();const style=document.createElement('style');style.textContent=dashboard.match(/<style>([\s\S]*?)<\/style>/)[1];document.head.prepend(style);
   document.getElementById('fixture').innerHTML=await(await fetch('../resources/views/release.blade.php')).text();document.getElementById('page-release').classList.add('active');document.querySelector('.cap-heading img').src='../public/yuv-logo.png';
-  await load('../public/sprint-panel.js');await load('../public/release.js');document.dispatchEvent(new Event('DOMContentLoaded'));
+  await load('../public/sprint-rules.js');await load('../public/sprint-panel.js');await load('../public/release.js');document.dispatchEvent(new Event('DOMContentLoaded'));
   SprintRelease.enter();check('Carregamento visível',!document.getElementById('release-loading').hidden);check('Exportação bloqueada durante carregamento',document.getElementById('release-export').disabled);await tick();
   check('Grupos dinâmicos e contagem reconciliada',document.querySelectorAll('.release-delivery').length===6 && document.querySelectorAll('.release-group').length===4 && document.getElementById('release-count').textContent.includes('6 itens'));
   check('Cores por Tipo e fallback consistente',SprintRelease.typeVisual('MELHORIA').color==='green' && SprintRelease.typeVisual('Suporte').color==='red' && SprintRelease.typeVisual('Homologação').color==='purple' && SprintRelease.typeVisual('Novo tipo').color===SprintRelease.typeVisual('Novo tipo').color);

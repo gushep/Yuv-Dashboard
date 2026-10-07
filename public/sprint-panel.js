@@ -10,10 +10,8 @@ window.SprintPanel = (() => {
     return rows.filter(row => String(row.Id ?? '').trim() && Number.isInteger(Number(row.Sprint)) && Number(row.Sprint) > 0 && normalized(row.Tipo) !== 'suporte');
   }
   function statusBucket(status) {
-    const value = normalized(status);
-    if (value === 'implementado') return 'done';
-    if (value === 'backlog' || value === 'pronto pra iniciar' || value === 'pronto para iniciar' ||
-        value === 'pronto pra comecar' || value === 'pronto para comecar') return 'backlog';
+    if (window.SprintRules.isClosed(status)) return 'done';
+    if (window.SprintRules.isNotStarted(status)) return 'backlog';
     return 'progress';
   }
   function selectedRows(rows, sprint) {

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Regras dos indicadores · testes</title>
+<pre id="test-result">RUNNING</pre>
+<script src="../public/sprint-rules.js"></script>
+<script>
+(() => {
+  const checks=[];const check=(name,condition)=>{checks.push(`${condition?'PASS':'FAIL'} ${name}`);if(!condition)throw new Error(name);};
+  try {
+    const R=window.SprintRules;
+    check('Concluído é somente Implementado',R.isDone('Implementado') && R.isDone('  implementado ') && !R.isDone('Aguardando Deploy') && !R.isDone('QA - Aprovado') && !R.isDone('Cancelado'));
+    check('Aguardando Deploy e QA aprovado são feitos, não entregues',R.isDoneNotDelivered('Aguardando Deploy') && R.isDoneNotDelivered('QA - Aprovado') && !R.isOpen('Aguardando Deploy'));
+    check('Cancelado, Descontinuado e Despriorizado saem do escopo, sem diferenciar maiúsculas',R.isRemoved('CANCELADO') && R.isRemoved('Descontinuado') && R.isRemoved('Despriorizado') && !R.isOpen('Cancelado'));
+    check('Status em andamento ou desconhecido continua em aberto',R.isOpen('Em progresso') && R.isOpen('Próx. Sprint') && R.isOpen('CR - Aguardando') && R.isOpen(''));
+    check('Impedimentos e itens não iniciados reconhecidos sem acento',R.isBlocked('Limitação Externa') && R.isBlocked('Parado') && R.isNotStarted('Pronto para começar') && R.isNotStarted('Backlog'));
+    check('Kanban encerra entregues e retirados',R.isClosed('Implementado') && R.isClosed('Cancelado') && !R.isClosed('Aguardando Deploy'));
+    check('Capacidade padrão de 80h',R.capacityMinutes()===4800);
+    R.applySettings({capacityHours:'60',excludedPeople:['Ana Souza']});
+    check('Configuração altera capacidade e pessoas fora das métricas',R.capacityMinutes()===3600 && R.isExcludedPerson(' ana souza ') && !R.isExcludedPerson('Bia'));
+    R.applySettings({capacityHours:-5,excludedPeople:'inválido'});
+    check('Configuração inválida é ignorada',R.capacityMinutes()===3600 && R.isExcludedPerson('Ana Souza'));
+    document.getElementById('test-result').textContent=checks.join('\n')+'\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent=checks.join('\n')+'\nFAIL '+error.message; }
+})();
+</script>
+</html>

@@ -27,7 +27,7 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
     createGain(){const gain={values:[],gain:{cancelScheduledValues(){},setValueAtTime(value,time){gain.values.push([value,time]);},linearRampToValueAtTime(value,time){gain.values.push([value,time]);}},connect(){},disconnect(){}};gains.push(gain);return gain;}
   };
   window.mondayRequest=async()=>({rows,boardName:'Teste',syncedAt:'2026-10-07T12:00:00Z'});
-  await load('../public/bombeiro.js');document.dispatchEvent(new Event('DOMContentLoaded'));Bombeiro.enter();await tick();
+  await load('../public/sprint-rules.js');await load('../public/bombeiro.js');document.dispatchEvent(new Event('DOMContentLoaded'));Bombeiro.enter();await tick();
   const test=document.getElementById('fire-audio-test'),toggle=document.getElementById('fire-audio-toggle');
   test.click();await tick();
   check('Falha de carregamento apresenta aviso sem tocar sirene antiga',sources.length===0 && document.getElementById('fire-audio-state').textContent.includes('Não foi possível carregar'));

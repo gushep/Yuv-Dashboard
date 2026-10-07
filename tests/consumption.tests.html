@@ -22,7 +22,7 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
   document.getElementById('fixture').innerHTML=template;
   document.getElementById('page-consumption').classList.add('active');
   document.querySelector('.cap-heading img').src='../public/yuv-logo.png';
-  await load('../public/forecast.js');await load('../public/sprint-panel.js');await load('../public/consumption.js');
+  await load('../public/sprint-rules.js');await load('../public/forecast.js');await load('../public/sprint-panel.js');await load('../public/consumption.js');
   document.dispatchEvent(new Event('DOMContentLoaded'));
   const rows=[row('1','7h30','  SUporte  '),row('1','7h30','  SUporte  '),row('2',2,'Bug','Bia'),row('3',3,'','Ana'),row('4',5,'Suporte','Ana, Bia'),row('5',1,'Melhoria',''),row('6',null),row('7',0),row('8',100,'Suporte','Ana',{Sprint:18}),row('2',2,'Bug','Bia',{Sprint:16}),row('',100)];
   const result=Consumption.model(rows,17);

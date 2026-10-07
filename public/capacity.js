@@ -1,6 +1,6 @@
 /* Capacity usa os dados já carregados pelo dashboard; cálculos internos em minutos. */
 window.Capacity = (() => {
-  const DEFAULT_MINUTES = 80 * 60;
+  const defaultMinutes = () => window.SprintRules.capacityMinutes();
   const state = { sprint: null, userSelectedSprint: false, developer: 'all', expanded: new Set(), overrides: {}, loadedOverrides: false, error: '', active: false, loading: false };
   const el = id => document.getElementById(id);
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -58,7 +58,7 @@ window.Capacity = (() => {
     if (today >= dates.end) return totalMinutes;
     return Math.round(totalMinutes * weekdays(dates.start, today) / all);
   }
-  const isDone = status => window.Bombeiro?.statusBucket(status) === 'done';
+  const isDone = status => window.SprintRules.isDone(status);
   function model(allRows, sprint, dates, overrides = {}, today = todaySaoPaulo()) {
     const sprintById = new Map();
     for (const row of allRows) if (row.Id) {
@@ -85,7 +85,7 @@ window.Capacity = (() => {
     }
     const developers = [...groups.entries()].map(([name, rows]) => {
       const key = `${sprint}|${name}`;
-      const capacity = Number.isInteger(overrides[key]) ? overrides[key] : DEFAULT_MINUTES;
+      const capacity = Number.isInteger(overrides[key]) ? overrides[key] : defaultMinutes();
       const elapsed = elapsedMinutes(capacity, dates, today);
       const result = {name, rows, capacity, elapsed, plannedEstimate:0, completedEstimate:0, missingEstimate:0,
         realPlanned:0, realUnplanned:0, realSupport:0, otherUnplanned:0, registered:0, knownReal:0, missingReal:0,
@@ -93,7 +93,7 @@ window.Capacity = (() => {
       for (const row of rows) {
         const category = planning(row.Planejada);
         const estimate = minutes(row.EstH), real = minutes(row.RealH);
-        if (category === 'planned') {
+        if (category === 'planned' && !window.SprintRules.isRemoved(row.Status)) {
           if (estimate === null) result.missingEstimate++;
           else { result.plannedEstimate += estimate; if (isDone(row.Status)) result.completedEstimate += estimate; }
         }
@@ -196,8 +196,8 @@ window.Capacity = (() => {
     }
     renderExtra('cap-pending','Pendências de atribuição',result.pending,true);
     renderExtra('cap-unassigned','Sem responsável',result.unassigned);
-    const standardElapsed = elapsedMinutes(DEFAULT_MINUTES,dates,todaySaoPaulo());
-    el('cap-reference').textContent = `Referência: ${formatMinutes(DEFAULT_MINUTES)} por dev · até hoje: ${formatMinutes(standardElapsed)}`;
+    const standardElapsed = elapsedMinutes(defaultMinutes(),dates,todaySaoPaulo());
+    el('cap-reference').textContent = `Referência: ${formatMinutes(defaultMinutes())} por dev · até hoje: ${formatMinutes(standardElapsed)}`;
     el('cap-calendar').textContent = 'Dias úteis: segunda a sexta; hoje completo';
     el('cap-calendar').title = 'Capacidade até hoje = capacidade total × dias úteis transcorridos ÷ dias úteis totais. Inclui o dia atual completo no fuso America/Sao_Paulo; não há feriados configurados.';
     const updated = window.MONDAY_LAST_SYNC ? `Última atualização: ${new Date(window.MONDAY_LAST_SYNC).toLocaleString('pt-BR')}` : 'Base incorporada disponível';

@@ -25,7 +25,7 @@ window.MONDAY_LAST_SYNC='2026-10-06T12:00:00-03:00';
     const dashboard= new DOMParser().parseFromString(await (await fetch('../resources/views/dashboard.blade.php')).text(),'text/html');
     document.head.insertBefore(dashboard.querySelector('style').cloneNode(true),document.head.querySelector('link'));
     document.querySelector('#page-forecast img').src='../public/yuv-logo.png';
-    for (const source of ['bombeiro','sprint-panel','capacity','forecast']) await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=`../public/${source}.js`;script.onload=resolve;script.onerror=reject;document.body.append(script);});
+    for (const source of ['sprint-rules','bombeiro','sprint-panel','capacity','forecast']) await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=`../public/${source}.js`;script.onload=resolve;script.onerror=reject;document.body.append(script);});
     document.dispatchEvent(new Event('DOMContentLoaded'));
     check('Normalização em minutos',Forecast.duration('1h30')===90 && Forecast.duration('1,5')===90 && Forecast.duration('1:30')===90 && Forecast.duration('90m')===90 && Forecast.format(90)==='1h 30min');
     check('Ausência e duração inválida',Forecast.duration(null)===null && Forecast.duration(' ' )===null && Forecast.duration('1h90')===null && Forecast.duration(-1)===null && Forecast.duration(0)===0);

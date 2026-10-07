@@ -66,7 +66,7 @@ window.Forecast = (() => {
       if (Number(row.Sprint) === Number(sprint)) unique.set(row.Id ? String(row.Id) : `snapshot-${index}`, row);
     });
     for (const row of unique.values()) {
-      const people = owners(row), done = window.Bombeiro.statusBucket(row.Status) === 'done';
+      const people = owners(row), done = !window.SprintRules.isOpen(row.Status);
       if (!people.length && !done) unassigned.push(row);
       for (const name of people) {
         if (!groups.has(name)) groups.set(name,[]);
@@ -83,14 +83,14 @@ window.Forecast = (() => {
         else if (estimate === null || estimate <= 0) issue = 'Sem estimativa válida';
         else if (!String(row.Status || '').trim()) issue = 'Status ausente: revisar esforço restante';
         else if (real !== null && real >= estimate) issue = 'Revisar esforço restante: estimativa consumida';
-        else if (window.SprintPanel.statusBucket(row.Status) === 'backlog') { remainingEffort = estimate; source = 'Estimativa total · tarefa não iniciada'; }
+        else if (window.SprintRules.isNotStarted(row.Status)) { remainingEffort = estimate; source = 'Estimativa total · tarefa não iniciada'; }
         else if (real === null || !row.Id) issue = 'Tempo real ausente ou não auditável em tarefa em andamento';
         else { remainingEffort = estimate-real; source = 'Calculada provisoriamente: estimativa − tempo real; não mede progresso exato'; }
         groups.get(name).push({row, estimate, real, remainingEffort, source, issue, reasons});
       }
     }
     const developers = [...groups].map(([name,tasks]) => {
-      const key = `${sprint}|${name}`, total = Number.isInteger(overrides[key]) ? overrides[key] : 4800;
+      const key = `${sprint}|${name}`, total = Number.isInteger(overrides[key]) ? overrides[key] : window.SprintRules.capacityMinutes();
       const calendar = capacity(total, dates, reference, holidays);
       const known = tasks.reduce((sum,task) => sum + (task.remainingEffort ?? 0),0), missing = tasks.filter(task => task.remainingEffort === null).length;
       const available = calendar.remaining, status = classify(known,available,missing,tasks.length);
@@ -144,7 +144,7 @@ window.Forecast = (() => {
       tbody.append(tr); if (expanded) tbody.append(detail(dev));
     }
     if (!state.loaded || !shown.length) tbody.innerHTML = `<tr><td colspan="6" class="cap-empty">${!state.loaded ? 'Aguardando configurações salvas para calcular a previsão.' : 'Nenhum desenvolvedor nesta sprint.'}</td></tr>`;
-    const calendar = capacity(4800,dates,state.reference);
+    const calendar = capacity(window.SprintRules.capacityMinutes(),dates,state.reference);
     el('forecast-cutoff').textContent = `Corte: fim de ${state.reference.split('-').reverse().join('/')} · ${calendar.days ?? '?'} dias úteis posteriores · America/Sao_Paulo`;
     el('forecast-last-sync').textContent = state.loading ? 'Atualizando dados do Monday…' : window.MONDAY_LAST_SYNC ? `Última atualização: ${new Date(window.MONDAY_LAST_SYNC).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}` : 'Base incorporada · sem atualização do Monday';
     const warnings = ['Segunda a sexta; não há calendário de feriados ou calendário individual configurado. Corte exclui o dia de referência inteiro.','Nas tarefas em andamento, o cálculo usa estimativa menos tempo real compatível como aproximação. Esforço restante revisado no Monday tem prioridade. Tempo real ausente ou estimativa consumida em tarefa aberta exigem revisão. Cards compartilhados ou em várias sprints ficam pendentes para evitar atribuição incorreta.','Capacidade herdada do painel Capacity; reservas e ausências não estão disponíveis na integração atual e não são descontadas. Ajustes de esforço devem ser feitos no Monday.', 'A data de referência altera a capacidade futura; tarefas refletem a base atual, sem reconstruir histórico.'];

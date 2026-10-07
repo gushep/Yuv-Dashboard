@@ -187,7 +187,7 @@ function useMondayRows(rows) {
   DATA.splice(0, DATA.length, ...SNAPSHOT_DATA.filter(row => !liveSprints.has(row.Sprint)), ...valid);
   SPRINTS.splice(0, SPRINTS.length, ...[...new Set(DATA.map(row => row.Sprint).filter(Number.isInteger))].sort((a, b) => a - b));
   EPICOS_LIST.splice(0, EPICOS_LIST.length, ...[...new Set(DATA.map(row => row.Epico).filter(Boolean))].sort((a, b) => a.localeCompare(b)));
-  DEVS.splice(0, DEVS.length, ...[...new Set(DATA.flatMap(row => devPeople(row)).filter(name => name !== QA_DEV))].sort((a, b) => a.localeCompare(b)));
+  DEVS.splice(0, DEVS.length, ...[...new Set(DATA.flatMap(row => devPeople(row)).filter(name => !SprintRules.isExcludedPerson(name)))].sort((a, b) => a.localeCompare(b)));
   initSprintNav();
   const devSelect = document.getElementById('timeDevSel');
   const sprintSelect = document.getElementById('timeSpSel');
