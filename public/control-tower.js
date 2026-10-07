@@ -10,7 +10,8 @@ window.ControlTower = (() => {
   };
   const LEVEL = {green:'Verde', yellow:'Amarelo', red:'Vermelho', unknown:'Sem dados'};
   const state = {active:false, sprint:null, data:null, loading:false, error:'', request:0, chart:null,
-    filters:{q:'', status:'', owner:'', priority:'', commitment:''}, sort:{key:null, dir:1}};
+    filters:{q:'', situations:new Set(), owner:'', priority:'', commitment:''}, sort:{key:null, dir:1}};
+  const OPEN_SITUATIONS = ['notStarted', 'progress', 'blocked'];
 
   /* Tabela de compromisso: situação, etiquetas e ordenação. */
   const AVATAR_COLORS = ['#ff7a21','#0871e9','#9d75df','#16a96b','#e1306c','#0d9488','#d97706','#475569'];
@@ -52,7 +53,7 @@ window.ControlTower = (() => {
     const f = state.filters;
     const kind = situation(item);
     return (!f.q || window.SprintRules.normalize(item.name).includes(window.SprintRules.normalize(f.q)))
-      && (!f.status || (f.status === 'open' ? !['done','waiting'].includes(kind) : kind === f.status))
+      && (!f.situations.size || f.situations.has(kind))
       && (!f.owner || (f.owner === '-' ? !owners(item).length : owners(item).includes(f.owner)))
       && (!f.priority || (f.priority === '-' ? !item.priority : item.priority === f.priority))
       && (!f.commitment || item.committed === (f.commitment === 'yes'));
@@ -70,6 +71,12 @@ window.ControlTower = (() => {
     const {key, dir} = state.sort;
     const shown = items.filter(matches).sort(key ? (a, b) => SORTS[key](a, b) * dir || defaultOrder(a, b) : defaultOrder);
     el('tower-filter-count').textContent = `${shown.length} de ${items.length} card(s)`;
+    document.querySelectorAll('#page-control-tower .tower-chip').forEach(chip => {
+      const kind = chip.dataset.situation;
+      chip.dataset.label ||= chip.textContent;
+      chip.textContent = `${chip.dataset.label} · ${items.filter(item => situation(item) === kind).length}`;
+      chip.setAttribute('aria-pressed', String(state.filters.situations.has(kind)));
+    });
     document.querySelectorAll('#page-control-tower .tower-table th').forEach(th => {
       const sortKey = th.querySelector('button').dataset.sort;
       th.setAttribute('aria-sort', sortKey === key ? (dir === 1 ? 'ascending' : 'descending') : 'none');
@@ -228,12 +235,26 @@ window.ControlTower = (() => {
     if (!el('page-control-tower')) return;
     el('tower-sprint').onchange = event => { state.sprint = Number(event.target.value); load(); };
     el('tower-refresh').onclick = () => syncMonday(true);
-    const filters = {q:'tower-filter-q', status:'tower-filter-status', owner:'tower-filter-owner', priority:'tower-filter-priority', commitment:'tower-filter-commitment'};
+    const filters = {q:'tower-filter-q', owner:'tower-filter-owner', priority:'tower-filter-priority', commitment:'tower-filter-commitment'};
+    const refreshItems = () => { if (state.data?.available) renderItems(); };
+    document.querySelectorAll('#page-control-tower .tower-chip').forEach(chip => {
+      chip.onclick = () => {
+        const kind = chip.dataset.situation, selected = state.filters.situations;
+        selected.has(kind) ? selected.delete(kind) : selected.add(kind);
+        refreshItems();
+      };
+    });
+    el('tower-filter-open').onclick = () => {
+      const selected = state.filters.situations;
+      const onlyOpen = selected.size === OPEN_SITUATIONS.length && OPEN_SITUATIONS.every(kind => selected.has(kind));
+      state.filters.situations = new Set(onlyOpen ? [] : OPEN_SITUATIONS);
+      refreshItems();
+    };
     for (const [key, id] of Object.entries(filters)) {
       el(id).addEventListener(key === 'q' ? 'input' : 'change', event => { state.filters[key] = event.target.value; if (state.data?.available) renderItems(); });
     }
     el('tower-filter-clear').onclick = () => {
-      state.filters = {q:'', status:'', owner:'', priority:'', commitment:''};
+      state.filters = {q:'', situations:new Set(), owner:'', priority:'', commitment:''};
       for (const id of Object.values(filters)) el(id).value = '';
       if (state.data?.available) renderItems();
     };

@@ -45,9 +45,13 @@
       <p class="tower-note">Marque o que é compromisso; o restante é desejável. Sem marcação, os cards planejados contam como compromisso. A marcação fica salva no dashboard e não altera o Monday.</p>
       <div class="tower-filters" role="search" aria-label="Filtrar cards da sprint">
         <label class="tower-search">Buscar<input type="search" id="tower-filter-q" placeholder="Nome do card"></label>
-        <label>Situação<select id="tower-filter-status">
-          <option value="">Todas</option><option value="open">Em aberto</option><option value="notStarted">Não iniciados</option><option value="progress">Em andamento</option><option value="blocked">Impedidos</option><option value="waiting">Feitos, não entregues</option><option value="done">Concluídos</option>
-        </select></label>
+        <fieldset class="tower-situations"><legend>Situação <button type="button" id="tower-filter-open" class="tower-link-button">Em aberto</button></legend>
+          <button type="button" class="tower-chip" data-situation="notStarted" aria-pressed="false">Não iniciados</button>
+          <button type="button" class="tower-chip" data-situation="progress" aria-pressed="false">Em andamento</button>
+          <button type="button" class="tower-chip" data-situation="blocked" aria-pressed="false">Impedidos</button>
+          <button type="button" class="tower-chip" data-situation="waiting" aria-pressed="false">Feitos, não entregues</button>
+          <button type="button" class="tower-chip" data-situation="done" aria-pressed="false">Concluídos</button>
+        </fieldset>
         <label>Responsável<select id="tower-filter-owner"></select></label>
         <label>Prioridade<select id="tower-filter-priority"></select></label>
         <label>Compromisso<select id="tower-filter-commitment"><option value="">Todos</option><option value="yes">Compromisso</option><option value="no">Desejável</option></select></label>
