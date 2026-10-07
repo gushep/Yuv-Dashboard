@@ -121,3 +121,6 @@ body.release-view .content{padding:24px clamp(24px,3.3vw,56px) 18px}
   body.release-view .release-card-link{grid-column:3;padding:0;font-size:8pt}
   body.release-view .release-card-link svg{width:3mm;height:3mm}
 }
+.release-summary-status{margin-left:14px;color:#385274}
+.release-stale{display:block;margin-top:4px;color:#b45309;font-size:11px}
+@media print{.release-summary-status,.release-stale{display:none!important}}

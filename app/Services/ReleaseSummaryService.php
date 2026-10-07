@@ -6,6 +6,77 @@ use Illuminate\Support\Facades\Cache;
 
 class ReleaseSummaryService
 {
+    /** Seções da ficha de especificação usada pelo time nos comentários dos cards. */
+    private const SPEC_SECTIONS = 'USER STORY|CONTEXTO|REGRAS DE NEGÓCIO|FLUXO OPERACIONAL|TELAS IMPACTADAS|PARÂMETROS|PERMISSÕES|ESTRUTURA DE DADOS|CRITÉRIOS DE ACEITE|ESCOPO|DEPENDÊNCIAS';
+
+    /** Trecho do modelo de comentário que o time cola vazio nos cards. */
+    private const EMPTY_TEMPLATE = 'Por que essa tarefa existe? Qual problema/dor resolve? ...';
+
+    /**
+     * OBJETIVO da ficha de especificação, quando o card tem uma ficha preenchida.
+     *
+     * @param  list<array<string, mixed>>  $comments
+     */
+    public function objective(array $comments): ?string
+    {
+        foreach ($this->texts($comments) as $text) {
+            if (! preg_match('/\bOBJETIVO\b:?\s*(.+?)(?=\s+(?:'.self::SPEC_SECTIONS.')\b|$)/u', $text, $matches)) {
+                continue;
+            }
+            $objective = trim($matches[1]);
+            if (mb_strlen($objective) > 400) {
+                // Corta no fim da última frase que cabe; sem frase completa, na última palavra.
+                $cut = mb_substr($objective, 0, 400);
+                $end = mb_strrpos($cut, '. ');
+                $objective = $end !== false ? mb_substr($cut, 0, $end + 1) : rtrim(mb_substr($cut, 0, (int) mb_strrpos($cut, ' ')), ' ,;').'…';
+            }
+            if (mb_strlen($objective) >= 20 && ! str_contains($objective, '...') && ! preg_match('/https?:|@\S+\.\S+/iu', $objective)) {
+                return $objective;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Texto limpo do card (título e comentários, sem o modelo vazio) para resumir fora do dashboard.
+     *
+     * @param  list<array<string, mixed>>  $comments
+     */
+    public function sourceText(string $title, array $comments): string
+    {
+        $texts = array_filter($this->texts($comments), fn (string $text): bool => ! str_contains($text, self::EMPTY_TEMPLATE));
+
+        return trim("Título: {$title}\n\n".implode("\n---\n", $texts));
+    }
+
+    /** Assinatura do conteúdo do card: muda quando título ou comentários mudam, tornando o resumo desatualizado. */
+    public function sourceHash(string $title, array $comments): string
+    {
+        return hash('sha256', $this->sourceText($title, $comments));
+    }
+
+    /**
+     * Textos dos comentários e respostas, sem HTML e com espaços normalizados.
+     *
+     * @param  list<array<string, mixed>>  $comments
+     * @return list<string>
+     */
+    private function texts(array $comments): array
+    {
+        $texts = [];
+        foreach ($comments as $comment) {
+            foreach ([(string) ($comment['text_body'] ?? $comment['body'] ?? ''), ...array_map(fn (array $reply): string => (string) ($reply['body'] ?? ''), $comment['replies'] ?? [])] as $source) {
+                $text = trim((string) preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($source), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+                if ($text !== '') {
+                    $texts[] = $text;
+                }
+            }
+        }
+
+        return $texts;
+    }
+
     public function summarize(string $itemId, array $comments, array $names = []): ?string
     {
         $sourceHash = hash('sha256', json_encode([$comments, $names], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));

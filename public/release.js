@@ -33,6 +33,7 @@ window.SprintRelease = (() => {
       const article = document.createElement('article');article.className='release-delivery';article.dataset.itemId=item.id;
       const text = document.createElement('div'), title = document.createElement('h3');text.className='release-copy';title.textContent=item.title;text.append(title);
       if (item.description) { const description = document.createElement('p');description.textContent=item.description;text.append(description); }
+      if (item.descriptionStale) { const stale = document.createElement('small');stale.className='release-stale';stale.textContent='Resumo desatualizado: o card mudou depois que o resumo foi escrito.';text.append(stale); }
       article.append(text);
       const module = document.createElement('span');module.className='release-module';module.append(svgIcon('layers'));
       if (item.module) { module.append(document.createTextNode(item.module));module.title=`Módulo: ${item.module}`; }
@@ -58,6 +59,13 @@ window.SprintRelease = (() => {
     for(const value of paths[name]){const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',value);svg.append(path);}
     return svg;
   }
+  /** Situação das descrições: de onde vieram e o que falta pedir no Claude Code. */
+  function summaryStatus(data) {
+    const items = data.groups.flatMap(group => group.items);
+    const count = source => items.filter(item => item.descriptionSource === source).length;
+    const pending = (data.withoutDescription || 0) + (data.staleSummaries || 0);
+    return `Descrições: ${count('ficha')} da ficha · ${count('resumo')} resumo(s) · ${data.withoutDescription || 0} sem descrição${data.staleSummaries ? ` · ${data.staleSummaries} desatualizado(s)` : ''}${pending ? ` — peça no Claude Code: "gera os resumos da release da sprint ${data.sprint}"` : ''}`;
+  }
   function render() {
     if (!state.active) return;
     const data = state.data;
@@ -74,6 +82,7 @@ window.SprintRelease = (() => {
     el('release-dates').textContent=dates ? `${date(dates.start)} – ${date(dates.end)}` : '';
     el('release-count').textContent = visible ? `Sprint ${data.sprint ?? '—'} · Status: Implementado · ${data.total} ${data.total===1?'item':'itens'}` : 'Aguardando dados da sprint';
     el('release-updated').textContent=visible ? `Última atualização: ${new Date(data.syncedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}` : '';
+    el('release-summary-status').textContent = visible ? summaryStatus(data) : '';
     el('release-warning').hidden = !visible || !data.commentsUnavailable;
     el('release-warning').textContent = visible ? `Comentários indisponíveis em ${data.commentsUnavailable} item(ns). Os títulos das entregas foram preservados.` : '';
     el('release-empty').hidden = state.loading || !visible || data.total!==0;

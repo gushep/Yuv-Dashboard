@@ -7,8 +7,8 @@
 <script>
 let mode='success',pending=null,printed=0,printedTitle='',printedGroups=0;
 window.print=()=>{window.dispatchEvent(new Event('beforeprint'));printed++;printedTitle=document.title;printedGroups=document.querySelectorAll('.release-group[open]').length;window.dispatchEvent(new Event('afterprint'));};
-const doc=sprint=>({sprint,sprints:[17,18,19],dates:{start:'2026-09-28',end:'2026-10-11'},total:sprint===19?0:6,syncedAt:'2026-10-07T12:00:00Z',commentsUnavailable:sprint===18?1:0,groups:sprint===19?[]:[
- {type:'Melhoria',count:2,items:[{id:'1',title:sprint===18?'Entrega da sprint 18':'Relatório de acompanhamento',description:'Ajustada a apresentação das informações do relatório.',module:'Relatórios',url:'https://empresa.monday.com/boards/123/pulses/1'},{id:'2',title:'Consulta de informações',description:null,module:null,url:null}]},
+const doc=sprint=>({sprint,sprints:[17,18,19],dates:{start:'2026-09-28',end:'2026-10-11'},total:sprint===19?0:6,withoutDescription:sprint===19?0:4,staleSummaries:sprint===19?0:1,syncedAt:'2026-10-07T12:00:00Z',commentsUnavailable:sprint===18?1:0,groups:sprint===19?[]:[
+ {type:'Melhoria',count:2,items:[{id:'1',title:sprint===18?'Entrega da sprint 18':'Relatório de acompanhamento',description:'Ajustada a apresentação das informações do relatório.',descriptionSource:'resumo',descriptionStale:true,module:'Relatórios',url:'https://empresa.monday.com/boards/123/pulses/1'},{id:'2',title:'Consulta de informações',description:null,module:null,url:null}]},
  {type:'Suporte',count:2,items:[{id:'3',title:'Menu lateral do aplicativo',description:'Corrigida a exibição dos botões do menu lateral.',module:'Aplicativo',url:'https://monday.com/boards/123/pulses/3'},{id:'4',title:'Filtros dos relatórios',description:null,module:null,url:'javascript:alert(1)'}]},
  {type:'Homologação',count:1,items:[{id:'5',title:'Compatibilidade de equipamento',description:null,module:'Integrações',url:null}]},
  {type:'Sem tipo',count:1,items:[{id:'6',title:'<img src=x onerror=alert(1)>',description:null,module:null,url:null}]}
@@ -27,6 +27,7 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
   check('Cores por Tipo e fallback consistente',SprintRelease.typeVisual('MELHORIA').color==='green' && SprintRelease.typeVisual('Suporte').color==='red' && SprintRelease.typeVisual('Homologação').color==='purple' && SprintRelease.typeVisual('Novo tipo').color===SprintRelease.typeVisual('Novo tipo').color);
   check('Títulos e descrições renderizados como texto',!document.querySelector('.release-delivery img') && document.getElementById('release-document').textContent.includes('<img src=x onerror=alert(1)>'));
   check('Ausência de comentário não cria descrição',document.querySelector('[data-item-id="2"] p')===null);
+  check('Resumo desatualizado sinalizado e situação das descrições exibida',document.querySelector('[data-item-id="1"] .release-stale')!==null && document.querySelector('[data-item-id="2"] .release-stale')===null && document.getElementById('release-summary-status').textContent.includes('1 resumo(s)') && document.getElementById('release-summary-status').textContent.includes('gera os resumos da release da sprint 17'));
   check('Ícone em todas as entregas e módulo somente quando existe',document.querySelectorAll('.release-module svg').length===6 && [...document.querySelectorAll('.release-module')].filter(module=>module.textContent).length===3);
   check('Categorias começam recolhidas',!document.querySelector('.release-group[open]'));
   document.querySelector('.release-group summary').click();await tick();

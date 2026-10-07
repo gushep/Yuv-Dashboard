@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ReleaseSummary;
 use Illuminate\Support\Facades\Cache;
 
 class SprintReleaseService
@@ -9,9 +10,111 @@ class SprintReleaseService
     public function __construct(private MondayService $monday, private ReleaseSummaryService $summaries) {}
 
     /**
-     * @return array{sprint: ?int, sprints: array, dates: ?array, total: int, groups: list<array{type: string, items: array, count: int}>, syncedAt: string, commentsUnavailable: int, summaryMethod: string}
+     * Release da sprint. A descrição de cada card vem, nesta ordem: do OBJETIVO da ficha de especificação,
+     * do resumo gerado no Claude Code (marcado como desatualizado se o card mudou) ou da extração conservadora dos comentários.
+     *
+     * @return array{sprint: ?int, sprints: array, dates: ?array, total: int, groups: list<array{type: string, items: array, count: int}>, syncedAt: string, commentsUnavailable: int, withoutDescription: int, staleSummaries: int, summaryMethod: string}
      */
     public function build(array $snapshot, ?int $sprint, string $token, string $boardId): array
+    {
+        ['sprint' => $sprint, 'sprints' => $sprints, 'items' => $items, 'comments' => $comments] = $this->load($snapshot, $sprint, $token, $boardId);
+        $stored = ReleaseSummary::query()->whereIn('item_id', array_map('strval', array_keys($items)))->get()->keyBy('item_id');
+        $groups = [];
+        $unavailable = $withoutDescription = $stale = 0;
+        foreach ($items as $id => $row) {
+            $source = $comments[$id] ?? ['available' => false, 'comments' => []];
+            $unavailable += (int) ! $source['available'];
+            $type = trim((string) ($row['Tipo'] ?? ''));
+            $type = $type !== '' ? $type : 'Sem tipo';
+            [$description, $origin, $isStale] = $this->describe((string) $id, (string) $row['Nome'], $source, $stored->get((string) $id), (string) ($row['Responsavel'] ?? ''));
+            $withoutDescription += (int) ($description === null);
+            $stale += (int) $isStale;
+            $groups[$type] ??= ['type' => $type, 'items' => []];
+            $groups[$type]['items'][] = [
+                'id' => (string) $id, 'title' => $row['Nome'], 'description' => $description,
+                'descriptionSource' => $origin, 'descriptionStale' => $isStale,
+                'module' => filled($row['Modulo'] ?? null) ? trim($row['Modulo']) : null,
+                'url' => $this->safeUrl((string) ($row['Url'] ?? '')),
+            ];
+        }
+        foreach ($groups as &$group) {
+            usort($group['items'], fn (array $first, array $second): int => strnatcasecmp($first['title'], $second['title']));
+            $group['count'] = count($group['items']);
+        }
+        unset($group);
+        ksort($groups, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return [
+            'sprint' => $sprint, 'sprints' => $sprints, 'dates' => collect($snapshot['sprints'] ?? [])->firstWhere('number', $sprint),
+            'total' => count($items), 'groups' => array_values($groups), 'syncedAt' => $snapshot['syncedAt'],
+            'commentsUnavailable' => $unavailable, 'withoutDescription' => $withoutDescription, 'staleSummaries' => $stale,
+            'summaryMethod' => 'ficha-resumo-extracao',
+        ];
+    }
+
+    /**
+     * Cards implementados que precisam de resumo: sem ficha preenchida e sem resumo atualizado (ou todos, com $all).
+     *
+     * @return list<array{id: string, title: string, type: string, module: ?string, hash: string, currentSummary: ?string, text: string}>
+     */
+    public function pendingSummaries(array $snapshot, int $sprint, string $token, string $boardId, bool $all = false): array
+    {
+        ['items' => $items, 'comments' => $comments] = $this->load($snapshot, $sprint, $token, $boardId);
+        $stored = ReleaseSummary::query()->whereIn('item_id', array_map('strval', array_keys($items)))->get()->keyBy('item_id');
+        $pending = [];
+        foreach ($items as $id => $row) {
+            $source = $comments[$id] ?? ['available' => false, 'comments' => []];
+            if (! $source['available']) {
+                continue;
+            }
+            $hash = $this->summaries->sourceHash((string) $row['Nome'], $source['comments']);
+            $summary = $stored->get((string) $id);
+            $needsSummary = $this->summaries->objective($source['comments']) === null && ($summary === null || $summary->source_hash !== $hash);
+            if ($all || $needsSummary) {
+                $pending[] = [
+                    'id' => (string) $id, 'title' => (string) $row['Nome'], 'type' => (string) ($row['Tipo'] ?? ''),
+                    'module' => filled($row['Modulo'] ?? null) ? trim($row['Modulo']) : null, 'hash' => $hash,
+                    'currentSummary' => $summary?->summary, 'text' => $this->summaries->sourceText((string) $row['Nome'], $source['comments']),
+                ];
+            }
+        }
+
+        return $pending;
+    }
+
+    /**
+     * @return array{0: ?string, 1: ?string, 2: bool} descrição, origem (ficha|resumo|comentario) e se o resumo está desatualizado
+     */
+    private function describe(string $id, string $title, array $source, ?ReleaseSummary $stored, string $owner): array
+    {
+        if ($source['available'] && ($objective = $this->summaries->objective($source['comments'])) !== null) {
+            return [$objective, 'ficha', false];
+        }
+        if ($stored !== null) {
+            $stale = $source['available'] && $stored->source_hash !== $this->summaries->sourceHash($title, $source['comments']);
+
+            return [$stored->summary, 'resumo', $stale];
+        }
+        if ($source['available']) {
+            try {
+                $description = $this->summaries->summarize($id, $source['comments'], [$owner]);
+            } catch (\Throwable) {
+                $description = null;
+            }
+            if ($description !== null) {
+                return [$description, 'comentario', false];
+            }
+        }
+
+        return [null, null, false];
+    }
+
+    /**
+     * Cards implementados da sprint e seus comentários (comentários em cache por 2 minutos por sincronização).
+     *
+     * @return array{sprint: ?int, sprints: list<int>, items: array<string, array<string, mixed>>, comments: array<string, array{available: bool, comments: array}>}
+     */
+    private function load(array $snapshot, ?int $sprint, string $token, string $boardId): array
     {
         $sprints = array_values(array_unique([
             ...array_column($snapshot['rows'], 'Sprint'),
@@ -47,40 +150,8 @@ class SprintReleaseService
                 }
             }
         }
-        $groups = [];
-        $unavailable = 0;
-        foreach ($items as $id => $row) {
-            $source = $comments[$id] ?? ['available' => false, 'comments' => []];
-            $unavailable += (int) ! $source['available'];
-            $type = trim((string) ($row['Tipo'] ?? ''));
-            $type = $type !== '' ? $type : 'Sem tipo';
-            $description = null;
-            if ($source['available']) {
-                try {
-                    $description = $this->summaries->summarize((string) $id, $source['comments'], [(string) ($row['Responsavel'] ?? '')]);
-                } catch (\Throwable) {
-                    $description = null;
-                }
-            }
-            $groups[$type] ??= ['type' => $type, 'items' => []];
-            $groups[$type]['items'][] = [
-                'id' => (string) $id, 'title' => $row['Nome'], 'description' => $description,
-                'module' => filled($row['Modulo'] ?? null) ? trim($row['Modulo']) : null,
-                'url' => $this->safeUrl((string) ($row['Url'] ?? '')),
-            ];
-        }
-        foreach ($groups as &$group) {
-            usort($group['items'], fn (array $first, array $second): int => strnatcasecmp($first['title'], $second['title']));
-            $group['count'] = count($group['items']);
-        }
-        unset($group);
-        ksort($groups, SORT_NATURAL | SORT_FLAG_CASE);
 
-        return [
-            'sprint' => $sprint, 'sprints' => $sprints, 'dates' => collect($snapshot['sprints'] ?? [])->firstWhere('number', $sprint),
-            'total' => count($items), 'groups' => array_values($groups), 'syncedAt' => $snapshot['syncedAt'],
-            'commentsUnavailable' => $unavailable, 'summaryMethod' => 'conservative-extraction',
-        ];
+        return ['sprint' => $sprint, 'sprints' => $sprints, 'items' => $items, 'comments' => $comments];
     }
 
     private function safeUrl(string $value): ?string
