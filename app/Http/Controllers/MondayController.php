@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\MondayConnection;
+use App\Services\MondayActivityImporter;
 use App\Services\MondayService;
 use App\Services\SprintReleaseService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -13,9 +15,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use RuntimeException;
 
+use function Illuminate\Support\defer;
+
 class MondayController extends Controller
 {
     private const CACHE_KEY = 'monday-sync-1';
+
+    /** Trava que limita a cópia do log de atividades a uma vez por hora. */
+    private const ACTIVITY_IMPORT_KEY = 'monday-activity-import';
 
     private const FIELDS = [
         'Responsavel', 'Status', 'Prioridade', 'Tipo', 'EstH', 'RealH',
@@ -152,7 +159,7 @@ class MondayController extends Controller
         return response()->json(['saved' => true, 'overrides' => $overrides]);
     }
 
-    public function sync(Request $request, MondayService $monday): JsonResponse
+    public function sync(Request $request, MondayService $monday, MondayActivityImporter $importer): JsonResponse
     {
         $data = $request->validate([
             'force' => ['nullable', 'boolean'],
@@ -160,7 +167,7 @@ class MondayController extends Controller
             'sprintPanel' => ['nullable', 'boolean'],
         ]);
 
-        return $this->attempt(function () use ($monday, $data) {
+        return $this->attempt(function () use ($monday, $importer, $data) {
             $connection = MondayConnection::current();
             if (! $connection->board_id || ! $connection->token || empty($connection->column_map['Sprint'])) {
                 throw new RuntimeException('Configure o quadro, token e coluna Sprint antes de atualizar.');
@@ -175,21 +182,41 @@ class MondayController extends Controller
             }
             $result = $monday->sync($connection->token, $connection->board_id, $connection->column_map ?? []);
             Cache::put(self::CACHE_KEY, $result, 3600);
+            $this->importActivityAfterResponse($importer, $connection);
 
             return $result;
         });
     }
 
-    public function release(Request $request, MondayService $monday, SprintReleaseService $release): JsonResponse
+    public function release(Request $request, MondayService $monday, MondayActivityImporter $importer, SprintReleaseService $release): JsonResponse
     {
         $data = $request->validate(['sprint' => ['nullable', 'integer', 'between:1,999999']]);
-        $snapshot = $this->sync($request, $monday);
+        $snapshot = $this->sync($request, $monday, $importer);
         if ($snapshot->getStatusCode() !== 200) {
             return $snapshot;
         }
         $connection = MondayConnection::current();
 
         return response()->json($release->build($snapshot->getData(true), isset($data['sprint']) ? (int) $data['sprint'] : null, $connection->token, $connection->board_id));
+    }
+
+    /**
+     * Sem servidor com agendador, o uso do dashboard mantém a cópia do histórico em dia.
+     * Roda após a resposta e no máximo uma vez por hora; uma falha não afeta o sync.
+     */
+    private function importActivityAfterResponse(MondayActivityImporter $importer, MondayConnection $connection): void
+    {
+        if (! Cache::add(self::ACTIVITY_IMPORT_KEY, true, 3600)) {
+            return;
+        }
+        defer(function () use ($importer, $connection): void {
+            try {
+                $importer->import($connection);
+            } catch (ConnectionException|RuntimeException $exception) {
+                Cache::forget(self::ACTIVITY_IMPORT_KEY);
+                report($exception);
+            }
+        });
     }
 
     private function token(Request $request): string

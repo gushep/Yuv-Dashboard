@@ -4,11 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\MondayActivityEvent;
 use App\Models\MondayConnection;
+use App\Models\User;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 use Tests\TestCase;
 
 class MondayActivityImportTest extends TestCase
@@ -101,11 +104,71 @@ class MondayActivityImportTest extends TestCase
         $this->assertTrue($event->withoutOverlapping);
     }
 
-    private function configureMonday(): void
+    public function test_dashboard_sync_copies_activity_after_response_at_most_once_per_hour(): void
+    {
+        $this->actingAs(User::factory()->create());
+        $this->configureMonday(['Sprint' => 'sprint']);
+        $this->withoutDefer();
+        Http::preventStrayRequests();
+        Http::fake(['api.monday.com/v2' => fn (Request $request) => Http::response(str_contains($request['query'], 'activity_logs')
+            ? $this->page([$this->log('e1', 'create_pulse', '17593344000000000', ['pulse_id' => 101])])
+            : $this->board())]);
+
+        $this->postJson('/api/sync', ['force' => true])->assertOk();
+        $this->postJson('/api/sync', ['force' => true])->assertOk();
+
+        $this->assertSame(1, MondayActivityEvent::query()->count());
+        Http::assertSentCount(3);
+        $this->travel(61)->minutes();
+        $this->postJson('/api/sync', ['force' => true])->assertOk();
+        Http::assertSentCount(5);
+    }
+
+    public function test_activity_copy_failure_does_not_affect_dashboard_sync_and_is_retried_on_next_sync(): void
+    {
+        $this->actingAs(User::factory()->create());
+        $this->configureMonday(['Sprint' => 'sprint']);
+        $this->withoutDefer();
+        Exceptions::fake();
+        Http::preventStrayRequests();
+        $activityRequests = 0;
+        Http::fake(['api.monday.com/v2' => function (Request $request) use (&$activityRequests) {
+            if (! str_contains($request['query'], 'activity_logs')) {
+                return Http::response($this->board());
+            }
+
+            return ++$activityRequests === 1
+                ? Http::response(['errors' => [['message' => 'Complexity budget exhausted']]])
+                : Http::response($this->page([$this->log('e1', 'create_pulse', '17593344000000000', ['pulse_id' => 101])]));
+        }]);
+
+        $this->postJson('/api/sync', ['force' => true])->assertOk()->assertJsonPath('fetched', 1);
+        $this->postJson('/api/sync', ['force' => true])->assertOk();
+
+        Exceptions::assertReported(fn (RuntimeException $exception): bool => str_contains($exception->getMessage(), 'Complexity budget exhausted'));
+        $this->assertSame(1, MondayActivityEvent::query()->count());
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function board(): array
+    {
+        return ['data' => ['boards' => [[
+            'name' => 'Tarefas', 'columns' => [],
+            'items_page' => ['cursor' => null, 'items' => [['id' => '101', 'name' => 'Tarefa', 'column_values' => [['id' => 'sprint', 'text' => 'Sprint 17']]]]],
+        ]]]];
+    }
+
+    /**
+     * @param  array<string, string>  $columnMap
+     */
+    private function configureMonday(array $columnMap = []): void
     {
         $connection = MondayConnection::current();
         $connection->board_id = '123';
         $connection->token = 'token-secreto';
+        $connection->column_map = $columnMap;
         $connection->save();
     }
 
