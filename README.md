@@ -1,58 +1,104 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+﻿<p align="center"><img src="public/yuv-logo.png" width="180" alt="YUV"></p>
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+# YUV Dashboard
 
-## About Laravel
+Plataforma interna de acompanhamento de métricas do time responsável pela evolução e sustentação da plataforma YUV. O dashboard transforma os dados dos cards da Monday em uma visão compartilhada de planejamento, execução, suporte e entregas por sprint.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Seu propósito é ajudar o time a entender onde o esforço está sendo consumido, acompanhar demandas de suporte, comparar o planejamento com a execução e comunicar as mudanças implementadas. As telas também funcionam como painéis de acompanhamento e apresentação.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Para quem serve
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- **Gestão e liderança técnica:** acompanhar indicadores, capacidade e previsibilidade das sprints.
+- **Desenvolvimento e sustentação:** consultar demandas, horas registradas, responsáveis e distribuição do esforço.
+- **CS e Comercial:** conhecer as mudanças implementadas por meio da release da sprint.
 
-## Learning Laravel
+Os indicadores contextualizam o trabalho do time. Horas sem apontamento não representam, por si só, ociosidade ou produtividade individual.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Painéis disponíveis
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+| Tela | Finalidade |
+| --- | --- |
+| Dashboard e sprints | Visão dos indicadores e detalhamento por sprint. |
+| Épicos, time e dados | Consulta das informações do quadro por diferentes perspectivas. |
+| Sustentação — Painel do Bombeiro | Demandas de Suporte por status e prioridade, com avisos visuais e toque Den Den Mushi para novas demandas. |
+| Painel da Sprint | Acompanhamento do trabalho vinculado à sprint selecionada. |
+| Apresentação dos painéis | Exibição dos painéis em carrossel. |
+| Capacidade e execução da sprint | Comparação de disponibilidade, planejamento e execução por desenvolvedor. |
+| Previsibilidade da sprint | Comparação da demanda restante com a capacidade disponível. |
+| Consumo de horas | Distribuição entre Sprint e Suporte, detalhamento individual e comparação com a reserva coletiva de suporte. |
+| Release da sprint | Itens implementados agrupados por Tipo, com categorias expansíveis, links dos cards e exportação via impressão para PDF. |
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## Integração com a Monday
 
-## Agentic Development
+A aplicação consulta a API GraphQL da Monday pelo backend, com paginação, mapeamento de colunas e cache. Na tela **Configurações**, informe o token, selecione o quadro e confira o mapeamento das colunas.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Os principais campos são Sprint, Tipo, Status, Responsável, Tempo Estimado e Tempo Real. Prioridade, épico e esforço restante apoiam os painéis que os utilizam. Os comentários dos cards são consultados para a release; o módulo é exibido quando existe nos dados.
+
+### Regras dos indicadores
+
+- **Consumo de horas:** Tipo = Suporte entra em Suporte; qualquer outro Tipo entra em Sprint. Considera as horas reais independentemente do status e da classificação Planejado / Não planejado.
+- **Reserva de suporte:** o padrão é 40 horas para o time inteiro por sprint, configurável e persistido por sprint. Essa comparação não altera a capacidade dos demais painéis.
+- **Atribuição individual:** horas compartilhadas sem distribuição confiável permanecem nos totais do time e aparecem como horas sem atribuição individual.
+- **Release:** inclui os itens da sprint com Status = Implementado, uma vez por ID, agrupados pela coluna Tipo. Não exige seleção ou edição manual.
+- **Descrições da release:** extração conservadora dos comentários, com cache. Sem informação confiável, aparece somente o título. Não há serviço de IA generativa configurado para sumarização.
+
+A qualidade dos indicadores depende do preenchimento dos cards. Tempo Real acumulado pode incluir esforço de outras sprints quando a fonte não permite separá-lo. Os painéis apresentam avisos de qualidade e atribuição para ajudar na conferência.
+
+## Tecnologia
+
+Laravel 13, PHP (ambiente de desenvolvimento em PHP 8.5), MySQL, Blade, JavaScript e CSS. A aplicação usa autenticação por sessão, proteção CSRF e PHPUnit. Os assets dos painéis ficam em `public/`.
+
+## Executar localmente
+
+Tenha PHP compatível com `composer.lock`, Composer e MySQL disponíveis. Para compilar os assets do pipeline Vite, utilize Node.js e npm compatíveis com `package.json`.
+
+1. Clone o repositório e instale as dependências:
+
+   ```bash
+   git clone https://github.com/gushep/Yuv-Dashboard.git
+   cd Yuv-Dashboard
+   composer install
+   ```
+
+2. Copie `.env.example` para `.env`. Crie o banco MySQL e configure `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` e `DB_PASSWORD`.
+
+3. Em uma instalação nova, gere a chave e execute as migrations:
+
+   ```bash
+   php artisan key:generate
+   php artisan migrate --no-interaction
+   ```
+
+4. Crie o usuário inicial. O comando solicita a senha sem exibi-la:
+
+   ```bash
+   php artisan app:create-admin seu-email@empresa.com "Seu Nome"
+   ```
+
+5. Inicie o servidor de desenvolvimento:
+
+   ```bash
+   php artisan serve
+   ```
+
+6. Acesse o endereço informado pelo servidor, faça login e configure a integração com a Monday na tela **Configurações**.
+
+Para compilar os assets Vite, execute `npm install` e `npm run build`. As orientações do ambiente Windows original estão em [MIGRACAO.md](MIGRACAO.md), que registra a etapa inicial da migração com SQLite.
+
+## Credenciais e configuração
+
+O token da Monday fica na coluna `token` da tabela `monday_connections`, criptografado pelo Laravel com a `APP_KEY`. A API de configuração informa apenas se existe um token cadastrado.
+
+Ao migrar uma instalação existente, preserve o banco e a mesma `APP_KEY` para manter a leitura do token. O comando `key:generate` das instruções acima se aplica a instalações novas.
+
+O `.env` contém a configuração do ambiente e não deve ser versionado. No servidor web, a raiz pública deve apontar para `public/`.
+
+Atualmente, a configuração do quadro é compartilhada entre os usuários. O projeto não implementa organizações independentes, gestão de papéis ou OAuth da Monday.
+
+## Verificação
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+php artisan test --compact
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+As páginas `tests/forecast.tests.html`, `tests/consumption.tests.html`, `tests/release.tests.html` e `tests/bombeiro-audio.tests.html` verificam interações com dados controlados. Sirva a raiz do repositório em um servidor local de desenvolvimento para abri-las no navegador; elas não devem ser expostas em produção.
