@@ -1,12 +1,13 @@
 /* Painel de consulta do Monday. A credencial permanece no servidor local. */
 window.Bombeiro = (() => {
   const CYCLE_MS = 60_000;
-  const ALARM_SECONDS = 16;
+  const ALARM_SECONDS = 8.13;
+  const ALARM_URL = new URL('den-den-mushi-short.m4a', document.currentScript.src).href;
   const state = {
     active: false, timer: null, inFlight: false, rows: [], allRows: [],
     sprint: null, pendingSprint: null, boardName: '', lastSuccess: null,
     stale: false, newIds: new Set(), audioEnabled: true, audioContext: null,
-    activeSound: null, alertPulseTimer: null
+    activeSound: null, alertPulseTimer: null, audioBuffer: null, audioLoading: null
   };
 
   function normalized(value) { return String(value ?? '').trim().toLocaleLowerCase('pt-BR'); }
@@ -201,7 +202,7 @@ window.Bombeiro = (() => {
     const banner = el('fire-alert');
     void banner.offsetWidth;
     banner.classList.add('is-ringing');
-    state.alertPulseTimer = setTimeout(stopAlertPulse, ALARM_SECONDS * 1_000);
+    state.alertPulseTimer = setTimeout(stopAlertPulse, (state.audioBuffer?.duration || ALARM_SECONDS) * 1_000);
   }
   async function ensureAudioContext() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -209,41 +210,50 @@ window.Bombeiro = (() => {
     if (!state.audioContext || state.audioContext.state === 'closed') state.audioContext = new AudioContextClass();
     if (state.audioContext.state !== 'running') await state.audioContext.resume();
     if (state.audioContext.state !== 'running') throw new Error('O navegador bloqueou o áudio. Tente clicar novamente.');
+    if (!state.audioBuffer) {
+      if (!state.audioLoading) {
+        state.audioLoading = (async () => {
+          const response = await fetch(ALARM_URL);
+          if (!response.ok) throw new Error('Não foi possível carregar o toque Den Den Mushi. Tente novamente.');
+          state.audioBuffer = await state.audioContext.decodeAudioData(await response.arrayBuffer());
+        })().finally(() => { state.audioLoading = null; });
+      }
+      await state.audioLoading;
+    }
     return state.audioContext;
   }
   function stopSound() {
     if (!state.activeSound) return;
-    const { context, gain } = state.activeSound;
+    const { context, gain, source } = state.activeSound;
     const now = context.currentTime;
     gain.gain.cancelScheduledValues(now);
     gain.gain.setValueAtTime(0, now);
+    source.stop(now);
     state.activeSound = null;
   }
-  function playSound(durationSeconds = ALARM_SECONDS) {
+  function playSound(durationSeconds = null) {
     const context = state.audioContext;
-    if (!context || context.state !== 'running') throw new Error('O áudio não está ativo neste navegador.');
+    if (!context || context.state !== 'running' || !state.audioBuffer) throw new Error('O áudio não está ativo neste navegador.');
+    durationSeconds = durationSeconds ?? state.audioBuffer.duration;
     stopSound();
     const start = context.currentTime + 0.02;
-    const oscillator = context.createOscillator();
+    const source = context.createBufferSource();
     const gain = context.createGain();
-    oscillator.type = 'triangle';
-    oscillator.frequency.setValueAtTime(650, start);
-    for (let cycle = 0; cycle < durationSeconds / 0.8; cycle++) {
-      oscillator.frequency.linearRampToValueAtTime(900, start + cycle * 0.8 + 0.4);
-      oscillator.frequency.linearRampToValueAtTime(650, start + (cycle + 1) * 0.8);
-    }
+    source.buffer = state.audioBuffer;
+    source.loop = false;
     gain.gain.setValueAtTime(0.001, start);
     gain.gain.linearRampToValueAtTime(0.22, start + 0.08);
     gain.gain.setValueAtTime(0.22, start + durationSeconds - 0.3);
     gain.gain.linearRampToValueAtTime(0.001, start + durationSeconds);
-    oscillator.connect(gain);
+    source.connect(gain);
     gain.connect(context.destination);
-    state.activeSound = { context, gain };
-    oscillator.onended = () => {
+    state.activeSound = { context, gain, source };
+    source.onended = () => {
+      source.disconnect();gain.disconnect();
       if (state.activeSound?.gain === gain) state.activeSound = null;
     };
-    oscillator.start(start);
-    oscillator.stop(start + durationSeconds);
+    source.start(start);
+    source.stop(start + durationSeconds);
   }
   function setAudioMessage(message, warning = false) {
     const status = el('fire-audio-state');
@@ -253,14 +263,14 @@ window.Bombeiro = (() => {
   function setAudioUi() {
     el('fire-audio-toggle').textContent = state.audioEnabled ? 'Silenciar alertas' : 'Ativar alertas sonoros';
     el('fire-audio-toggle').setAttribute('aria-pressed', String(state.audioEnabled));
-    const ready = state.audioEnabled && state.audioContext?.state === 'running';
+    const ready = state.audioEnabled && state.audioContext?.state === 'running' && !!state.audioBuffer;
     setAudioMessage(!state.audioEnabled ? 'Som silenciado · alertas visuais ativos'
-      : ready ? 'Som ativo · alertas visuais ativos'
+      : ready ? 'Den Den Mushi ativo · alertas visuais ativos'
         : 'Alertas sonoros ativados · clique ou toque na página para liberar o áudio');
     el('fire-audio-state').classList.toggle('on', ready);
   }
   async function unlockAudioOnInteraction(event) {
-    if (!state.audioEnabled || state.audioContext?.state === 'running' ||
+    if (!state.active || !state.audioEnabled || (state.audioContext?.state === 'running' && state.audioBuffer) ||
         event.target.closest?.('#fire-audio-toggle, #fire-audio-test')) return;
     try {
       await ensureAudioContext();
@@ -293,8 +303,8 @@ window.Bombeiro = (() => {
       await ensureAudioContext();
       playSound();
       setAudioMessage(state.audioEnabled
-        ? 'Teste iniciado (16 s) · alertas sonoros ativos'
-        : 'Teste iniciado (16 s) · alertas continuam silenciados');
+        ? 'Teste do toque completo iniciado · alertas sonoros ativos'
+        : 'Teste do toque completo iniciado · alertas continuam silenciados');
     } catch (error) {
       setAudioMessage(error.message, true);
     }

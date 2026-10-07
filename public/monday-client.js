@@ -195,7 +195,7 @@ function useMondayRows(rows) {
   sprintSelect.length = 1;
   timeInited = false;
   rawPage = 0;
-  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast') navigate('dashboard');
+  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast' && currentPage !== 'consumption' && currentPage !== 'release') navigate('dashboard');
   else {
     document.getElementById('tb-right').textContent = `S${SPRINTS[0]}–S${SPRINTS.at(-1)}`;
   }
@@ -205,25 +205,30 @@ async function syncMonday(force = true) {
   if (mondaySyncInFlight) return;
   mondaySyncInFlight = true;
   window.Capacity?.onLoading();
+  window.Consumption?.onLoading();
   window.Forecast?.onLoading();
   const button = document.getElementById('monday-sync');
   button.disabled = true;
   mondayMessage('monday-sync-status', 'Buscando tarefas no Monday...');
   try {
     const result = await mondayRequest('/api/sync', { force });
-    useMondayRows(result.rows);
+    if (result.rows.length || !['consumption','release'].includes(currentPage)) useMondayRows(result.rows);
     window.Capacity?.onDataUpdated(result);
     window.Forecast?.onDataUpdated(result);
+    window.Consumption?.onDataUpdated(result);
+    window.SprintRelease?.onDataUpdated(result);
     const time = new Date(result.syncedAt).toLocaleString('pt-BR');
     mondayMessage('monday-sync-status', `${result.rows.length} registros carregados de ${result.fetched} tarefas · ${result.skipped} sem Sprint reconhecida · ${time}.`, 'success');
   } catch (error) {
     mondayMessage('monday-sync-status', error.message, 'error');
     window.Capacity?.onError(error.message);
     window.Forecast?.onError(error.message);
+    window.Consumption?.onError(error.message);
   } finally {
     button.disabled = false;
     mondaySyncInFlight = false;
     window.Forecast?.onSyncComplete();
+    window.Consumption?.onSyncComplete();
     scheduleMondayRefresh();
   }
 }

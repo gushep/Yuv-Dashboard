@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Consumo de horas · testes</title>
+<link rel="stylesheet" href="../public/capacity.css"><link rel="stylesheet" href="../public/consumption.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:25px;overflow:auto;z-index:100;background:white;font-size:9px}body:has(#page-consumption){margin:0}.main{transition:none!important}</style>
+<main class="main"><div class="topbar"><button class="hamburger" type="button">☰</button></div><div class="content" id="fixture"></div></main><pre id="test-result">RUNNING</pre>
+<script>
+let failLoad=false, failSave=false, saved={}, writes=0;
+window.mondayRequest=async (path,body)=>{
+  if(body){if(failSave)throw new Error('Falha de gravação');writes++;saved[body.sprint]=body.minutes;return {reserves:{...saved}};}
+  if(failLoad)throw new Error('Falha de leitura');return {reserves:{...saved},defaultMinutes:2400};
+};
+window.syncMonday=async()=>{};
+const row=(Id,RealH,Tipo='Melhoria',Responsavel='Ana',extra={})=>({Id,RealH,Tipo,Responsavel,Sprint:17,Nome:`Tarefa ${Id}`,Status:'Implementado',Planejada:'Não planejada',...extra});
+const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+const load=src=>new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=src;script.onload=resolve;script.onerror=reject;document.body.append(script);});
+(async()=>{
+ const checks=[];const check=(name,condition)=>{checks.push(`${condition?'PASS':'FAIL'} ${name}`);if(!condition)throw new Error(name);};
+ try{
+  const dashboard=await(await fetch('../resources/views/dashboard.blade.php')).text();
+  const baseStyle=document.createElement('style');baseStyle.textContent=dashboard.match(/<style>([\s\S]*?)<\/style>/)[1];document.head.prepend(baseStyle);
+  const template=await(await fetch('../resources/views/consumption.blade.php')).text();
+  document.getElementById('fixture').innerHTML=template;
+  document.getElementById('page-consumption').classList.add('active');
+  document.querySelector('.cap-heading img').src='../public/yuv-logo.png';
+  await load('../public/forecast.js');await load('../public/sprint-panel.js');await load('../public/consumption.js');
+  document.dispatchEvent(new Event('DOMContentLoaded'));
+  const rows=[row('1','7h30','  SUporte  '),row('1','7h30','  SUporte  '),row('2',2,'Bug','Bia'),row('3',3,'','Ana'),row('4',5,'Suporte','Ana, Bia'),row('5',1,'Melhoria',''),row('6',null),row('7',0),row('8',100,'Suporte','Ana',{Sprint:18}),row('2',2,'Bug','Bia',{Sprint:16}),row('',100)];
+  const result=Consumption.model(rows,17);
+  check('Tipo exclusivo, qualquer status e ausência de duplicação',result.macro.total===1110 && result.macro.sprint===360 && result.macro.support===750 && result.macro.tasks.length===7);
+  check('Compartilhados e sem responsável não são rateados',result.unassigned.total===360 && result.attributed.total===750 && result.developers.find(dev=>dev.name==='Ana').total===630);
+  check('Reconciliação por grupo',result.macro.sprint===result.attributed.sprint+result.unassigned.sprint && result.macro.support===result.attributed.support+result.unassigned.support);
+  check('Qualidade dos dados',result.missingType===1 && result.missingReal===1 && result.missingId===1 && result.multiSprint===1);
+  check('Percentual ponderado por horas',Math.abs(Consumption.shares(result.macro).support-750/1110*100)<1e-9);
+  check('Durações e vazio',Forecast.duration('7h30')===450 && Forecast.duration('7,5')===450 && Forecast.duration('7:30')===450 && Forecast.duration('30m')===30 && Forecast.duration('')===null && Forecast.duration('7h90')===null && Consumption.format(450)==='7h30');
+  check('Total zero exibe percentuais indefinidos e barra vazia',Consumption.shares({total:0,sprint:0,support:0}).support===null && !Consumption.bar({total:0,sprint:0,support:0}).includes('cons-red'));
+  check('Reserva abaixo do consumo',Consumption.reserveModel(3000,2400).consumed===125 && Consumption.reserveModel(3000,2400).excess===25);
+  check('Reserva igual ao consumo',Consumption.reserveModel(2400,2400).balance===0 && Consumption.reserveModel(2400,2400).consumed===100);
+  check('Reserva acima do consumo',Consumption.reserveModel(1200,2400).balance===1200 && Consumption.reserveModel(1200,2400).available===50);
+  check('Reserva zero sem divisão por zero',Consumption.reserveModel(3000,0).consumed===null && Consumption.reserveModel(0,0).consumed===null);
+  Consumption.enter();await tick();
+  check('Sem dados ilustrativos',document.getElementById('cons-content').hidden);
+  Consumption.onDataUpdated({rows,syncedAt:'2026-10-07T12:00:00Z',sprints:[{number:17,start:'2026-10-01',end:'2026-10-14'}]});
+  const select=document.getElementById('cons-sprint');select.value='17';select.dispatchEvent(new Event('change'));
+  check('Datas e atualização',document.getElementById('cons-dates').textContent.includes('01/10/2026') && document.getElementById('cons-updated').textContent.includes('Última atualização'));
+  check('Detalhamento reconcilia e mantém status concluído',document.getElementById('cons-body').textContent.includes('10h30'));
+  document.querySelector('#cons-body button').click();
+  check('Expansão inclui Tipo, grupo, status e subtotais',document.querySelector('#cons-body .cons-detail').textContent.includes('Implementado') && document.querySelector('#cons-body .cons-detail').textContent.includes('Subtotais: Sprint 3h · Suporte 7h30 · Total 10h30'));
+  const before=document.getElementById('cons-total').textContent, reserveBefore=document.getElementById('cons-reserve-hours').textContent;
+  const dev=document.getElementById('cons-developer');dev.value='Bia';dev.dispatchEvent(new Event('change'));
+  check('Filtro afeta apenas tabela e identifica total exibido',document.getElementById('cons-body').textContent.includes('Bia') && !document.getElementById('cons-body').textContent.includes('Ana') && document.getElementById('cons-foot').textContent.includes('Total dos desenvolvedores exibidos') && document.getElementById('cons-total').textContent===before && document.getElementById('cons-reserve-hours').textContent===reserveBefore);
+  const input=document.getElementById('cons-reserve-input'),form=document.getElementById('cons-reserve-form');
+  input.value='10';form.dispatchEvent(new Event('submit',{cancelable:true}));await tick();
+  check('Persistência por sprint e excesso visual',saved[17]===600 && writes===1 && document.getElementById('cons-reserve-percent').textContent.includes('125%') && document.querySelector('.cons-marker') && document.getElementById('cons-reserve-balance').textContent.includes('Excesso de 25%'));
+  input.value='0';form.dispatchEvent(new Event('submit',{cancelable:true}));await tick();
+  check('Sem reserva configurada',document.getElementById('cons-reserve-percent').textContent==='Sem reserva configurada' && document.getElementById('cons-reserve-balance').textContent==='12h30 consumidas sem reserva');
+  failSave=true;input.value='20';form.dispatchEvent(new Event('submit',{cancelable:true}));await tick();
+  check('Falha de gravação preserva reserva',saved[17]===0 && document.getElementById('cons-save-status').textContent.includes('Falha ao salvar'));failSave=false;
+  failLoad=true;Consumption.enter();await tick();
+  check('Falha de leitura não simula reserva salva',document.getElementById('cons-reserve-save').disabled && document.getElementById('cons-error').textContent.includes('Falha de leitura'));
+  failLoad=false;Consumption.enter();await tick();
+  check('Recarrega reserva persistida',document.getElementById('cons-reserve-input').value==='0');
+  Consumption.onDataUpdated({rows:[],syncedAt:'2026-10-07T12:00:00Z',sprints:[{number:17,start:'2026-10-01',end:'2026-10-14'}]});
+  check('Sprint vazia substitui dados antigos',document.getElementById('cons-total').textContent==='0h' && document.getElementById('cons-sprint-hours').textContent==='0h · —');
+  const panelRows=['Cássio Rezende Alves','Gabriel Taveira','Gustavo Zuckert','Hugo César Leal','Igor Rossi Silva','Rafael Souza da Silva'].flatMap((name,index)=>[row(`s${index}`,10+index,'Melhoria',name),row(`h${index}`,5+index,'Suporte',name)]);
+  saved[17]=2400;Consumption.enter();await tick();Consumption.onDataUpdated({rows:panelRows,syncedAt:'2026-10-07T12:00:00Z',sprints:[{number:17,start:'2026-09-28',end:'2026-10-11'}]});
+  await new Promise(resolve=>setTimeout(resolve,350));
+  check('Modo painel recolhe navegação e aplica avatares do Capacity',document.body.classList.contains('sidebar-collapsed') && document.querySelectorAll('#cons-body .cap-avatar').length===6 && document.querySelector('#cons-body .cap-avatar').textContent==='RS');
+  if(innerWidth>900){
+    check('Painel cabe na altura da janela',document.documentElement.scrollHeight<=innerHeight+1 && document.querySelector('footer.cons-rule').getBoundingClientRect().bottom<=innerHeight);
+    check('Tabela mantém área visível',document.querySelector('.cons-developer-scroll').clientHeight>=150);
+    if(innerWidth>=1200 && innerHeight>=650)check(`Seis desenvolvedores cabem sem rolagem da tabela (${document.querySelector('.cons-developer-scroll').scrollHeight}/${document.querySelector('.cons-developer-scroll').clientHeight})`,document.querySelector('.cons-developer-scroll').scrollHeight<=document.querySelector('.cons-developer-scroll').clientHeight+1);
+    document.querySelector('#cons-body button').click();
+    check('Expansão mantém painel em uma tela',document.documentElement.scrollHeight<=innerHeight+1 && document.querySelector('#cons-body .cons-detail'));
+    document.querySelector('#cons-body button').click();
+    const manyRows=Array.from({length:30},(_,index)=>row(`many${index}`,1,'Melhoria',`Desenvolvedor ${index}`));
+    Consumption.onDataUpdated({rows:manyRows,syncedAt:'2026-10-07T12:00:00Z',sprints:[{number:17,start:'2026-09-28',end:'2026-10-11'}]});
+    check('Times maiores rolam apenas na tabela',document.documentElement.scrollHeight<=innerHeight+1 && document.querySelector('.cons-developer-scroll').scrollHeight>document.querySelector('.cons-developer-scroll').clientHeight);
+    document.querySelector('.cons-unassigned').open=true;document.querySelector('.cons-quality').open=true;document.querySelector('.cons-reserve-settings').open=true;
+    check('Conferência e reserva abrem sem ampliar a página',document.documentElement.scrollHeight<=innerHeight+1);
+    document.querySelectorAll('#page-consumption details').forEach(node=>node.open=false);
+    Consumption.onDataUpdated({rows:panelRows,syncedAt:'2026-10-07T12:00:00Z',sprints:[{number:17,start:'2026-09-28',end:'2026-10-11'}]});
+  }
+  document.querySelector('.cons-quality').open=true;Consumption.leave();
+  check('Saída restaura navegação e fecha detalhes',!document.body.classList.contains('consumption-view') && !document.body.classList.contains('sidebar-collapsed') && !document.querySelector('#page-consumption details[open]'));
+  Consumption.enter();await tick();
+  document.getElementById('test-result').textContent=checks.join('\n')+'\nALL PASSED';
+ }catch(error){document.getElementById('test-result').textContent=checks.join('\n')+'\nERROR '+error.stack;}
+})();
+</script></html>

@@ -56,7 +56,7 @@ class MondayService
         $first = <<<'GRAPHQL'
 query ($board: [ID!]!) {
   boards(ids: $board) {
-    id name columns { id settings_str }
+    id name columns { id title settings_str }
     items_page(limit: 500) {
       cursor
       items { id name url column_values { id text type ... on BoardRelationValue { display_value } ... on TimeTrackingValue { duration } } }
@@ -84,6 +84,12 @@ GRAPHQL;
             array_push($items, ...($page['items'] ?? []));
             $cursor = $page['cursor'] ?? null;
             $page = $cursor ? ($this->query($token, $next, ['cursor' => $cursor])['next_items_page'] ?? null) : null;
+        }
+        foreach ($board['columns'] ?? [] as $column) {
+            if (in_array(mb_strtolower(trim($column['title'] ?? '')), ['módulo', 'modulo'], true)) {
+                $map['Modulo'] = $column['id'];
+                break;
+            }
         }
         $converted = $this->convertItems($items, $map);
         try {
@@ -148,11 +154,58 @@ GRAPHQL;
                     'RealH' => $this->hours($item, $map['RealH'] ?? null),
                     'RemainingH' => $this->hours($item, $map['RemainingH'] ?? null),
                     'Impedimento' => $this->text($item, $map['Impedimento'] ?? null),
+                    'Modulo' => $this->text($item, $map['Modulo'] ?? null),
                 ];
             }
         }
 
         return compact('rows', 'unassignedSupport', 'skipped');
+    }
+
+    /** @return array<string, array{available: bool, comments: array}> */
+    public function releaseComments(string $token, array $itemIds): array
+    {
+        $result = [];
+        $query = 'query ($ids: [ID!]!, $page: Int!) { items(ids: $ids) { id updates(limit: 100, page: $page) { id text_body created_at creator { name } replies { id body created_at creator { name } } } } }';
+        foreach (array_chunk($itemIds, 20) as $chunk) {
+            $pending = $chunk;
+            $comments = array_fill_keys($chunk, []);
+            try {
+                for ($page = 1; $pending !== []; $page++) {
+                    if ($page > 100) {
+                        throw new RuntimeException('Histórico de comentários ultrapassou o limite de leitura.');
+                    }
+                    $data = $this->query($token, $query, ['ids' => $pending, 'page' => $page]);
+                    $next = [];
+                    $returned = [];
+                    foreach ($data['items'] ?? [] as $item) {
+                        $id = (string) $item['id'];
+                        $returned[] = $id;
+                        if (! array_key_exists($id, $comments) || ! isset($item['updates'])) {
+                            continue;
+                        }
+                        foreach ($item['updates'] as $update) {
+                            $comments[$id][(string) $update['id']] = $update;
+                        }
+                        if (count($item['updates']) === 100) {
+                            $next[] = $id;
+                        } else {
+                            $result[$id] = ['available' => true, 'comments' => array_values($comments[$id])];
+                        }
+                    }
+                    foreach (array_diff($pending, $returned) as $missingId) {
+                        $result[$missingId] = ['available' => false, 'comments' => []];
+                    }
+                    $pending = $next;
+                }
+            } catch (\Throwable) {
+                foreach ($pending as $id) {
+                    $result[$id] = ['available' => false, 'comments' => []];
+                }
+            }
+        }
+
+        return $result;
     }
 
     public function hours(array $item, ?string $columnId): ?float
@@ -169,6 +222,10 @@ GRAPHQL;
             return null;
         }
         if (preg_match('/^(\d+)\s*h\s*(\d{1,2})?\s*m?$/i', $text, $matches)) {
+            if ((int) ($matches[2] ?? 0) >= 60) {
+                return null;
+            }
+
             return (float) $matches[1] + (float) ($matches[2] ?? 0) / 60;
         }
         if (preg_match('/^(\d{1,2})\s*m$/i', $text, $matches)) {

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -210,6 +210,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="panel-carousel.css">
 <link rel="stylesheet" href="capacity.css">
 <link rel="stylesheet" href="forecast.css">
+<link rel="stylesheet" href="consumption.css">
+<link rel="stylesheet" href="release.css">
 </head>
 <body>
 <aside class="sidebar" id="sidebar">
@@ -263,6 +265,14 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <div class="nav-item" onclick="navigate('forecast')" id="nav-forecast">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M6 15l5-6 4 3 6-8"/></svg>
       Previsibilidade
+    </div>
+    <div class="nav-item" onclick="navigate('consumption')" id="nav-consumption">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg>
+      Consumo de horas
+    </div>
+    <div class="nav-item" onclick="navigate('release')" id="nav-release">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/></svg>
+      Release da sprint
     </div>
     <div class="nav-item" onclick="navigate('settings')" id="nav-settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
@@ -444,6 +454,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     </div>
 
     @include('forecast')
+    @include('consumption')
+    @include('release')
     <!-- CAPACITY -->
     <div class="page" id="page-capacity">
       <header class="cap-hero">
@@ -479,7 +491,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           <span id="fire-last-sync" role="status">Aguardando primeira consulta</span>
           <button type="button" id="fire-refresh">Atualizar agora</button>
           <button type="button" id="fire-audio-toggle" aria-pressed="true">Silenciar alertas</button>
-          <button type="button" id="fire-audio-test" aria-label="Testar som por 16 segundos" title="Testar som (16 s)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 9a5 5 0 0 1 0 6"/><path d="M18 6a9 9 0 0 1 0 12"/></svg></button>
+          <button type="button" id="fire-audio-test" aria-label="Testar toque completo" title="Testar toque completo (aprox. 8 s)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 9a5 5 0 0 1 0 6"/><path d="M18 6a9 9 0 0 1 0 12"/></svg></button>
         </div>
       </div>
       <div id="fire-audio-state" class="fire-audio-state" role="status">Alertas sonoros ativados · clique ou toque na página para liberar o áudio</div>
@@ -691,6 +703,8 @@ function navigate(page,sp=null){
   if(previousPage==='carousel'&&page!=='carousel') window.PanelCarousel?.leave();
   if(previousPage==='capacity'&&page!=='capacity') window.Capacity?.leave();
   if(previousPage==='forecast'&&page!=='forecast') window.Forecast?.leave();
+  if(previousPage==='consumption'&&page!=='consumption') window.Consumption?.leave();
+  if(previousPage==='release'&&page!=='release') window.SprintRelease?.leave();
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   currentPage=page; currentSprint=sp;
@@ -698,6 +712,8 @@ function navigate(page,sp=null){
   if(ni) ni.classList.add('active');
   document.getElementById('page-'+page)?.classList.add('active');
   const titles={dashboard:['Dashboard',`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`],sprint:[`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],settings:['Configurações','integração com Monday']};
+  if(page==='consumption'){titles.consumption=['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'];}
+  if(page==='release'){titles.release=['Release da sprint','Itens implementados, organizados automaticamente por Tipo'];}
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
@@ -713,6 +729,8 @@ function navigate(page,sp=null){
   else if(page==='carousel') window.PanelCarousel?.enter(previousPage==='sprint-panel'?1:0,previousPage==='sprint'?previousSprint:null);
   else if(page==='capacity') window.Capacity?.enter(previousPage==='sprint'?previousSprint:null);
   else if(page==='forecast') window.Forecast?.enter(previousPage==='sprint'?previousSprint:null);
+  else if(page==='consumption') window.Consumption?.enter(previousPage==='sprint'?previousSprint:null);
+  else if(page==='release') window.SprintRelease?.enter(previousPage==='sprint'?previousSprint:null);
   if(page==='carousel') scheduleMondayRefresh();
   if((previousPage==='bombeiro'&&page!=='bombeiro')||(previousPage==='sprint-panel'&&page!=='sprint-panel')||(previousPage==='carousel'&&page!=='carousel')) scheduleMondayRefresh();
 }
@@ -1266,5 +1284,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script src="panel-carousel.js"></script>
 <script src="capacity.js"></script>
 <script src="forecast.js"></script>
+<script src="consumption.js"></script>
+<script src="release.js"></script>
 </body></html>
 

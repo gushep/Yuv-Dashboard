@@ -33,10 +33,13 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/api/config', [MondayController::class, 'config']);
     Route::get('/api/capacity', [MondayController::class, 'capacity']);
+    Route::get('/api/support-reserves', [MondayController::class, 'supportReserves'])->name('support-reserves.index');
+    Route::post('/api/support-reserves', [MondayController::class, 'saveSupportReserve'])->name('support-reserves.store');
     Route::post('/api/boards', [MondayController::class, 'boards']);
     Route::post('/api/inspect', [MondayController::class, 'inspect']);
     Route::post('/api/config', [MondayController::class, 'saveConfig']);
     Route::post('/api/refresh', [MondayController::class, 'saveRefresh']);
     Route::post('/api/capacity', [MondayController::class, 'saveCapacity']);
     Route::post('/api/sync', [MondayController::class, 'sync']);
+    Route::post('/api/release', [MondayController::class, 'release'])->name('release.data');
 });

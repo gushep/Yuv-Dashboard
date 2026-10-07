@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\MondayConnection;
 use App\Services\MondayService;
+use App\Services\SprintReleaseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use RuntimeException;
 
@@ -35,6 +37,34 @@ class MondayController extends Controller
     public function capacity(): JsonResponse
     {
         return response()->json(['overrides' => MondayConnection::current()->capacity_overrides ?? []]);
+    }
+
+    public function supportReserves(): JsonResponse
+    {
+        return response()->json([
+            'reserves' => MondayConnection::current()->forecast_settings['supportReserves'] ?? [],
+            'defaultMinutes' => 2400,
+        ]);
+    }
+
+    public function saveSupportReserve(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'sprint' => ['required', 'regex:/^[1-9]\d{0,5}$/'],
+            'minutes' => ['required', 'integer', 'between:0,600000'],
+        ]);
+        $connectionId = MondayConnection::current()->id;
+        $reserves = DB::transaction(function () use ($data, $connectionId): array {
+            $connection = MondayConnection::query()->lockForUpdate()->findOrFail($connectionId);
+            $settings = $connection->forecast_settings ?? [];
+            $settings['supportReserves'][$data['sprint']] = (int) $data['minutes'];
+            $connection->forecast_settings = $settings;
+            $connection->save();
+
+            return $settings['supportReserves'];
+        });
+
+        return response()->json(['saved' => true, 'reserves' => $reserves]);
     }
 
     public function boards(Request $request, MondayService $monday): JsonResponse
@@ -148,6 +178,18 @@ class MondayController extends Controller
 
             return $result;
         });
+    }
+
+    public function release(Request $request, MondayService $monday, SprintReleaseService $release): JsonResponse
+    {
+        $data = $request->validate(['sprint' => ['nullable', 'integer', 'between:1,999999']]);
+        $snapshot = $this->sync($request, $monday);
+        if ($snapshot->getStatusCode() !== 200) {
+            return $snapshot;
+        }
+        $connection = MondayConnection::current();
+
+        return response()->json($release->build($snapshot->getData(true), isset($data['sprint']) ? (int) $data['sprint'] : null, $connection->token, $connection->board_id));
     }
 
     private function token(Request $request): string

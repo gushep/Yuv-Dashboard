@@ -197,5 +197,5 @@ window.SprintPanel = (() => {
     document.fonts?.ready.then(() => requestAnimationFrame(fitLanes));
     render();
   });
-  return {enter,leave,refresh,render,filterTasks,statusBucket,selectedRows};
+  return {enter,leave,refresh,render,filterTasks,statusBucket,selectedRows,safeMondayUrl};
 })();

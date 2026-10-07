@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Alertas sonoros · testes</title>
+<div id="tb-right"></div><div id="fixture"></div><pre id="test-result">RUNNING</pre>
+<script>
+const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+const load=src=>new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=src;script.onload=resolve;script.onerror=reject;document.body.append(script);});
+(async()=>{
+ const checks=[];const check=(name,condition)=>{checks.push(`${condition?'PASS':'FAIL'} ${name}`);if(!condition)throw new Error(name);};
+ const realFetch=window.fetch.bind(window);
+ let failAudio=true,audioRequests=0,rows=[];
+ const sources=[],gains=[];
+ try{
+  const response=await realFetch('../public/den-den-mushi-short.m4a');
+  const context=new OfflineAudioContext(1,1,44100);const buffer=await context.decodeAudioData(await response.arrayBuffer());
+  check('Arquivo do Shorts é decodificável e tem cerca de 8 segundos',response.ok && buffer.duration>8 && buffer.duration<9 && buffer.numberOfChannels>0);
+  const dashboard=new DOMParser().parseFromString(await(await realFetch('../resources/views/dashboard.blade.php')).text(),'text/html');
+  document.getElementById('fixture').append(dashboard.getElementById('page-bombeiro'));document.getElementById('page-bombeiro').classList.add('active');
+  window.fetch=async(url,...args)=>{
+    if(String(url).endsWith('/den-den-mushi-short.m4a')){audioRequests++;return {ok:!failAudio,arrayBuffer:async()=>new ArrayBuffer(8)};}
+    return realFetch(url,...args);
+  };
+  window.AudioContext=class {
+    state='running';currentTime=10;destination={};
+    async resume(){this.state='running';}
+    async decodeAudioData(){return buffer;}
+    createBufferSource(){const source={starts:[],stops:[],connect(){},disconnect(){},start(time){this.starts.push(time);},stop(time){this.stops.push(time);}};sources.push(source);return source;}
+    createGain(){const gain={values:[],gain:{cancelScheduledValues(){},setValueAtTime(value,time){gain.values.push([value,time]);},linearRampToValueAtTime(value,time){gain.values.push([value,time]);}},connect(){},disconnect(){}};gains.push(gain);return gain;}
+  };
+  window.mondayRequest=async()=>({rows,boardName:'Teste',syncedAt:'2026-10-07T12:00:00Z'});
+  await load('../public/bombeiro.js');document.dispatchEvent(new Event('DOMContentLoaded'));Bombeiro.enter();await tick();
+  const test=document.getElementById('fire-audio-test'),toggle=document.getElementById('fire-audio-toggle');
+  test.click();await tick();
+  check('Falha de carregamento apresenta aviso sem tocar sirene antiga',sources.length===0 && document.getElementById('fire-audio-state').textContent.includes('Não foi possível carregar'));
+  failAudio=false;test.click();await tick();
+  check('Nova tentativa toca o arquivo completo sem repetir',sources.length===1 && sources[0].buffer===buffer && !sources[0].loop && Math.abs(sources[0].stops[0]-sources[0].starts[0]-buffer.duration)<0.00001);
+  check('Mensagem do teste informa reprodução completa',document.getElementById('fire-audio-state').textContent.includes('toque completo'));
+  check('Volume reduzido com entrada e saída suaves',gains[0].values.some(([value])=>value===0.22) && gains[0].values[0][0]===0.001 && gains[0].values.at(-1)[0]===0.001);
+  test.click();await tick();
+  check('Áudio carregado é reutilizado e reprodução anterior é interrompida',audioRequests===2 && sources[0].stops.at(-1)===10 && sources.length===2);
+  document.getElementById('fire-alert-close').click();
+  check('Fechar aviso interrompe som',sources[1].stops.at(-1)===10);
+  toggle.click();await tick();check('Silenciar mantém alertas visuais',toggle.getAttribute('aria-pressed')==='false' && document.getElementById('fire-audio-state').textContent.includes('alertas visuais ativos'));
+  toggle.click();await tick();check('Ativar reproduz prévia curta',toggle.getAttribute('aria-pressed')==='true' && Math.abs(sources.at(-1).stops[0]-sources.at(-1).starts[0]-0.8)<0.00001);
+  rows=[{Id:'1',Nome:'Nova demanda',Tipo:'Suporte',Status:'Backlog',Sprint:17}];await Bombeiro.refresh(true);
+  check('Nova demanda toca o áudio inteiro do Shorts',sources.at(-1).buffer===buffer && !sources.at(-1).loop && Math.abs(sources.at(-1).stops[0]-sources.at(-1).starts[0]-buffer.duration)<0.00001 && !document.getElementById('fire-alert').hidden);
+  const last=sources.at(-1);Bombeiro.leave();check('Sair do painel interrompe som',last.stops.at(-1)===10);
+  document.getElementById('test-result').textContent=checks.join('\n')+'\nALL PASSED';
+ }catch(error){if(window.Bombeiro)Bombeiro.leave();document.getElementById('test-result').textContent=checks.join('\n')+'\nERROR '+error.stack;}
+})();
+</script></html>
