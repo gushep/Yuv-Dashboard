@@ -51,6 +51,19 @@ class MondayService
         return $boards;
     }
 
+    /**
+     * Uma página do log de atividades do quadro, do evento mais recente para o mais antigo.
+     *
+     * @return list<array{id: string, event: string, user_id: ?string, created_at: string, data: string}>
+     */
+    public function activityLogs(string $token, string $boardId, ?string $from, string $to, int $page, int $limit): array
+    {
+        $query = 'query ($board: [ID!]!, $from: ISO8601DateTime, $to: ISO8601DateTime, $page: Int!, $limit: Int!) { boards(ids: $board) { activity_logs(from: $from, to: $to, page: $page, limit: $limit) { id event user_id created_at data } } }';
+        $data = $this->query($token, $query, ['board' => [$boardId], 'from' => $from, 'to' => $to, 'page' => $page, 'limit' => $limit]);
+
+        return $data['boards'][0]['activity_logs'] ?? throw new RuntimeException('Quadro não encontrado ou sem permissão de leitura.');
+    }
+
     public function sync(string $token, string $boardId, array $map): array
     {
         $first = <<<'GRAPHQL'
