@@ -18,6 +18,7 @@ Os indicadores contextualizam o trabalho do time. Horas sem apontamento não rep
 
 | Tela | Finalidade |
 | --- | --- |
+| Torre de controle | Tela inicial. Farol da sprint, trajetória dia a dia (burnup), previsão probabilística, ponto de decisão, manobras sugeridas, alertas e compromisso da sprint. |
 | Dashboard e sprints | Visão dos indicadores e detalhamento por sprint. |
 | Épicos, time e dados | Consulta das informações do quadro por diferentes perspectivas. |
 | Sustentação — Painel do Bombeiro | Demandas de Suporte por status e prioridade, com avisos visuais e toque Den Den Mushi para novas demandas. |
@@ -36,6 +37,9 @@ Os principais campos são Sprint, Tipo, Status, Responsável, Tempo Estimado e T
 
 ### Regras dos indicadores
 
+- **Definições únicas (todas as telas):** concluído é somente `Implementado`; `Aguardando Deploy` e `QA - Aprovado` são feitos, não entregues; `Cancelado`, `Descontinuado` e `Despriorizado` saem do total da sprint e contam como retirados do escopo. Capacidade padrão e pessoas fora das métricas individuais são configuradas em **Configurações**.
+- **Histórico:** o log de atividades da Monday é copiado para a tabela `monday_activity_events`, porque a Monday guarda apenas alguns meses. Com ele, sprints encerradas aparecem como estavam no fim efetivo (véspera do início da sprint seguinte) e a Torre de controle reconstitui cada dia da sprint.
+- **Torre de controle:** linha de base do escopo no fim do 2º dia útil; suporte que entra no meio da sprint é medido pela reserva, não como escopo adicionado; card parado = 3 dias úteis no mesmo status. Sem marcação, os cards planejados formam o compromisso da sprint. Os limites ficam em `App\Services\ControlTowerService`.
 - **Consumo de horas:** Tipo = Suporte entra em Suporte; qualquer outro Tipo entra em Sprint. Considera as horas reais independentemente do status e da classificação Planejado / Não planejado.
 - **Reserva de suporte:** o padrão é 40 horas para o time inteiro por sprint, configurável e persistido por sprint. Essa comparação não altera a capacidade dos demais painéis.
 - **Atribuição individual:** horas compartilhadas sem distribuição confiável permanecem nos totais do time e aparecem como horas sem atribuição individual.
@@ -82,6 +86,8 @@ Tenha PHP compatível com `composer.lock`, Composer e MySQL disponíveis. Para c
    ```
 
 6. Acesse o endereço informado pelo servidor, faça login e configure a integração com a Monday na tela **Configurações**.
+
+7. Opcional: para manter dados e histórico atualizados sem o dashboard aberto, deixe o agendador rodando (`php artisan schedule:work`). Ele executa `php artisan monday:refresh` a cada 15 minutos. Sem agendador, o próprio uso do dashboard copia o histórico, no máximo uma vez por hora.
 
 Para compilar os assets Vite, execute `npm install` e `npm run build`. As orientações do ambiente Windows original estão em [MIGRACAO.md](MIGRACAO.md), que registra a etapa inicial da migração com SQLite.
 
