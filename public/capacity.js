@@ -153,6 +153,18 @@ window.Capacity = (() => {
     }).join('');
     node.innerHTML = `<details><summary>${title} · ${items.length} item(ns)</summary><ul>${list}</ul></details>`;
   }
+  /** Ritmo do time: horas registradas por dia útil projetadas até o fim da sprint, contra a capacidade somada. */
+  function teamPaceText(developers, dates, today = todaySaoPaulo()) {
+    const tracked = developers.filter(dev => dev.knownReal);
+    if (!tracked.length) return 'Ritmo do time: sem horas registradas.';
+    const registered = tracked.reduce((sum, dev) => sum + dev.registered, 0);
+    const capacity = tracked.reduce((sum, dev) => sum + dev.capacity, 0);
+    const pace = window.SprintRules.pace(registered, dates, today, capacity);
+    if (pace.status === 'unavailable') return 'Ritmo do time: datas da sprint indisponíveis.';
+    if (pace.status === 'not-started') return 'Ritmo do time: a sprint ainda não começou.';
+    if (pace.status === 'finished') return `Ritmo do time: sprint encerrada com ${formatMinutes(registered)} registradas (${formatPct(capacity ? registered / capacity * 100 : null)} da capacidade).`;
+    return `Ritmo do time: ${formatMinutes(registered)} registradas em ${pace.elapsedDays} de ${pace.totalDays} dias úteis; mantido o ritmo, ${formatMinutes(pace.projected)} ao fim da sprint (${formatPct(pace.projectedPercent)} da capacidade de ${formatMinutes(capacity)}).`;
+  }
   function render() {
     if (!el('page-capacity')) return;
     const sprints = [...new Set(DATA.map(row => Number(row.Sprint)).filter(number => Number.isInteger(number) && number > 0))].sort((a,b)=>b-a);
@@ -198,6 +210,7 @@ window.Capacity = (() => {
     renderExtra('cap-unassigned','Sem responsável',result.unassigned);
     const standardElapsed = elapsedMinutes(defaultMinutes(),dates,todaySaoPaulo());
     el('cap-reference').textContent = `Referência: ${formatMinutes(defaultMinutes())} por dev · até hoje: ${formatMinutes(standardElapsed)}`;
+    el('cap-pace').textContent = teamPaceText(result.developers, dates);
     el('cap-calendar').textContent = 'Dias úteis: segunda a sexta; hoje completo';
     el('cap-calendar').title = 'Capacidade até hoje = capacidade total × dias úteis transcorridos ÷ dias úteis totais. Inclui o dia atual completo no fuso America/Sao_Paulo; não há feriados configurados.';
     const updated = window.MONDAY_LAST_SYNC ? `Última atualização: ${new Date(window.MONDAY_LAST_SYNC).toLocaleString('pt-BR')}` : 'Base incorporada disponível';

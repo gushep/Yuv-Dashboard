@@ -474,7 +474,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           <span id="cap-dates">Datas não disponíveis</span>
         </div>
       </header>
-      <div class="cap-info"><span class="cap-info-icon" aria-hidden="true">i</span><strong id="cap-reference"></strong><span id="cap-calendar"></span><label class="cap-dev-filter">Dev <select id="cap-developer" aria-label="Filtrar desenvolvedor"><option value="all">Todos</option></select></label><span id="cap-last-sync" role="status">Carregando dados...</span></div>
+      <div class="cap-info"><span class="cap-info-icon" aria-hidden="true">i</span><strong id="cap-reference"></strong><span id="cap-calendar"></span><label class="cap-dev-filter">Dev <select id="cap-developer" aria-label="Filtrar desenvolvedor"><option value="all">Todos</option></select></label><span id="cap-last-sync" role="status">Carregando dados...</span></div><p id="cap-pace" class="cap-pace" role="status"></p>
       <div id="cap-error" class="cap-message cap-error" role="status" hidden></div>
       <details id="cap-quality" class="cap-quality" hidden><summary id="cap-warning-summary"></summary><div id="cap-warning" class="cap-message cap-warning"></div></details>
       <div class="cap-table-scroll"><table class="cap-table"><thead><tr>

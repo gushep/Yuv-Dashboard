@@ -15,7 +15,7 @@
     <section class="cons-card cons-composition"><h2>Composição do tempo executado (100%)</h2><div id="cons-composition"></div><div id="cons-legend" class="cons-legend"></div></section>
     <section id="cons-reserve" class="cons-card cons-reserve">
       <div><h2>Reserva de suporte do time</h2><strong id="cons-reserve-hours"></strong><p>Reserva coletiva por sprint · time completo</p></div>
-      <div><p id="cons-reserve-percent" class="cons-reserve-percent"></p><div id="cons-reserve-bar"></div><p id="cons-reserve-balance"></p></div>
+      <div><p id="cons-reserve-percent" class="cons-reserve-percent"></p><div id="cons-reserve-bar"></div><p id="cons-reserve-balance"></p><p id="cons-reserve-pace" class="cons-pace" role="status"></p></div>
       <details class="cons-reserve-settings cons-popover"><summary>Ajustar reserva</summary>
       <form id="cons-reserve-form" class="cons-reserve-form cons-popover-content" data-url="{{ route('support-reserves.store') }}">
         <label>Reserva desta sprint (horas decimais) <input id="cons-reserve-input" type="number" min="0" max="10000" step="any" required aria-describedby="cons-reserve-help"></label>
