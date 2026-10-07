@@ -3,7 +3,7 @@ window.Consumption = (() => {
   const el = id => document.getElementById(id);
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalize = value => String(value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
-  const state = {active:false, wasCollapsed:false, rows:null, dates:{}, sprint:null, developer:'', updated:null, reserves:{}, defaultMinutes:null, loaded:false, saving:false, loading:false, error:'', configError:'', expanded:new Set()};
+  const state = {active:false, rows:null, dates:{}, sprint:null, developer:'', updated:null, reserves:{}, defaultMinutes:null, loaded:false, saving:false, loading:false, error:'', configError:'', expanded:new Set()};
   const duration = value => window.Forecast.duration(value);
   function format(minutes) {
     if (minutes === null) return 'Sem registro';
@@ -139,9 +139,8 @@ window.Consumption = (() => {
   function onLoading() { state.loading = true; render(); }
   function onSyncComplete() { state.loading = false; render(); }
   function enter(hint = null) {
-    if (!state.active) state.wasCollapsed = document.body.classList.contains('sidebar-collapsed');
     state.active = true;
-    document.body.classList.add('consumption-view','sidebar-collapsed');
+    document.body.classList.add('consumption-view');
     if (Number.isInteger(hint)) state.sprint = hint;
     render(); loadReserves();
     if (typeof mondayReady !== 'undefined' && mondayReady) syncMonday(false);
@@ -149,7 +148,6 @@ window.Consumption = (() => {
   function leave() {
     state.active = false;
     document.body.classList.remove('consumption-view');
-    if (!state.wasCollapsed) document.body.classList.remove('sidebar-collapsed');
     document.querySelectorAll('#page-consumption details[open]').forEach(node => { node.open = false; });
   }
   document.addEventListener('DOMContentLoaded', () => {

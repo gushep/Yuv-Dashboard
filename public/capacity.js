@@ -1,7 +1,7 @@
 /* Capacity usa os dados já carregados pelo dashboard; cálculos internos em minutos. */
 window.Capacity = (() => {
   const DEFAULT_MINUTES = 80 * 60;
-  const state = { sprint: null, userSelectedSprint: false, developer: 'all', expanded: new Set(), overrides: {}, loadedOverrides: false, error: '', active: false, loading: false, wasCollapsed: false };
+  const state = { sprint: null, userSelectedSprint: false, developer: 'all', expanded: new Set(), overrides: {}, loadedOverrides: false, error: '', active: false, loading: false };
   const el = id => document.getElementById(id);
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalized = value => String(value ?? '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -237,9 +237,8 @@ window.Capacity = (() => {
     } catch (error) { state.error = `Não foi possível salvar a capacidade: ${error.message}`; render(); }
   }
   function enter(sprintHint = null) {
-    if (!state.active) state.wasCollapsed = document.body.classList.contains('sidebar-collapsed');
     state.active = true;
-    document.body.classList.add('capacity-view','sidebar-collapsed');
+    document.body.classList.add('capacity-view');
     if (Number.isInteger(sprintHint)) { state.sprint = sprintHint; state.userSelectedSprint = true; }
     if (!window.MONDAY_LAST_SYNC && location.protocol !== 'file:') state.loading = true;
     render();
@@ -249,7 +248,6 @@ window.Capacity = (() => {
   function leave() {
     state.active = false;
     document.body.classList.remove('capacity-view');
-    if (!state.wasCollapsed) document.body.classList.remove('sidebar-collapsed');
   }
   function onDataUpdated(result) {
     window.MONDAY_SPRINT_DATES = Object.fromEntries((result.sprints || []).map(item => [Number(item.number),item]));

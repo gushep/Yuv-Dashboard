@@ -63,7 +63,7 @@
 /* Layout de acompanhamento: largura total e hierarquia visual do painel de referência. */
 body.capacity-view,body.capacity-view .content{background:#fff}
 body.capacity-view .content{padding:12px 22px 34px}
-body.capacity-view .topbar{height:42px;min-height:42px;padding:4px 22px;background:#fff;border-bottom:0}
+body.capacity-view .topbar{background:#fff;border-bottom:0}
 body.capacity-view .topbar>div:not(.topbar-right){display:none}
 body.capacity-view .topbar-right{display:none}
 #page-capacity{max-width:none;font-size:14px}

@@ -17,36 +17,40 @@
   --bg:#f0f2f8;--sidebar:#ffffff;--card:#ffffff;--border:#e5e9f5;
   --text:#0d1117;--text2:#4b5568;--muted:#94a3b8;
   --shadow:0 1px 8px rgba(0,0,0,.06);--shadow-md:0 4px 20px rgba(0,0,0,.1);
-  --sidebar-w:220px;--topbar-h:52px;
+  --sidebar-w:230px;--sidebar-rail-w:64px;--topbar-h:52px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 
 /* SIDEBAR */
-.sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;transform:translateX(-100%);transition:transform .25s ease;box-shadow:var(--shadow)}
+.sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;transform:translateX(-100%);transition:transform .25s ease,width .2s ease;box-shadow:var(--shadow);overflow:hidden}
 .sidebar.open{transform:translateX(0)}
-.sidebar-logo{padding:16px 18px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sidebar-logo{height:var(--topbar-h);padding:0 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .logo-text{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;color:var(--text);letter-spacing:-.02em}
 .sidebar-brand-image{display:block;width:72px;height:auto}
 .logo-dot{width:7px;height:7px;border-radius:50%;background:var(--blue);display:inline-block;margin-right:6px}
 .sidebar-close{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;cursor:pointer;color:var(--muted);border:none;background:transparent;transition:background .15s}
 .sidebar-close:hover{background:var(--bg);color:var(--text)}
 .sidebar-nav{flex:1;padding:10px 0;overflow-y:auto}
-.nav-item{display:flex;align-items:center;gap:9px;padding:8px 18px;cursor:pointer;color:var(--text2);font-size:12.5px;font-weight:500;border-left:2px solid transparent;transition:all .15s;user-select:none}
-.nav-item:hover{color:var(--blue);background:var(--blue-bg)}
+.nav-item,.sprint-toggle,.sidebar-action{display:flex;align-items:center;gap:12px;width:100%;padding:9px 20px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;font-weight:500;text-align:left;white-space:nowrap;cursor:pointer;color:var(--text2);transition:all .15s;user-select:none}
+.nav-item:hover,.sidebar-action:hover{color:var(--blue);background:var(--blue-bg)}
 .nav-item.active{color:var(--blue);border-left-color:var(--blue);background:var(--blue-bg);font-weight:600}
-.nav-item svg{width:15px;height:15px;flex-shrink:0}
+.nav-item:focus-visible,.sprint-toggle:focus-visible,.sidebar-action:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.nav-item svg,.sidebar-action svg{width:20px;height:20px;flex-shrink:0}
 .nav-group-label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;padding:14px 18px 4px}
-.sprint-toggle{display:flex;align-items:center;gap:9px;padding:8px 18px;cursor:pointer;color:var(--text2);font-size:12.5px;font-weight:500;transition:all .15s;user-select:none}
 .sprint-toggle:hover{color:var(--blue)}
-.sprint-toggle svg{width:15px;height:15px;flex-shrink:0}
+.sprint-toggle.active{color:var(--blue);font-weight:600}
+.sprint-toggle svg{width:20px;height:20px;flex-shrink:0}
 .sprint-arrow{margin-left:auto;width:12px;height:12px;transition:transform .2s;opacity:.5}
 .sprint-arrow.open{transform:rotate(90deg)}
 .sprint-children{display:none;background:var(--bg)}
 .sprint-children.open{display:block}
-.sprint-children .nav-item{font-size:12px;padding:7px 18px 7px 38px;border-left:none}
+.sprint-children .nav-item{font-size:12px;padding:7px 20px 7px 44px;border-left:none}
+.sprint-children .nav-item svg{width:15px;height:15px}
 .sprint-children .nav-item.active{background:var(--blue-bg2);color:var(--blue)}
-.sidebar-footer{padding:12px 18px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);font-family:'DM Mono',monospace}
+.sidebar-footer{padding:6px 0 10px;border-top:1px solid var(--border)}
+.sidebar-footer form{margin:0}
+.sidebar-version{padding:6px 20px 0;font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap}
 
 /* OVERLAY */
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:49}
@@ -63,16 +67,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .topbar-right{margin-left:auto;font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
 
 @media(min-width:1024px){
-  .sidebar{transform:translateX(0)}
-  .main{margin-left:var(--sidebar-w)}
+  /* Menu sempre recolhido em ícones; expande sobre o conteúdo no hover/teclado e recolhe ao abrir uma página (.suppressed). */
+  .sidebar{transform:translateX(0);width:var(--sidebar-rail-w);transition:width .18s ease,box-shadow .18s ease}
+  .sidebar:is(:hover,:has(:focus-visible)):not(.suppressed){width:var(--sidebar-w);box-shadow:var(--shadow-md);transition-delay:.12s}
+  .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) :is(.logo-text span,.nav-label,.sprint-arrow,.sprint-children,.sidebar-version){display:none}
+  .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) .sidebar-logo{padding:0 10px}
+  .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) .sidebar-brand-image{width:44px}
+  .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) .sprint-toggle.active{background:var(--blue-bg);border-left-color:var(--blue)}
+  .main{margin-left:var(--sidebar-rail-w)}
   .hamburger{display:none}
   .sidebar-close{display:none}
   .sidebar-overlay{display:none !important}
-  body.sidebar-collapsed .sidebar:not(.open){transform:translateX(-100%)}
-  body.sidebar-collapsed .main{margin-left:0}
-  body.sidebar-collapsed .hamburger{display:flex}
-  body.sidebar-collapsed .sidebar-close{display:flex}
-  body.sidebar-collapsed .sidebar-overlay.open{display:block !important}
 }
 
 /* CONTENT */
@@ -214,80 +219,83 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="release.css">
 </head>
 <body>
-<aside class="sidebar" id="sidebar">
+<aside class="sidebar" id="sidebar" onmouseleave="this.classList.remove('suppressed')" onkeydown="this.classList.remove('suppressed')">
   <div class="sidebar-logo">
     <div class="logo-text"><img src="yuv-logo.png" alt="YUV" class="sidebar-brand-image"><span>metrics</span></div>
-    <button class="sidebar-close" onclick="closeSidebar()" aria-label="Fechar menu lateral">
+    <button type="button" class="sidebar-close" onclick="dismissSidebar()" aria-label="Fechar menu lateral">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
   </div>
   <nav class="sidebar-nav">
-    <div class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard">
+    <button type="button" class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard" aria-current="page">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      Dashboard
-    </div>
-    <div class="sprint-toggle" onclick="toggleSprints()" id="sprint-toggle">
+      <span class="nav-label">Dashboard</span>
+    </button>
+    <button type="button" class="sprint-toggle" onclick="toggleSprints()" id="sprint-toggle" aria-expanded="false" aria-controls="sprint-children">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-      Sprints
+      <span class="nav-label">Sprints</span>
       <svg class="sprint-arrow" id="sprint-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-    </div>
+    </button>
     <div class="sprint-children" id="sprint-children">
       <div id="sprint-nav-items"></div>
     </div>
-    <div class="nav-item" onclick="navigate('epicos')" id="nav-epicos">
+    <button type="button" class="nav-item" onclick="navigate('epicos')" id="nav-epicos">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg>
-      Épicos
-    </div>
-    <div class="nav-item" onclick="navigate('time')" id="nav-time">
+      <span class="nav-label">Épicos</span>
+    </button>
+    <button type="button" class="nav-item" onclick="navigate('time')" id="nav-time">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      Time
-    </div>
-    <div class="nav-item" onclick="navigate('raw')" id="nav-raw">
+      <span class="nav-label">Time</span>
+    </button>
+    <button type="button" class="nav-item" onclick="navigate('raw')" id="nav-raw">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-      Dado Bruto
-    </div>
-    <div class="nav-item" onclick="navigate('bombeiro')" id="nav-bombeiro">
+      <span class="nav-label">Dado Bruto</span>
+    </button>
+    <button type="button" class="nav-item" onclick="navigate('bombeiro')" id="nav-bombeiro">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c2 3 2 5 0 7 3-1 5 2 5 5a5 5 0 0 1-10 0c0-2 1-4 3-6 0 2 1 3 2 3"/><path d="M12 21a5 5 0 0 0 5-5"/></svg>
-      Painel do Bombeiro
-    </div>
-    <div class="nav-item" onclick="navigate('sprint-panel')" id="nav-sprint-panel">
+      <span class="nav-label">Painel do Bombeiro</span>
+    </button>
+    <button type="button" class="nav-item" onclick="navigate('sprint-panel')" id="nav-sprint-panel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10m6-10v10"/></svg>
-      Painel da Sprint
-    </div>
-    <div class="nav-item" onclick="navigate('carousel')" id="nav-carousel">
+      <span class="nav-label">Painel da Sprint</span>
+    </button>
+    <button type="button" class="nav-item" onclick="navigate('carousel')" id="nav-carousel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m9 8 7 4-7 4V8Z"/></svg>
-      Apresentação dos Painéis
-    </div>
-    <div class="nav-item" onclick="navigate('capacity')" id="nav-capacity">
+      <span class="nav-label">Apresentação dos Painéis</span>
+    </button>
+    <button type="button" class="nav-item" onclick="navigate('capacity')" id="nav-capacity">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18M6 17V9m6 8V4m6 13v-6"/><circle cx="6" cy="7" r="1"/><circle cx="12" cy="2" r="1"/><circle cx="18" cy="9" r="1"/></svg>
-      Capacity
-    </div>
-    <div class="nav-item" onclick="navigate('forecast')" id="nav-forecast">
+      <span class="nav-label">Capacity</span>
+    </button>
+    <button type="button" class="nav-item" onclick="navigate('forecast')" id="nav-forecast">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M6 15l5-6 4 3 6-8"/></svg>
-      Previsibilidade
-    </div>
-    <div class="nav-item" onclick="navigate('consumption')" id="nav-consumption">
+      <span class="nav-label">Previsibilidade</span>
+    </button>
+    <button type="button" class="nav-item" onclick="navigate('consumption')" id="nav-consumption">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg>
-      Consumo de horas
-    </div>
-    <div class="nav-item" onclick="navigate('release')" id="nav-release">
+      <span class="nav-label">Consumo de horas</span>
+    </button>
+    <button type="button" class="nav-item" onclick="navigate('release')" id="nav-release">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/></svg>
-      Release da sprint
-    </div>
-    <div class="nav-item" onclick="navigate('settings')" id="nav-settings">
+      <span class="nav-label">Release da sprint</span>
+    </button>
+    <button type="button" class="nav-item" onclick="navigate('settings')" id="nav-settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
-      Configurações
-    </div>
+      <span class="nav-label">Configurações</span>
+    </button>
   </nav>
   <div class="sidebar-footer">
-    <form method="post" action="/logout" style="margin-bottom:10px">@csrf<button type="submit" style="width:100%;padding:8px;border:1px solid #49609a;border-radius:8px;background:transparent;color:inherit;cursor:pointer">Sair da conta</button></form>
-    sprint metrics v4
+    <form method="post" action="/logout">@csrf<button type="submit" class="sidebar-action">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+      <span class="nav-label">Sair da conta</span>
+    </button></form>
+    <div class="sidebar-version">sprint metrics v4</div>
   </div>
 </aside>
-<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+<div class="sidebar-overlay" id="overlay" onclick="dismissSidebar()"></div>
 <div class="main">
   <div class="topbar">
-    <button class="hamburger" onclick="openSidebar()" aria-label="Abrir menu lateral">
+    <button type="button" class="hamburger" onclick="openSidebar()" aria-label="Abrir menu lateral">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div><div class="topbar-title" id="tb-title">Dashboard</div><div class="topbar-sub" id="tb-sub">visão geral histórica · sprints 4–11</div></div>
@@ -705,15 +713,11 @@ function navigate(page,sp=null){
   if(previousPage==='forecast'&&page!=='forecast') window.Forecast?.leave();
   if(previousPage==='consumption'&&page!=='consumption') window.Consumption?.leave();
   if(previousPage==='release'&&page!=='release') window.SprintRelease?.leave();
-  document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   currentPage=page; currentSprint=sp;
-  const ni=document.getElementById('nav-'+page);
-  if(ni) ni.classList.add('active');
+  setActiveNav(page==='sprint'?`nav-sprint-${sp}`:`nav-${page}`);
   document.getElementById('page-'+page)?.classList.add('active');
-  const titles={dashboard:['Dashboard',`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`],sprint:[`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],settings:['Configurações','integração com Monday']};
-  if(page==='consumption'){titles.consumption=['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'];}
-  if(page==='release'){titles.release=['Release da sprint','Itens implementados, organizados automaticamente por Tipo'];}
+  const titles={dashboard:['Dashboard',`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`],sprint:[`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday']};
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
@@ -734,22 +738,37 @@ function navigate(page,sp=null){
   if(page==='carousel') scheduleMondayRefresh();
   if((previousPage==='bombeiro'&&page!=='bombeiro')||(previousPage==='sprint-panel'&&page!=='sprint-panel')||(previousPage==='carousel'&&page!=='carousel')) scheduleMondayRefresh();
 }
+function setActiveNav(id){
+  document.querySelectorAll('.nav-item').forEach(e=>{e.classList.remove('active');e.removeAttribute('aria-current');});
+  const ni=document.getElementById(id);
+  if(ni){ni.classList.add('active');ni.setAttribute('aria-current','page');}
+  document.getElementById('sprint-toggle').classList.toggle('active',id.startsWith('nav-sprint-'));
+}
+function setSprintsOpen(open){
+  document.getElementById('sprint-children').classList.toggle('open',open);
+  document.getElementById('sprint-arrow').classList.toggle('open',open);
+  document.getElementById('sprint-toggle').setAttribute('aria-expanded',String(open));
+}
 function toggleSprints(){
-  const c=document.getElementById('sprint-children');
-  const a=document.getElementById('sprint-arrow');
-  c.classList.toggle('open'); a.classList.toggle('open');
+  setSprintsOpen(!document.getElementById('sprint-children').classList.contains('open'));
 }
 function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('overlay').classList.add('open');}
-function dismissSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('open');}
-function closeSidebar(){dismissSidebar();if(window.matchMedia('(min-width:1024px)').matches)document.body.classList.add('sidebar-collapsed');}
+/** Fecha a gaveta (mobile) e recolhe o menu expandido (desktop) até o mouse sair dele. */
+function dismissSidebar(){
+  const sidebar=document.getElementById('sidebar');
+  sidebar.classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+  if(sidebar.matches(':hover,:has(:focus-visible)')) sidebar.classList.add('suppressed');
+}
 function initSprintNav(){
   const nav=document.getElementById('sprint-nav-items');
   nav.replaceChildren();
   SPRINTS.forEach(s=>{
-    const el=document.createElement('div');
-    el.className='nav-item'; el.id=`nav-sprint-${s}`;
-    el.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>Sprint ${s}`;
-    el.onclick=()=>{document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));el.classList.add('active');navigate('sprint',s);};
+    const el=document.createElement('button');
+    el.type='button'; el.className='nav-item'; el.id=`nav-sprint-${s}`;
+    el.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span class="nav-label">Sprint ${s}</span>`;
+    el.onclick=()=>navigate('sprint',s);
+    if(currentPage==='sprint'&&currentSprint===s) el.classList.add('active');
     nav.appendChild(el);
   });
   // raw filters

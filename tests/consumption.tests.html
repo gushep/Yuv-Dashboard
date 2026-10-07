@@ -64,7 +64,7 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
   const panelRows=['Cássio Rezende Alves','Gabriel Taveira','Gustavo Zuckert','Hugo César Leal','Igor Rossi Silva','Rafael Souza da Silva'].flatMap((name,index)=>[row(`s${index}`,10+index,'Melhoria',name),row(`h${index}`,5+index,'Suporte',name)]);
   saved[17]=2400;Consumption.enter();await tick();Consumption.onDataUpdated({rows:panelRows,syncedAt:'2026-10-07T12:00:00Z',sprints:[{number:17,start:'2026-09-28',end:'2026-10-11'}]});
   await new Promise(resolve=>setTimeout(resolve,350));
-  check('Modo painel recolhe navegação e aplica avatares do Capacity',document.body.classList.contains('sidebar-collapsed') && document.querySelectorAll('#cons-body .cap-avatar').length===6 && document.querySelector('#cons-body .cap-avatar').textContent==='RS');
+  check('Modo painel preserva o menu lateral e aplica avatares do Capacity',!document.body.classList.contains('sidebar-collapsed') && document.querySelectorAll('#cons-body .cap-avatar').length===6 && document.querySelector('#cons-body .cap-avatar').textContent==='RS');
   if(innerWidth>900){
     check('Painel cabe na altura da janela',document.documentElement.scrollHeight<=innerHeight+1 && document.querySelector('footer.cons-rule').getBoundingClientRect().bottom<=innerHeight);
     check('Tabela mantém área visível',document.querySelector('.cons-developer-scroll').clientHeight>=150);
@@ -81,7 +81,7 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
     Consumption.onDataUpdated({rows:panelRows,syncedAt:'2026-10-07T12:00:00Z',sprints:[{number:17,start:'2026-09-28',end:'2026-10-11'}]});
   }
   document.querySelector('.cons-quality').open=true;Consumption.leave();
-  check('Saída restaura navegação e fecha detalhes',!document.body.classList.contains('consumption-view') && !document.body.classList.contains('sidebar-collapsed') && !document.querySelector('#page-consumption details[open]'));
+  check('Saída remove modo painel e fecha detalhes',!document.body.classList.contains('consumption-view') && !document.querySelector('#page-consumption details[open]'));
   Consumption.enter();await tick();
   document.getElementById('test-result').textContent=checks.join('\n')+'\nALL PASSED';
  }catch(error){document.getElementById('test-result').textContent=checks.join('\n')+'\nERROR '+error.stack;}

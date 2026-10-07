@@ -1,7 +1,7 @@
 /* Mesmo enquadramento do Capacity, com rolagem restrita aos detalhes e à tabela. */
 body.consumption-view,body.consumption-view .content{background:#fff}
 body.consumption-view .main{height:100dvh;min-height:0;overflow:hidden}
-body.consumption-view .topbar{height:34px;min-height:34px;flex:none;padding:3px 14px;border-bottom:0;background:#fff}
+body.consumption-view .topbar{flex:none;border-bottom:0;background:#fff}
 body.consumption-view .topbar>div,body.consumption-view .topbar-right{display:none}
 body.consumption-view .content{padding:10px 14px 8px;flex:1;min-height:0;overflow:hidden}
 #page-consumption.active{display:flex;flex-direction:column;height:100%;gap:8px;min-height:0;color:#102044;font-size:12px}
@@ -95,7 +95,6 @@ body.consumption-view .content{padding:10px 14px 8px;flex:1;min-height:0;overflo
 .cons-rule{font-size:10px;color:#61708c;line-height:1.4;margin:0;flex:none}
 footer.cons-rule{padding:4px 9px;background:#f5f8fc;border:1px solid #dce5f1;border-radius:5px;color:#385274}
 @media(max-height:850px) and (min-width:901px){
-  body.consumption-view .topbar{height:28px;min-height:28px}
   body.consumption-view .content{padding-top:8px}
   #page-consumption.active,#cons-content{gap:6px}
   #page-consumption .cap-hero{min-height:44px}
