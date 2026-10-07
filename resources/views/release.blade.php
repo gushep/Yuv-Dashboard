@@ -5,6 +5,7 @@
   </header>
   <div class="release-info"><strong id="release-count">Aguardando dados</strong><span>Descrições: objetivo da ficha do card ou resumo revisado do que foi implementado.</span></div>
   <div class="release-metadata"><span id="release-updated"></span><span id="release-summary-status" class="release-summary-status"></span></div>
+  <div id="release-selection" class="release-selection" hidden><strong id="release-selection-count"></strong><span>Desmarque o que não deve ir para o PDF de CS e clientes; na tela todos os itens continuam visíveis.</span><button type="button" id="release-select-all">Marcar todos</button><button type="button" id="release-select-none">Desmarcar todos</button></div>
   <p id="release-loading" class="release-message" role="status" hidden>Carregando itens implementados e comentários dos cards…</p>
   <p id="release-error" class="release-message release-error" role="alert" hidden></p>
   <p id="release-warning" class="release-message release-warning" role="status" hidden></p>

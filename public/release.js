@@ -1,7 +1,20 @@
 /* O backend prepara o documento; a interface apenas apresenta os dados da release. */
 window.SprintRelease = (() => {
   const el = id => document.getElementById(id);
-  const state = {active:false, sprint:null, data:null, loading:false, error:'', request:0, expanded:new Set(), printing:false, printGroups:[]};
+  const state = {active:false, sprint:null, data:null, loading:false, error:'', request:0, expanded:new Set(), printing:false, printGroups:[], excluded:new Set()};
+  /* Seleção para exportação: guardada só neste navegador, por sprint. Na tela todos os itens continuam visíveis. */
+  const selectionKey = sprint => `yuv-release-excluded-${sprint}`;
+  function loadSelection(sprint) {
+    try { state.excluded = new Set(JSON.parse(localStorage.getItem(selectionKey(sprint)) || '[]').map(String)); } catch { state.excluded = new Set(); }
+  }
+  function saveSelection() {
+    try { localStorage.setItem(selectionKey(state.sprint), JSON.stringify([...state.excluded])); } catch { /* A seleção vale para esta sessão mesmo sem armazenamento local. */ }
+  }
+  function setSelected(ids, selected) {
+    for (const id of ids) selected ? state.excluded.delete(String(id)) : state.excluded.add(String(id));
+    saveSelection();render();
+  }
+  const selectedItems = group => group.items.filter(item => !state.excluded.has(String(item.id)));
   const normalize = value => String(value ?? '').trim().replace(/\s+/g,' ').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   function typeVisual(type) {
     const name = normalize(type);
@@ -14,7 +27,8 @@ window.SprintRelease = (() => {
   }
   function groupNode(group) {
     const visual = typeVisual(group.type), section = document.createElement('details');
-    section.className = `release-group release-${visual.color}`;
+    const selected = selectedItems(group).length;
+    section.className = `release-group release-${visual.color}${selected ? '' : ' release-group-excluded'}`;
     section.open = state.expanded.has(group.type);
     section.addEventListener('toggle',()=>{
       if (!section.isConnected || state.printing) return;
@@ -25,12 +39,23 @@ window.SprintRelease = (() => {
     const heading = document.createElement('h2');
     const icon = document.createElement('span');icon.className='release-icon';icon.append(svgIcon(visual.color==='green'?'trend':visual.color==='red'?'support':visual.color==='purple'?'check':'layers'));icon.setAttribute('aria-hidden','true');
     const label = document.createElement('span');label.textContent=group.type;
-    const counter = document.createElement('span');counter.className='release-counter';counter.textContent=group.count;counter.setAttribute('aria-label',`${group.count} itens`);
+    const counter = document.createElement('span');counter.className='release-counter';counter.dataset.total=group.count;counter.dataset.selected=selected;
+    counter.textContent=state.printing ? selected : group.count;counter.setAttribute('aria-label',`${group.count} itens`);
     const chevron = document.createElement('span');chevron.className='release-chevron';chevron.append(svgIcon('chevron'));chevron.setAttribute('aria-hidden','true');
     heading.append(icon,label,counter,chevron);summary.append(heading);section.append(summary);
     const items = document.createElement('div');items.className='release-group-items';section.append(items);
+    const groupActions = document.createElement('div');groupActions.className='release-group-selection';
+    for (const [label, value] of [['Marcar todos deste tipo', true], ['Desmarcar todos deste tipo', false]]) {
+      const button = document.createElement('button');button.type='button';button.textContent=label;
+      button.onclick=()=>setSelected(group.items.map(item => item.id), value);groupActions.append(button);
+    }
+    items.append(groupActions);
     for (const item of group.items) {
-      const article = document.createElement('article');article.className='release-delivery';article.dataset.itemId=item.id;
+      const isSelected = !state.excluded.has(String(item.id));
+      const article = document.createElement('article');article.className=`release-delivery${isSelected ? '' : ' release-excluded'}`;article.dataset.itemId=item.id;
+      const pick = document.createElement('input');pick.type='checkbox';pick.className='release-pick';pick.checked=isSelected;
+      pick.setAttribute('aria-label',`Incluir na exportação: ${item.title}`);pick.onchange=()=>setSelected([item.id], pick.checked);
+      article.append(pick);
       const text = document.createElement('div'), title = document.createElement('h3');text.className='release-copy';title.textContent=item.title;text.append(title);
       if (item.description) { const description = document.createElement('p');description.textContent=item.description;text.append(description); }
       if (item.descriptionStale) { const stale = document.createElement('small');stale.className='release-stale';stale.textContent='Resumo desatualizado: o card mudou depois que o resumo foi escrito.';text.append(stale); }
@@ -76,11 +101,15 @@ window.SprintRelease = (() => {
     el('release-loading').hidden = !state.loading;
     el('release-error').hidden = !state.error;el('release-error').textContent=state.error;
     const visible = data && data.sprint===state.sprint;
-    el('release-export').disabled = state.loading || !!state.error || !visible || !Number.isInteger(data.sprint);
+    const selectedCount = visible ? data.groups.reduce((sum, group) => sum + selectedItems(group).length, 0) : 0;
+    el('release-export').disabled = state.loading || !!state.error || !visible || !Number.isInteger(data.sprint) || !selectedCount;
+    el('release-selection').hidden = !visible || !data.total;
+    el('release-selection-count').textContent = visible ? `Exportar ${selectedCount} de ${data.total} ${data.total===1?'item':'itens'} no PDF` : '';
     const dates = visible ? data.dates : null;
     const date = value => new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR');
     el('release-dates').textContent=dates ? `${date(dates.start)} – ${date(dates.end)}` : '';
-    el('release-count').textContent = visible ? `Sprint ${data.sprint ?? '—'} · Status: Implementado · ${data.total} ${data.total===1?'item':'itens'}` : 'Aguardando dados da sprint';
+    const shownTotal = state.printing ? selectedCount : visible ? data.total : 0;
+    el('release-count').textContent = visible ? `Sprint ${data.sprint ?? '—'} · Status: Implementado · ${shownTotal} ${shownTotal===1?'item':'itens'}` : 'Aguardando dados da sprint';
     el('release-updated').textContent=visible ? `Última atualização: ${new Date(data.syncedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}` : '';
     el('release-summary-status').textContent = visible ? summaryStatus(data) : '';
     el('release-warning').hidden = !visible || !data.commentsUnavailable;
@@ -99,6 +128,7 @@ window.SprintRelease = (() => {
     try {
       const data = await mondayRequest(el('page-release').dataset.url,sprint ? {sprint} : {});
       if (!state.active || request !== state.request) return;
+      if (data.sprint !== state.data?.sprint) loadSelection(data.sprint);
       state.data = data;state.sprint = data.sprint;
     } catch(error) {
       if (!state.active || request !== state.request) return;
@@ -118,12 +148,14 @@ window.SprintRelease = (() => {
   function preparePrint() {
     if (!state.active || state.printing) return;
     state.printing = true;
+    render();
+    // Somente os tipos com itens marcados são abertos e impressos; os contadores passam a mostrar os itens marcados.
     state.printGroups = [...el('release-document').querySelectorAll('details')].map(group=>({group,open:group.open}));
-    for (const {group} of state.printGroups) group.open = true;
+    for (const {group} of state.printGroups) group.open = !group.classList.contains('release-group-excluded');
   }
   function restorePrint() {
-    for (const {group,open} of state.printGroups) group.open = open;
     state.printGroups = [];state.printing = false;
+    render();
   }
   function exportPdf() {
     if (!state.active || state.loading || state.error || !state.data || state.data.sprint!==state.sprint || !Number.isInteger(state.sprint)) return;
@@ -140,6 +172,8 @@ window.SprintRelease = (() => {
   document.addEventListener('DOMContentLoaded',()=>{
     el('release-sprint').onchange=event=>{state.expanded.clear();state.sprint=Number(event.target.value);load();};
     el('release-export').onclick=exportPdf;
+    el('release-select-all').onclick=()=>setSelected(state.data?.groups.flatMap(group => group.items.map(item => item.id)) || [], true);
+    el('release-select-none').onclick=()=>setSelected(state.data?.groups.flatMap(group => group.items.map(item => item.id)) || [], false);
     if (location.hash==='#release') navigate('release');
   });
   window.addEventListener('beforeprint',preparePrint);

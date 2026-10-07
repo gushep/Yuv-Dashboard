@@ -124,3 +124,15 @@ body.release-view .content{padding:24px clamp(24px,3.3vw,56px) 18px}
 .release-summary-status{margin-left:14px;color:#385274}
 .release-stale{display:block;margin-top:4px;color:#b45309;font-size:11px}
 @media print{.release-summary-status,.release-stale{display:none!important}}
+/* Seleção dos itens que vão para o PDF. */
+.release-selection{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 14px;padding:10px 16px;border:1px dashed #b9c8e4;border-radius:9px;background:#fbfcff;font-size:12px;color:#385274}
+.release-selection[hidden]{display:none}
+.release-selection strong{color:#0b1645}
+.release-selection button,.release-group-selection button{padding:5px 10px;border:1px solid #c9d6ee;border-radius:6px;background:#fff;color:#1d4ed8;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.release-selection button:hover,.release-group-selection button:hover{border-color:#1d6ef5}
+.release-group-selection{display:flex;gap:8px;justify-content:flex-end;padding:4px 0 6px}
+.release-delivery{position:relative}
+.release-pick{position:absolute;left:18px;top:50%;width:17px;height:17px;margin:-8px 0 0;cursor:pointer;accent-color:#1d6ef5}
+.release-excluded>*:not(.release-pick){opacity:.38}
+.release-group-excluded summary{opacity:.6}
+@media print{.release-selection,.release-group-selection,.release-pick,.release-excluded,.release-group-excluded{display:none!important}}
