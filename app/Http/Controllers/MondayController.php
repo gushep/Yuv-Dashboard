@@ -38,7 +38,23 @@ class MondayController extends Controller
             'map' => $connection->column_map ?? [],
             'refreshMinutes' => $connection->refresh_minutes,
             'hasToken' => filled($connection->token),
+            'metrics' => $connection->metricSettings(),
         ]);
+    }
+
+    public function saveMetricSettings(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'capacityHours' => ['required', 'numeric', 'between:0,200'],
+            'excludedPeople' => ['present', 'array', 'max:50'],
+            'excludedPeople.*' => ['nullable', 'string', 'max:150'],
+        ]);
+        $people = array_values(array_unique(array_filter(array_map(fn (?string $name): string => trim((string) $name), $data['excludedPeople']), 'strlen')));
+        $connection = MondayConnection::current();
+        $connection->metric_settings = ['capacityHours' => round((float) $data['capacityHours'], 2), 'excludedPeople' => $people];
+        $connection->save();
+
+        return response()->json(['saved' => true, 'metrics' => $connection->metricSettings()]);
     }
 
     public function capacity(): JsonResponse

@@ -147,6 +147,29 @@ async function saveMonday() {
   }
 }
 
+function applyMetricSettings(metrics = {}) {
+  SprintRules.applySettings(metrics);
+  document.getElementById('metric-capacity').value = String(SprintRules.settings.capacityHours);
+  document.getElementById('metric-excluded').value = SprintRules.settings.excludedPeople.join('\n');
+}
+
+async function saveMetricSettings() {
+  const button = document.getElementById('metric-save');
+  button.disabled = true;
+  try {
+    const capacityHours = Number(String(document.getElementById('metric-capacity').value).replace(',', '.'));
+    const excludedPeople = document.getElementById('metric-excluded').value.split('\n').map(name => name.trim()).filter(Boolean);
+    const result = await mondayRequest('/api/metric-settings', { capacityHours, excludedPeople });
+    applyMetricSettings(result.metrics);
+    if (DATA.length) useMondayRows(DATA.slice());
+    mondayMessage('metric-status', 'Regras salvas. Os indicadores já usam os novos valores.', 'success');
+  } catch (error) {
+    mondayMessage('metric-status', error.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function scheduleMondayRefresh() {
   clearTimeout(mondayRefreshTimer);
   mondayRefreshTimer = null;
@@ -197,7 +220,7 @@ function useMondayRows(rows) {
   rawPage = 0;
   if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast' && currentPage !== 'consumption' && currentPage !== 'release') navigate('dashboard');
   else {
-    document.getElementById('tb-right').textContent = `S${SPRINTS[0]}–S${SPRINTS.at(-1)}`;
+    document.getElementById('tb-right').textContent = sprintRangeLabel();
   }
 }
 
@@ -241,6 +264,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   try {
     const config = await mondayRequest('/api/config');
+    applyMetricSettings(config.metrics);
     document.getElementById('monday-board').value = config.boardId || '';
     mondayRefreshMinutes = config.refreshMinutes ?? 5;
     document.getElementById('monday-refresh').value = String(mondayRefreshMinutes);
