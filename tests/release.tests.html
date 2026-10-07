@@ -43,7 +43,7 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
   document.querySelector('[data-item-id="6"] .release-pick').click();document.querySelector('[data-item-id="3"] .release-pick').click();
   check('Itens desmarcados continuam visíveis na tela e saem da contagem',document.querySelectorAll('.release-delivery').length===6 && document.querySelectorAll('.release-excluded').length===2 && document.getElementById('release-selection-count').textContent==='Exportar 4 de 6 itens no PDF');
   document.getElementById('release-export').click();
-  check('PDF imprime somente os itens marcados e omite tipos sem itens',printedVisible===4 && printedGroups===3 && printedCount.includes('4 itens') && document.getElementById('release-count').textContent.includes('6 itens'));
+  check('PDF imprime somente os itens marcados e omite tipos sem itens',printedVisible===4 && printedGroups===3 && printedCount.includes('4 entregas') && !printedCount.includes('Status') && document.getElementById('release-count').textContent.includes('6 itens'));
   check('Seleção fica salva para a sprint',JSON.parse(localStorage.getItem('yuv-release-excluded-17')).sort().join()==='3,6');
   document.getElementById('release-select-none').click();
   check('Sem itens marcados a exportação fica bloqueada',document.getElementById('release-export').disabled && document.getElementById('release-selection-count').textContent==='Exportar 0 de 6 itens no PDF');

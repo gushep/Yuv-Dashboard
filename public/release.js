@@ -62,7 +62,7 @@ window.SprintRelease = (() => {
       article.append(text);
       const module = document.createElement('span');module.className='release-module';module.append(svgIcon('layers'));
       if (item.module) { module.append(document.createTextNode(item.module));module.title=`Módulo: ${item.module}`; }
-      else module.setAttribute('aria-label','Entrega sem módulo informado');
+      else { module.setAttribute('aria-label','Entrega sem módulo informado');module.classList.add('release-module-empty'); }
       article.append(module);
       const url = window.SprintPanel.safeMondayUrl(item.url);
       if (url) { const link = document.createElement('a');link.href=url;link.className='release-card-link';link.append(document.createTextNode('Ver card'),svgIcon('external'));link.target='_blank';link.rel='noopener noreferrer';article.append(link); }
@@ -108,8 +108,11 @@ window.SprintRelease = (() => {
     const dates = visible ? data.dates : null;
     const date = value => new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR');
     el('release-dates').textContent=dates ? `${date(dates.start)} – ${date(dates.end)}` : '';
-    const shownTotal = state.printing ? selectedCount : visible ? data.total : 0;
-    el('release-count').textContent = visible ? `Sprint ${data.sprint ?? '—'} · Status: Implementado · ${shownTotal} ${shownTotal===1?'item':'itens'}` : 'Aguardando dados da sprint';
+    // No PDF, uma linha para o cliente: sprint, período e entregas exportadas, sem termos internos do quadro.
+    const period = dates ? ` · ${date(dates.start)} a ${date(dates.end)}` : '';
+    el('release-count').textContent = !visible ? 'Aguardando dados da sprint'
+      : state.printing ? `Sprint ${data.sprint}${period} · ${selectedCount} ${selectedCount===1?'entrega':'entregas'}`
+      : `Sprint ${data.sprint ?? '—'} · Status: Implementado · ${data.total} ${data.total===1?'item':'itens'}`;
     el('release-updated').textContent=visible ? `Última atualização: ${new Date(data.syncedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}` : '';
     el('release-summary-status').textContent = visible ? summaryStatus(data) : '';
     el('release-warning').hidden = !visible || !data.commentsUnavailable;

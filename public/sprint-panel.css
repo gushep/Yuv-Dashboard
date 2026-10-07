@@ -21,7 +21,7 @@ body.sprint-panel-view .content{padding:10px 16px 0;background:#f7faff}
 @media(max-width:620px){#page-sprint-panel .fire-board{grid-template-columns:1fr}#page-sprint-panel .fire-lane-done{grid-column:auto}#page-sprint-panel .fire-lane{min-height:260px}}
 @media print{
   body.sprint-panel-view #page-bombeiro{display:none!important}
-  body.sprint-panel-view #page-sprint-panel{display:block!important}
+  body.sprint-panel-view #page-sprint-panel{display:block!important;page:fire-board}
   body.sprint-panel-view .content{padding:0!important}
   #page-sprint-panel .fire-lane{height:auto!important;min-height:0;overflow:visible;box-shadow:none}
   #page-sprint-panel .fire-lane-list{overflow:visible!important}
