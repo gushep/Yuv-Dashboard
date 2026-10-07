@@ -218,7 +218,7 @@ function useMondayRows(rows) {
   sprintSelect.length = 1;
   timeInited = false;
   rawPage = 0;
-  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast' && currentPage !== 'consumption' && currentPage !== 'release') navigate('dashboard');
+  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast' && currentPage !== 'consumption' && currentPage !== 'release' && currentPage !== 'control-tower') navigate('dashboard');
   else {
     document.getElementById('tb-right').textContent = sprintRangeLabel();
   }
@@ -240,6 +240,7 @@ async function syncMonday(force = true) {
     window.Forecast?.onDataUpdated(result);
     window.Consumption?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);
+    window.ControlTower?.refreshAlerts();
     const time = new Date(result.syncedAt).toLocaleString('pt-BR');
     mondayMessage('monday-sync-status', `${result.rows.length} registros carregados de ${result.fetched} tarefas · ${result.skipped} sem Sprint reconhecida · ${time}.`, 'success');
   } catch (error) {

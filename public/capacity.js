@@ -61,7 +61,7 @@ window.Capacity = (() => {
   const isDone = status => window.SprintRules.isDone(status);
   function model(allRows, sprint, dates, overrides = {}, today = todaySaoPaulo()) {
     const sprintById = new Map();
-    for (const row of allRows) if (row.Id) {
+    for (const row of allRows) if (row.Id && !row.AsOf) {
       const key = String(row.Id);
       if (!sprintById.has(key)) sprintById.set(key, new Set());
       sprintById.get(key).add(Number(row.Sprint));

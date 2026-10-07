@@ -62,7 +62,7 @@ window.Forecast = (() => {
   function model(rows, sprint, dates, overrides = {}, reference = window.Capacity.todaySaoPaulo(), holidays = []) {
     const seenSprints = new Map(), unique = new Map(), groups = new Map(), unassigned = [];
     rows.forEach((row,index) => {
-      if (row.Id) { const set = seenSprints.get(String(row.Id)) || new Set(); set.add(Number(row.Sprint)); seenSprints.set(String(row.Id),set); }
+      if (row.Id && !row.AsOf) { const set = seenSprints.get(String(row.Id)) || new Set(); set.add(Number(row.Sprint)); seenSprints.set(String(row.Id),set); }
       if (Number(row.Sprint) === Number(sprint)) unique.set(row.Id ? String(row.Id) : `snapshot-${index}`, row);
     });
     for (const row of unique.values()) {

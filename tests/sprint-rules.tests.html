@@ -11,7 +11,7 @@
     check('Aguardando Deploy e QA aprovado são feitos, não entregues',R.isDoneNotDelivered('Aguardando Deploy') && R.isDoneNotDelivered('QA - Aprovado') && !R.isOpen('Aguardando Deploy'));
     check('Cancelado, Descontinuado e Despriorizado saem do escopo, sem diferenciar maiúsculas',R.isRemoved('CANCELADO') && R.isRemoved('Descontinuado') && R.isRemoved('Despriorizado') && !R.isOpen('Cancelado'));
     check('Status em andamento ou desconhecido continua em aberto',R.isOpen('Em progresso') && R.isOpen('Próx. Sprint') && R.isOpen('CR - Aguardando') && R.isOpen(''));
-    check('Impedimentos e itens não iniciados reconhecidos sem acento',R.isBlocked('Limitação Externa') && R.isBlocked('Parado') && R.isNotStarted('Pronto para começar') && R.isNotStarted('Backlog'));
+    check('Impedimentos e itens não iniciados reconhecidos sem acento',R.isBlocked('Limitação Externa') && R.isBlocked('Parado') && R.isNotStarted('Pronto para começar') && R.isNotStarted('Backlog') && R.isNotStarted('') && R.isOpen(''));
     check('Kanban encerra entregues e retirados',R.isClosed('Implementado') && R.isClosed('Cancelado') && !R.isClosed('Aguardando Deploy'));
     check('Capacidade padrão de 80h',R.capacityMinutes()===4800);
     R.applySettings({capacityHours:'60',excludedPeople:['Ana Souza']});

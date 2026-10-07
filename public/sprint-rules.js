@@ -5,7 +5,7 @@ window.SprintRules = (() => {
   const DONE_NOT_DELIVERED = ['aguardando deploy', 'qa - aprovado'];
   const REMOVED = ['cancelado', 'descontinuado', 'despriorizado'];
   const BLOCKED = ['parado', 'bloqueado', 'impedido', 'limitacao externa'];
-  const NOT_STARTED = ['backlog', 'pronto pra iniciar', 'pronto para iniciar', 'pronto pra comecar', 'pronto para comecar'];
+  const NOT_STARTED = ['', 'backlog', 'pronto pra iniciar', 'pronto para iniciar', 'pronto pra comecar', 'pronto para comecar'];
   const settings = { capacityHours: 80, excludedPeople: [] };
 
   const isDone = status => DONE.includes(normalize(status));

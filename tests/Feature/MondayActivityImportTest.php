@@ -9,6 +9,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -94,12 +95,26 @@ class MondayActivityImportTest extends TestCase
         $this->assertSame(1, MondayActivityEvent::query()->count());
     }
 
-    public function test_import_is_scheduled_every_fifteen_minutes(): void
+    public function test_monday_refresh_updates_cached_cards_and_copies_new_activity(): void
     {
-        $this->artisan('schedule:list')->expectsOutputToContain('monday:import-activity')->assertSuccessful();
+        $this->configureMonday(['Sprint' => 'sprint']);
+        Http::preventStrayRequests();
+        Http::fake(['api.monday.com/v2' => fn (Request $request) => Http::response(str_contains($request['query'], 'activity_logs')
+            ? $this->page([$this->log('e1', 'create_pulse', '17593344000000000', ['pulse_id' => 101])])
+            : $this->board())]);
+
+        $this->artisan('monday:refresh')->expectsOutputToContain('1 registro(s) atualizados e 1 evento(s) novo(s)')->assertSuccessful();
+
+        $this->assertSame('101', Cache::get('monday-sync-1')['rows'][0]['Id']);
+        $this->assertSame(1, MondayActivityEvent::query()->count());
+    }
+
+    public function test_monday_refresh_is_scheduled_every_fifteen_minutes(): void
+    {
+        $this->artisan('schedule:list')->expectsOutputToContain('monday:refresh')->assertSuccessful();
 
         $event = collect(app(Schedule::class)->events())
-            ->first(fn ($event): bool => str_contains($event->command, 'monday:import-activity'));
+            ->first(fn ($event): bool => str_contains($event->command, 'monday:refresh'));
         $this->assertSame('*/15 * * * *', $event->expression);
         $this->assertTrue($event->withoutOverlapping);
     }

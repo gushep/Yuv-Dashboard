@@ -3,13 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\MondayConnection;
+use App\Models\SprintCommitment;
+use App\Services\ControlTowerService;
 use App\Services\MondayActivityImporter;
 use App\Services\MondayService;
+use App\Services\MondaySnapshotService;
 use App\Services\SprintReleaseService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -19,8 +21,6 @@ use function Illuminate\Support\defer;
 
 class MondayController extends Controller
 {
-    private const CACHE_KEY = 'monday-sync-1';
-
     /** Trava que limita a cópia do log de atividades a uma vez por hora. */
     private const ACTIVITY_IMPORT_KEY = 'monday-activity-import';
 
@@ -143,7 +143,7 @@ class MondayController extends Controller
                 $connection->token = $token;
             }
             $connection->save();
-            Cache::forget(self::CACHE_KEY);
+            Cache::forget(MondaySnapshotService::CACHE_KEY);
 
             return ['saved' => true, 'boardName' => $board['name'], 'refreshMinutes' => $connection->refresh_minutes];
         });
@@ -175,7 +175,10 @@ class MondayController extends Controller
         return response()->json(['saved' => true, 'overrides' => $overrides]);
     }
 
-    public function sync(Request $request, MondayService $monday, MondayActivityImporter $importer): JsonResponse
+    /**
+     * Cards do Monday para o dashboard. Sprints encerradas voltam ao estado do último dia, reconstituído pelo log de atividades.
+     */
+    public function sync(Request $request, MondaySnapshotService $snapshots, MondayActivityImporter $importer): JsonResponse
     {
         $data = $request->validate([
             'force' => ['nullable', 'boolean'],
@@ -183,37 +186,62 @@ class MondayController extends Controller
             'sprintPanel' => ['nullable', 'boolean'],
         ]);
 
-        return $this->attempt(function () use ($monday, $importer, $data) {
+        return $this->attempt(function () use ($snapshots, $importer, $data) {
             $connection = MondayConnection::current();
-            if (! $connection->board_id || ! $connection->token || empty($connection->column_map['Sprint'])) {
-                throw new RuntimeException('Configure o quadro, token e coluna Sprint antes de atualizar.');
-            }
             $ttl = ! empty($data['bombeiro']) || ! empty($data['sprintPanel']) || $connection->refresh_minutes === 0
                 ? 60 : $connection->refresh_minutes * 60;
-            if (empty($data['force']) && ($cached = Cache::get(self::CACHE_KEY))) {
-                $age = Carbon::parse($cached['syncedAt'])->diffInSeconds(now(), false);
-                if ($age >= 0 && $age < $ttl) {
-                    return $cached;
-                }
+            $snapshot = $snapshots->current($connection, $ttl, ! empty($data['force']));
+            if ($snapshots->fetchedFresh) {
+                $this->importActivityAfterResponse($importer, $connection);
             }
-            $result = $monday->sync($connection->token, $connection->board_id, $connection->column_map ?? []);
-            Cache::put(self::CACHE_KEY, $result, 3600);
-            $this->importActivityAfterResponse($importer, $connection);
 
-            return $result;
+            return $snapshots->withFrozenSprints($snapshot, $connection);
         });
     }
 
-    public function release(Request $request, MondayService $monday, MondayActivityImporter $importer, SprintReleaseService $release): JsonResponse
+    public function release(Request $request, MondaySnapshotService $snapshots, MondayActivityImporter $importer, SprintReleaseService $release): JsonResponse
     {
         $data = $request->validate(['sprint' => ['nullable', 'integer', 'between:1,999999']]);
-        $snapshot = $this->sync($request, $monday, $importer);
+        $snapshot = $this->sync($request, $snapshots, $importer);
         if ($snapshot->getStatusCode() !== 200) {
             return $snapshot;
         }
         $connection = MondayConnection::current();
 
         return response()->json($release->build($snapshot->getData(true), isset($data['sprint']) ? (int) $data['sprint'] : null, $connection->token, $connection->board_id));
+    }
+
+    /**
+     * Torre de controle da sprint (atual, ou a informada).
+     */
+    public function controlTower(Request $request, MondaySnapshotService $snapshots, MondayActivityImporter $importer, ControlTowerService $tower): JsonResponse
+    {
+        $data = $request->validate(['sprint' => ['nullable', 'integer', 'between:1,999999']]);
+
+        return $this->attempt(function () use ($snapshots, $importer, $tower, $data) {
+            $connection = MondayConnection::current();
+            $snapshot = $snapshots->current($connection, $connection->refresh_minutes === 0 ? 60 : $connection->refresh_minutes * 60);
+            if ($snapshots->fetchedFresh) {
+                $this->importActivityAfterResponse($importer, $connection);
+            }
+
+            return $tower->build($snapshot, $connection, isset($data['sprint']) ? (int) $data['sprint'] : null);
+        });
+    }
+
+    public function saveCommitment(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'sprint' => ['required', 'integer', 'between:1,999999'],
+            'itemId' => ['required', 'string', 'regex:/^\d{1,20}$/'],
+            'committed' => ['required', 'boolean'],
+        ]);
+        SprintCommitment::query()->updateOrCreate(
+            ['sprint' => (int) $data['sprint'], 'item_id' => $data['itemId']],
+            ['committed' => (bool) $data['committed']],
+        );
+
+        return response()->json(['saved' => true, 'commitments' => SprintCommitment::forSprint((int) $data['sprint'])]);
     }
 
     /**

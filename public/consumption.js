@@ -20,7 +20,7 @@ window.Consumption = (() => {
     let missingType = 0, missingReal = 0, missingId = 0, multiSprint = 0;
     for (const row of rows) {
       const id = String(row.Id ?? '').trim();
-      if (id) { const values = seenSprints.get(id) || new Set(); values.add(Number(row.Sprint)); seenSprints.set(id,values); }
+      if (id && !row.AsOf) { const values = seenSprints.get(id) || new Set(); values.add(Number(row.Sprint)); seenSprints.set(id,values); }
       if (Number(row.Sprint) !== Number(sprint)) continue;
       if (!id) { missingId++; continue; }
       if (!unique.has(id)) unique.set(id,row);
@@ -32,7 +32,7 @@ window.Consumption = (() => {
       const task = {row, group, minutes};
       if (!normalize(row.Tipo)) missingType++;
       if (minutes === null) missingReal++;
-      if (seenSprints.get(String(row.Id).trim()).size > 1) multiSprint++;
+      if (seenSprints.get(String(row.Id).trim())?.size > 1) multiSprint++;
       add(macro,task);
       if (people.length === 1) {
         if (!groups.has(people[0])) groups.set(people[0],{name:people[0],...emptyTotals()});

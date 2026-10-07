@@ -218,6 +218,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="forecast.css">
 <link rel="stylesheet" href="consumption.css">
 <link rel="stylesheet" href="release.css">
+<link rel="stylesheet" href="control-tower.css">
 </head>
 <body>
 <aside class="sidebar" id="sidebar" onmouseleave="this.classList.remove('suppressed')" onkeydown="this.classList.remove('suppressed')">
@@ -228,7 +229,11 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     </button>
   </div>
   <nav class="sidebar-nav">
-    <button type="button" class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard" aria-current="page">
+    <button type="button" class="nav-item" onclick="navigate('control-tower')" id="nav-control-tower">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v3M5 5l2 2M19 5l-2 2"/><circle cx="12" cy="12" r="4"/><path d="M8 21h8M12 16v5"/></svg>
+      <span class="nav-label">Torre de controle</span>
+      <span class="nav-badge" id="tower-badge" hidden></span>
+    </button>    <button type="button" class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard" aria-current="page">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       <span class="nav-label">Dashboard</span>
     </button>
@@ -465,6 +470,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     @include('forecast')
     @include('consumption')
     @include('release')
+    @include('control-tower')
     <!-- CAPACITY -->
     <div class="page" id="page-capacity">
       <header class="cap-hero">
@@ -594,6 +600,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 
   </div>
 </div>
+<div id="tower-toast" role="status" aria-live="polite" hidden></div>
 <div id="carousel-controls" role="toolbar" aria-label="Controles da apresentação" hidden>
   <span id="carousel-current">Sustentação · 1/2</span>
   <button type="button" id="carousel-prev" aria-label="Painel anterior" title="Painel anterior">‹</button>
@@ -717,11 +724,12 @@ function navigate(page,sp=null){
   if(previousPage==='forecast'&&page!=='forecast') window.Forecast?.leave();
   if(previousPage==='consumption'&&page!=='consumption') window.Consumption?.leave();
   if(previousPage==='release'&&page!=='release') window.SprintRelease?.leave();
+  if(previousPage==='control-tower'&&page!=='control-tower') window.ControlTower?.leave();
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   currentPage=page; currentSprint=sp;
   setActiveNav(page==='sprint'?`nav-sprint-${sp}`:`nav-${page}`);
   document.getElementById('page-'+page)?.classList.add('active');
-  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday']};
+  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar']};
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
@@ -739,6 +747,7 @@ function navigate(page,sp=null){
   else if(page==='forecast') window.Forecast?.enter(previousPage==='sprint'?previousSprint:null);
   else if(page==='consumption') window.Consumption?.enter(previousPage==='sprint'?previousSprint:null);
   else if(page==='release') window.SprintRelease?.enter(previousPage==='sprint'?previousSprint:null);
+  else if(page==='control-tower') window.ControlTower?.enter(previousPage==='sprint'?previousSprint:null);
   if(page==='carousel') scheduleMondayRefresh();
   if((previousPage==='bombeiro'&&page!=='bombeiro')||(previousPage==='sprint-panel'&&page!=='sprint-panel')||(previousPage==='carousel'&&page!=='carousel')) scheduleMondayRefresh();
 }
@@ -1300,6 +1309,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   else if(location.hash==='#carousel') navigate('carousel');
   else if(location.hash==='#capacity') navigate('capacity');
   else if(location.hash==='#forecast') navigate('forecast');
+  else if(location.hash==='#dashboard') navigate('dashboard');
+  else navigate('control-tower');
 });
 </script>
 <script src="monday-client.js"></script>
@@ -1310,5 +1321,6 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script src="forecast.js"></script>
 <script src="consumption.js"></script>
 <script src="release.js"></script>
+<script src="control-tower.js"></script>
 </body></html>
 
