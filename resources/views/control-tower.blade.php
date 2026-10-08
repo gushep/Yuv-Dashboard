@@ -20,6 +20,14 @@
     <div class="tower-grid">
       <section class="tower-card tower-burnup">
         <h2>Trajetória da sprint</h2>
+        <div class="tower-origins" id="tower-origins" aria-label="Entregue e pendente por origem do card"></div>
+        <div class="tower-origin-filter" role="group" aria-label="Origem exibida no gráfico">
+          <span>Mostrar no gráfico:</span>
+          <button type="button" class="tower-chip" data-origin="" aria-pressed="true">Todos</button>
+          <button type="button" class="tower-chip" data-origin="planned" aria-pressed="false">Planejado</button>
+          <button type="button" class="tower-chip" data-origin="unplanned" aria-pressed="false">Não planejado</button>
+          <button type="button" class="tower-chip" data-origin="support" aria-pressed="false">Suporte</button>
+        </div>
         <p class="tower-note">Escopo e cards concluídos no fim de cada dia útil, reconstituídos pelo histórico do Monday. As linhas tracejadas mostram a projeção até o fim da sprint.</p>
         <div class="tower-chart"><canvas id="tower-burnup-chart" aria-label="Burnup da sprint"></canvas></div>
         <p class="tower-note" id="tower-forecast"></p>
@@ -54,12 +62,12 @@
         </fieldset>
         <label>Responsável<select id="tower-filter-owner"></select></label>
         <label>Prioridade<select id="tower-filter-priority"></select></label>
-        <label>Planejamento<select id="tower-filter-commitment"><option value="">Todos</option><option value="yes">Planejada (compromisso)</option><option value="no">Não planejado</option></select></label>
+        <label>Origem<select id="tower-filter-commitment"><option value="">Todos</option><option value="planned">Planejado (compromisso)</option><option value="unplanned">Não planejado</option><option value="support">Suporte</option></select></label>
         <button type="button" id="tower-filter-clear" class="tower-link-button">Limpar filtros</button>
         <span id="tower-filter-count" role="status"></span>
       </div>
       <div class="cap-table-scroll"><table class="tower-table"><thead><tr>
-        <th aria-sort="none"><button type="button" data-sort="committed">Planejamento</button></th>
+        <th aria-sort="none"><button type="button" data-sort="committed">Origem</button></th>
         <th aria-sort="none"><button type="button" data-sort="name">Card</button></th>
         <th aria-sort="none"><button type="button" data-sort="status">Status</button></th>
         <th aria-sort="none"><button type="button" data-sort="owner">Responsável</button></th>

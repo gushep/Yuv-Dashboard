@@ -74,6 +74,16 @@ class SprintTimelineTest extends TestCase
         $this->assertSame(20.0, $points['2026-10-07']['scopeHours']);
     }
 
+    public function test_burnup_splits_each_day_into_planned_unplanned_and_support_cards(): void
+    {
+        $points = collect($this->timeline()->burnup(17, '2026-09-28', '2026-10-09', '2026-10-07'))->keyBy('date');
+
+        $empty = ['scope' => 0, 'done' => 0];
+        $this->assertSame(['planned' => ['scope' => 3, 'done' => 0], 'unplanned' => $empty, 'support' => $empty], $points['2026-09-28']['categories']);
+        $this->assertSame(['planned' => ['scope' => 3, 'done' => 1], 'unplanned' => ['scope' => 1, 'done' => 0], 'support' => $empty], $points['2026-10-02']['categories']);
+        $this->assertSame(['planned' => ['scope' => 3, 'done' => 1], 'unplanned' => ['scope' => 1, 'done' => 0], 'support' => ['scope' => 1, 'done' => 0]], $points['2026-10-07']['categories']);
+    }
+
     public function test_scope_added_after_the_planning_days_is_listed_with_the_day_it_entered(): void
     {
         $scope = $this->timeline()->scopeChanges(17, '2026-09-28', '2026-10-09', '2026-10-07');

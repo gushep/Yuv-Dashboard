@@ -40,7 +40,12 @@ class ControlTowerTest extends TestCase
             ->assertJsonPath('totals.committedDone', 1)
             ->assertJsonPath('status', 'red')
             ->assertJsonPath('decision.late', true)
-            ->assertJsonCount(8, 'burnup');
+            ->assertJsonCount(8, 'burnup')
+            ->assertJsonPath('totals.categories.planned', ['scope' => 3, 'done' => 1, 'doneNotDelivered' => 0, 'remaining' => 2])
+            ->assertJsonPath('totals.categories.unplanned', ['scope' => 1, 'done' => 0, 'doneNotDelivered' => 0, 'remaining' => 1])
+            ->assertJsonPath('totals.categories.support', ['scope' => 1, 'done' => 0, 'doneNotDelivered' => 0, 'remaining' => 1]);
+        $this->assertSame(['1' => 'planned', '4' => 'planned', '5' => 'planned', '6' => 'support', '7' => 'unplanned'],
+            collect($response->json('items'))->pluck('category', 'id')->sortKeys()->all());
 
         $signals = collect($response->json('signals'))->keyBy('key');
         $this->assertSame('red', $signals['scope']['level']);

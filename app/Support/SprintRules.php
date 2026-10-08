@@ -63,6 +63,20 @@ class SprintRules
     }
 
     /**
+     * Origem do card na sprint: suporte prevalece sobre a coluna Planejada, pois é medido pela reserva de suporte.
+     *
+     * @return 'planned'|'unplanned'|'support'
+     */
+    public static function category(?string $type, ?string $planned): string
+    {
+        if (self::normalize($type) === 'suporte') {
+            return 'support';
+        }
+
+        return self::normalize($planned) === 'planejada' ? 'planned' : 'unplanned';
+    }
+
+    /**
      * Dias úteis (segunda a sexta) entre duas datas, inclusive.
      *
      * @return list<string> datas AAAA-MM-DD
