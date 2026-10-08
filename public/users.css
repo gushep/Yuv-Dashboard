@@ -1,0 +1,17 @@
+/* Cadastro de usuários e permissões de acesso por tela. */
+.users-screens-field select{min-height:180px;padding:6px}
+.users-screens-field option{padding:5px 7px;border-radius:5px}
+.users-screens-field option:checked{background:var(--blue-bg2);color:var(--blue)}
+.users-screens-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:var(--text2)}
+.users-screens-tools span{margin-right:auto}
+.users-screens-tools button,.users-actions button{padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text2);font:inherit;font-size:11px;font-weight:600;cursor:pointer}
+.users-screens-tools button:hover,.users-actions button:hover{color:var(--blue);border-color:var(--blue)}
+.users-actions{display:flex;gap:6px;justify-content:flex-end;white-space:nowrap}
+.users-actions button.danger:hover{color:var(--red);border-color:var(--red)}
+.users-table thead th{cursor:default}
+.users-table thead th:hover{color:var(--muted)}
+.users-table td{vertical-align:top}
+.users-screen-list{display:flex;flex-wrap:wrap;gap:4px;max-width:520px}
+.users-screen-list .b{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-bg2)}
+.users-none{color:var(--muted);font-size:11px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

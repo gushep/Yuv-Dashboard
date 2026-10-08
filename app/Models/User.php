@@ -3,14 +3,20 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Screen;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\AsEnumCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 
-#[Fillable(['name', 'email', 'password'])]
+/**
+ * @property Collection<int, Screen>|null $screens
+ */
+#[Fillable(['name', 'email', 'password', 'screens'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -27,6 +33,22 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'screens' => AsEnumCollection::of(Screen::class),
         ];
+    }
+
+    public function canAccessScreen(Screen $screen): bool
+    {
+        return (bool) $this->screens?->contains($screen);
+    }
+
+    /**
+     * Telas liberadas, na ordem do menu lateral.
+     *
+     * @return list<string>
+     */
+    public function screenValues(): array
+    {
+        return array_values(array_filter(Screen::values(), fn (string $value): bool => $this->canAccessScreen(Screen::from($value))));
     }
 }

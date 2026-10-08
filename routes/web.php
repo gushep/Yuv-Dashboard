@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\MondayController;
+use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -31,17 +32,23 @@ Route::middleware('auth')->group(function () {
         return redirect('/login');
     });
 
+    // Leituras compartilhadas: todas as telas dependem da configuração e dos dados sincronizados.
     Route::get('/api/config', [MondayController::class, 'config']);
     Route::get('/api/capacity', [MondayController::class, 'capacity']);
     Route::get('/api/support-reserves', [MondayController::class, 'supportReserves'])->name('support-reserves.index');
-    Route::post('/api/support-reserves', [MondayController::class, 'saveSupportReserve'])->name('support-reserves.store');
-    Route::post('/api/boards', [MondayController::class, 'boards']);
-    Route::post('/api/inspect', [MondayController::class, 'inspect']);
-    Route::post('/api/config', [MondayController::class, 'saveConfig']);
-    Route::post('/api/refresh', [MondayController::class, 'saveRefresh']);
-    Route::post('/api/capacity', [MondayController::class, 'saveCapacity']);
-    Route::post('/api/metric-settings', [MondayController::class, 'saveMetricSettings'])->name('metric-settings.store');
     Route::post('/api/sync', [MondayController::class, 'sync']);
-    Route::post('/api/release', [MondayController::class, 'release'])->name('release.data');
-    Route::get('/api/control-tower', [MondayController::class, 'controlTower'])->name('control-tower.show');
+
+    Route::middleware('screen:settings')->group(function () {
+        Route::post('/api/boards', [MondayController::class, 'boards']);
+        Route::post('/api/inspect', [MondayController::class, 'inspect']);
+        Route::post('/api/config', [MondayController::class, 'saveConfig']);
+        Route::post('/api/refresh', [MondayController::class, 'saveRefresh']);
+        Route::post('/api/metric-settings', [MondayController::class, 'saveMetricSettings'])->name('metric-settings.store');
+    });
+    Route::post('/api/capacity', [MondayController::class, 'saveCapacity'])->middleware('screen:capacity');
+    Route::post('/api/support-reserves', [MondayController::class, 'saveSupportReserve'])->middleware('screen:consumption')->name('support-reserves.store');
+    Route::post('/api/release', [MondayController::class, 'release'])->middleware('screen:release')->name('release.data');
+    Route::get('/api/control-tower', [MondayController::class, 'controlTower'])->middleware('screen:control-tower')->name('control-tower.show');
+
+    Route::apiResource('/api/users', UserController::class)->except('show')->middleware('screen:users');
 });
