@@ -33,6 +33,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .sidebar-close:hover{background:var(--bg);color:var(--text)}
 .sidebar-nav{flex:1;padding:10px 0;overflow-y:auto}
 .nav-item,.sprint-toggle,.sidebar-action{display:flex;align-items:center;gap:12px;width:100%;padding:9px 20px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;font-weight:500;text-align:left;white-space:nowrap;cursor:pointer;color:var(--text2);transition:all .15s;user-select:none}
+.sprint-toggle[hidden]{display:none}
 .nav-item:hover,.sidebar-action:hover{color:var(--blue);background:var(--blue-bg)}
 .nav-item.active{color:var(--blue);border-left-color:var(--blue);background:var(--blue-bg);font-weight:600}
 .nav-item:focus-visible,.sprint-toggle:focus-visible,.sidebar-action:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
@@ -219,6 +220,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="consumption.css">
 <link rel="stylesheet" href="release.css">
 <link rel="stylesheet" href="control-tower.css">
+<link rel="stylesheet" href="users.css">
 </head>
 <body>
 <aside class="sidebar" id="sidebar" onmouseleave="this.classList.remove('suppressed')" onkeydown="this.classList.remove('suppressed')">
@@ -229,15 +231,20 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     </button>
   </div>
   <nav class="sidebar-nav">
+    @can('access-screen', 'control-tower')
     <button type="button" class="nav-item" onclick="navigate('control-tower')" id="nav-control-tower">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v3M5 5l2 2M19 5l-2 2"/><circle cx="12" cy="12" r="4"/><path d="M8 21h8M12 16v5"/></svg>
       <span class="nav-label">Torre de controle</span>
       <span class="nav-badge" id="tower-badge" hidden></span>
-    </button>    <button type="button" class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard" aria-current="page">
+    </button>
+    @endcan
+    @can('access-screen', 'dashboard')
+    <button type="button" class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard" aria-current="page">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       <span class="nav-label">Dashboard</span>
     </button>
-    <button type="button" class="sprint-toggle" onclick="toggleSprints()" id="sprint-toggle" aria-expanded="false" aria-controls="sprint-children">
+    @endcan
+    <button type="button" class="sprint-toggle" onclick="toggleSprints()" id="sprint-toggle" aria-expanded="false" aria-controls="sprint-children" @cannot('access-screen', 'sprint') hidden @endcannot>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
       <span class="nav-label">Sprints</span>
       <svg class="sprint-arrow" id="sprint-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
@@ -245,50 +252,78 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <div class="sprint-children" id="sprint-children">
       <div id="sprint-nav-items"></div>
     </div>
+    @can('access-screen', 'epicos')
     <button type="button" class="nav-item" onclick="navigate('epicos')" id="nav-epicos">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg>
       <span class="nav-label">Épicos</span>
     </button>
+    @endcan
+    @can('access-screen', 'time')
     <button type="button" class="nav-item" onclick="navigate('time')" id="nav-time">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span class="nav-label">Time</span>
     </button>
+    @endcan
+    @can('access-screen', 'raw')
     <button type="button" class="nav-item" onclick="navigate('raw')" id="nav-raw">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
       <span class="nav-label">Dado Bruto</span>
     </button>
+    @endcan
+    @can('access-screen', 'bombeiro')
     <button type="button" class="nav-item" onclick="navigate('bombeiro')" id="nav-bombeiro">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c2 3 2 5 0 7 3-1 5 2 5 5a5 5 0 0 1-10 0c0-2 1-4 3-6 0 2 1 3 2 3"/><path d="M12 21a5 5 0 0 0 5-5"/></svg>
       <span class="nav-label">Painel do Bombeiro</span>
     </button>
+    @endcan
+    @can('access-screen', 'sprint-panel')
     <button type="button" class="nav-item" onclick="navigate('sprint-panel')" id="nav-sprint-panel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10m6-10v10"/></svg>
       <span class="nav-label">Painel da Sprint</span>
     </button>
+    @endcan
+    @can('access-screen', 'carousel')
     <button type="button" class="nav-item" onclick="navigate('carousel')" id="nav-carousel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m9 8 7 4-7 4V8Z"/></svg>
       <span class="nav-label">Apresentação dos Painéis</span>
     </button>
+    @endcan
+    @can('access-screen', 'capacity')
     <button type="button" class="nav-item" onclick="navigate('capacity')" id="nav-capacity">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18M6 17V9m6 8V4m6 13v-6"/><circle cx="6" cy="7" r="1"/><circle cx="12" cy="2" r="1"/><circle cx="18" cy="9" r="1"/></svg>
       <span class="nav-label">Capacity</span>
     </button>
+    @endcan
+    @can('access-screen', 'forecast')
     <button type="button" class="nav-item" onclick="navigate('forecast')" id="nav-forecast">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M6 15l5-6 4 3 6-8"/></svg>
       <span class="nav-label">Previsibilidade</span>
     </button>
+    @endcan
+    @can('access-screen', 'consumption')
     <button type="button" class="nav-item" onclick="navigate('consumption')" id="nav-consumption">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg>
       <span class="nav-label">Consumo de horas</span>
     </button>
+    @endcan
+    @can('access-screen', 'release')
     <button type="button" class="nav-item" onclick="navigate('release')" id="nav-release">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/></svg>
       <span class="nav-label">Release da sprint</span>
     </button>
+    @endcan
+    @can('access-screen', 'users')
+    <button type="button" class="nav-item" onclick="navigate('users')" id="nav-users">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><path d="M19 8v6M16 11h6"/></svg>
+      <span class="nav-label">Usuários</span>
+    </button>
+    @endcan
+    @can('access-screen', 'settings')
     <button type="button" class="nav-item" onclick="navigate('settings')" id="nav-settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
       <span class="nav-label">Configurações</span>
     </button>
+    @endcan
   </nav>
   <div class="sidebar-footer">
     <form method="post" action="/logout">@csrf<button type="submit" class="sidebar-action">
@@ -471,6 +506,12 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     @include('consumption')
     @include('release')
     @include('control-tower')
+    @include('users')
+
+    <!-- SEM ACESSO -->
+    <div class="page" id="page-no-access">
+      <p class="empty-state">Você não tem acesso a esta tela. Use o menu lateral para abrir uma tela liberada ou peça acesso a quem administra os usuários.</p>
+    </div>
     <!-- CAPACITY -->
     <div class="page" id="page-capacity">
       <header class="cap-hero">
@@ -715,7 +756,11 @@ function trendHtml(cur,ref,higherIsBetter=true){
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
 let currentPage='dashboard', currentSprint=null, timeInited=false;
+/** Telas liberadas para o usuário logado; o servidor também bloqueia as APIs de cada tela. */
+const ALLOWED_SCREENS=@json(auth()->user()->screenValues());
+function canAccessScreen(page){return ALLOWED_SCREENS.includes(page);}
 function navigate(page,sp=null){
+  if(page!=='no-access'&&!canAccessScreen(page)){page=ALLOWED_SCREENS.find(p=>p!=='sprint')||'no-access';sp=null;}
   const previousPage=currentPage, previousSprint=currentSprint;
   if(previousPage==='bombeiro'&&page!=='bombeiro') window.Bombeiro?.leave();
   if(previousPage==='sprint-panel'&&page!=='sprint-panel') window.SprintPanel?.leave();
@@ -725,11 +770,12 @@ function navigate(page,sp=null){
   if(previousPage==='consumption'&&page!=='consumption') window.Consumption?.leave();
   if(previousPage==='release'&&page!=='release') window.SprintRelease?.leave();
   if(previousPage==='control-tower'&&page!=='control-tower') window.ControlTower?.leave();
+  if(previousPage==='users'&&page!=='users') window.Users?.leave();
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   currentPage=page; currentSprint=sp;
   setActiveNav(page==='sprint'?`nav-sprint-${sp}`:`nav-${page}`);
   document.getElementById('page-'+page)?.classList.add('active');
-  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar']};
+  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar']};
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
@@ -748,6 +794,7 @@ function navigate(page,sp=null){
   else if(page==='consumption') window.Consumption?.enter(previousPage==='sprint'?previousSprint:null);
   else if(page==='release') window.SprintRelease?.enter(previousPage==='sprint'?previousSprint:null);
   else if(page==='control-tower') window.ControlTower?.enter(previousPage==='sprint'?previousSprint:null);
+  else if(page==='users') window.Users?.enter();
   if(page==='carousel') scheduleMondayRefresh();
   if((previousPage==='bombeiro'&&page!=='bombeiro')||(previousPage==='sprint-panel'&&page!=='sprint-panel')||(previousPage==='carousel'&&page!=='carousel')) scheduleMondayRefresh();
 }
@@ -1322,5 +1369,6 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script src="consumption.js"></script>
 <script src="release.js"></script>
 <script src="control-tower.js"></script>
+<script src="users.js"></script>
 </body></html>
 

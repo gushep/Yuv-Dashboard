@@ -218,7 +218,10 @@ function useMondayRows(rows) {
   sprintSelect.length = 1;
   timeInited = false;
   rawPage = 0;
-  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast' && currentPage !== 'consumption' && currentPage !== 'release' && currentPage !== 'control-tower') navigate('dashboard');
+  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast' && currentPage !== 'consumption' && currentPage !== 'release' && currentPage !== 'control-tower' && currentPage !== 'users' && currentPage !== 'no-access') {
+    if (canAccessScreen('dashboard')) navigate('dashboard');
+    else navigate(currentPage, currentSprint);
+  }
   else {
     document.getElementById('tb-right').textContent = sprintRangeLabel();
   }
@@ -240,7 +243,7 @@ async function syncMonday(force = true) {
     window.Forecast?.onDataUpdated(result);
     window.Consumption?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);
-    window.ControlTower?.refreshAlerts();
+    if (canAccessScreen('control-tower')) window.ControlTower?.refreshAlerts();
     const time = new Date(result.syncedAt).toLocaleString('pt-BR');
     mondayMessage('monday-sync-status', `${result.rows.length} registros carregados de ${result.fetched} tarefas · ${result.skipped} sem Sprint reconhecida · ${time}.`, 'success');
   } catch (error) {
@@ -273,7 +276,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     mondayReady = Boolean(config.boardId && config.hasToken);
     if (mondayReady) {
       mondayMessage('monday-connection', 'Credencial salva. Carregando colunas e dados do quadro...');
-      await inspectMonday();
+      if (canAccessScreen('settings')) await inspectMonday();
       await syncMonday(false);
     } else {
       mondayMessage('monday-connection', 'Informe o quadro e o token; depois clique em Buscar colunas.');

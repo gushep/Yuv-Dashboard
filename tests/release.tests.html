@@ -5,10 +5,10 @@
 <style>#test-result{position:fixed;bottom:0;left:0;max-height:25px;overflow:auto;background:#fff;font-size:9px;z-index:99}</style>
 <style>@media print{#test-result{display:none!important}}</style>
 <script>
-let mode='success',pending=null,printed=0,printedTitle='',printedGroups=0;
-window.print=()=>{window.dispatchEvent(new Event('beforeprint'));printed++;printedTitle=document.title;printedGroups=document.querySelectorAll('.release-group[open]').length;window.dispatchEvent(new Event('afterprint'));};
-const doc=sprint=>({sprint,sprints:[17,18,19],dates:{start:'2026-09-28',end:'2026-10-11'},total:sprint===19?0:6,syncedAt:'2026-10-07T12:00:00Z',commentsUnavailable:sprint===18?1:0,groups:sprint===19?[]:[
- {type:'Melhoria',count:2,items:[{id:'1',title:sprint===18?'Entrega da sprint 18':'Relatório de acompanhamento',description:'Ajustada a apresentação das informações do relatório.',module:'Relatórios',url:'https://empresa.monday.com/boards/123/pulses/1'},{id:'2',title:'Consulta de informações',description:null,module:null,url:null}]},
+localStorage.removeItem('yuv-release-excluded-17');localStorage.removeItem('yuv-release-excluded-18');let mode='success',pending=null,printed=0,printedTitle='',printedGroups=0,printedCount='',printedVisible=0;
+window.print=()=>{window.dispatchEvent(new Event('beforeprint'));printed++;printedTitle=document.title;printedGroups=document.querySelectorAll('.release-group[open]').length;printedCount=document.getElementById('release-count').textContent;printedVisible=document.querySelectorAll('.release-group[open] .release-delivery:not(.release-excluded)').length;window.dispatchEvent(new Event('afterprint'));};
+const doc=sprint=>({sprint,sprints:[17,18,19],dates:{start:'2026-09-28',end:'2026-10-11'},total:sprint===19?0:6,withoutDescription:sprint===19?0:4,staleSummaries:sprint===19?0:1,syncedAt:'2026-10-07T12:00:00Z',commentsUnavailable:sprint===18?1:0,groups:sprint===19?[]:[
+ {type:'Melhoria',count:2,items:[{id:'1',title:sprint===18?'Entrega da sprint 18':'Relatório de acompanhamento',description:'Ajustada a apresentação das informações do relatório.',descriptionSource:'resumo',descriptionStale:true,module:'Relatórios',url:'https://empresa.monday.com/boards/123/pulses/1'},{id:'2',title:'Consulta de informações',description:null,module:null,url:null}]},
  {type:'Suporte',count:2,items:[{id:'3',title:'Menu lateral do aplicativo',description:'Corrigida a exibição dos botões do menu lateral.',module:'Aplicativo',url:'https://monday.com/boards/123/pulses/3'},{id:'4',title:'Filtros dos relatórios',description:null,module:null,url:'javascript:alert(1)'}]},
  {type:'Homologação',count:1,items:[{id:'5',title:'Compatibilidade de equipamento',description:null,module:'Integrações',url:null}]},
  {type:'Sem tipo',count:1,items:[{id:'6',title:'<img src=x onerror=alert(1)>',description:null,module:null,url:null}]}
@@ -27,6 +27,7 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
   check('Cores por Tipo e fallback consistente',SprintRelease.typeVisual('MELHORIA').color==='green' && SprintRelease.typeVisual('Suporte').color==='red' && SprintRelease.typeVisual('Homologação').color==='purple' && SprintRelease.typeVisual('Novo tipo').color===SprintRelease.typeVisual('Novo tipo').color);
   check('Títulos e descrições renderizados como texto',!document.querySelector('.release-delivery img') && document.getElementById('release-document').textContent.includes('<img src=x onerror=alert(1)>'));
   check('Ausência de comentário não cria descrição',document.querySelector('[data-item-id="2"] p')===null);
+  check('Resumo desatualizado sinalizado e situação das descrições exibida',document.querySelector('[data-item-id="1"] .release-stale')!==null && document.querySelector('[data-item-id="2"] .release-stale')===null && document.getElementById('release-summary-status').textContent.includes('1 resumo(s)') && document.getElementById('release-summary-status').textContent.includes('gera os resumos da release da sprint 17'));
   check('Ícone em todas as entregas e módulo somente quando existe',document.querySelectorAll('.release-module svg').length===6 && [...document.querySelectorAll('.release-module')].filter(module=>module.textContent).length===3);
   check('Categorias começam recolhidas',!document.querySelector('.release-group[open]'));
   document.querySelector('.release-group summary').click();await tick();
@@ -34,10 +35,19 @@ const load=src=>new Promise((resolve,reject)=>{const script=document.createEleme
   SprintRelease.onDataUpdated();await tick();
   check('Atualização da mesma sprint preserva expansão',document.querySelectorAll('.release-group[open]').length===1);
   check('Links seguros e abertura do card',document.querySelectorAll('.release-delivery a').length===2 && document.querySelector('.release-delivery a').rel==='noopener noreferrer');
-  check('PDF habilitado e seletor é o único filtro',!document.getElementById('release-export').disabled && document.querySelectorAll('#page-release select').length===1 && !document.querySelector('#page-release input,#page-release textarea,#page-release form'));
+  check('PDF habilitado e seletor é o único filtro',!document.getElementById('release-export').disabled && document.querySelectorAll('#page-release select').length===1 && !document.querySelector('#page-release input:not(.release-pick),#page-release textarea,#page-release form') && [...document.querySelectorAll('#page-release input')].every(input=>input.type==='checkbox'));
   const previousTitle=document.title;document.getElementById('release-export').click();
   check('Exporta a sprint exibida e restaura título',printed===1 && printedTitle==='Release da sprint - Sprint 17' && document.title===previousTitle);
   check('PDF inclui todos os grupos e restaura expansão da tela',printedGroups===4 && document.querySelectorAll('.release-group[open]').length===1);
+  check('Todos os itens começam marcados para exportação',document.querySelectorAll('.release-pick:checked').length===6 && document.getElementById('release-selection-count').textContent==='Exportar 6 de 6 itens no PDF');
+  document.querySelector('[data-item-id="6"] .release-pick').click();document.querySelector('[data-item-id="3"] .release-pick').click();
+  check('Itens desmarcados continuam visíveis na tela e saem da contagem',document.querySelectorAll('.release-delivery').length===6 && document.querySelectorAll('.release-excluded').length===2 && document.getElementById('release-selection-count').textContent==='Exportar 4 de 6 itens no PDF');
+  document.getElementById('release-export').click();
+  check('PDF imprime somente os itens marcados e omite tipos sem itens',printedVisible===4 && printedGroups===3 && printedCount.includes('4 entregas') && !printedCount.includes('Status') && document.getElementById('release-count').textContent.includes('6 itens'));
+  check('Seleção fica salva para a sprint',JSON.parse(localStorage.getItem('yuv-release-excluded-17')).sort().join()==='3,6');
+  document.getElementById('release-select-none').click();
+  check('Sem itens marcados a exportação fica bloqueada',document.getElementById('release-export').disabled && document.getElementById('release-selection-count').textContent==='Exportar 0 de 6 itens no PDF');
+  document.getElementById('release-select-all').click();printed=1;
   document.querySelector('.release-group summary').click();await tick();
   check('Categoria pode ser recolhida novamente',!document.querySelector('.release-group[open]'));
   document.querySelector('.release-group summary').click();await tick();

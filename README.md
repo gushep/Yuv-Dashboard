@@ -44,7 +44,7 @@ Os principais campos são Sprint, Tipo, Status, Responsável, Tempo Estimado e T
 - **Reserva de suporte:** o padrão é 40 horas para o time inteiro por sprint, configurável e persistido por sprint. Essa comparação não altera a capacidade dos demais painéis.
 - **Atribuição individual:** horas compartilhadas sem distribuição confiável permanecem nos totais do time e aparecem como horas sem atribuição individual.
 - **Release:** inclui os itens da sprint com Status = Implementado, uma vez por ID, agrupados pela coluna Tipo. Não exige seleção ou edição manual.
-- **Descrições da release:** extração conservadora dos comentários, com cache. Sem informação confiável, aparece somente o título. Não há serviço de IA generativa configurado para sumarização.
+- **Descrições da release:** nesta ordem, o OBJETIVO da ficha de especificação do card; um resumo gravado na tabela `release_summaries`; ou a extração conservadora dos comentários. Sem informação confiável, aparece somente o título. Os resumos são escritos fora do dashboard (no Claude Code, sem chave de API): `php artisan release:summaries-export {sprint}` gera o arquivo com os cards pendentes e `php artisan release:summaries-import {arquivo}` grava os resumos. Se os comentários do card mudarem, o resumo aparece como desatualizado até ser refeito.
 
 A qualidade dos indicadores depende do preenchimento dos cards. Tempo Real acumulado pode incluir esforço de outras sprints quando a fonte não permite separá-lo. Os painéis apresentam avisos de qualidade e atribuição para ajudar na conferência.
 

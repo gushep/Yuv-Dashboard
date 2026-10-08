@@ -83,7 +83,8 @@ body.release-view .content{padding:24px clamp(24px,3.3vw,56px) 18px}
 .release-footer{font-size:11px;color:#7182a7;margin-top:10px}
 @media(max-width:1150px){.release-header{grid-template-columns:minmax(0,1fr) 230px;gap:20px}.release-delivery{grid-template-columns:minmax(0,1fr) 190px 90px;gap:16px;padding-left:40px}.release-module{padding-left:18px}.release-delivery h3{font-size:17px}.release-delivery p,.release-module,.release-card-link{font-size:14px}.release-info{font-size:14px}.release-info>span{font-size:12px}}
 @media(max-width:700px){body.release-view .content{padding:24px 16px 16px}.release-header{grid-template-columns:1fr;gap:18px}#page-release .cap-heading{gap:12px}#page-release .cap-heading h1{font-size:34px}#page-release .cap-heading p{font-size:15px}.release-actions{grid-template-columns:1fr auto;justify-items:start;align-items:center;gap:12px}.release-actions select{width:160px;font-size:14px}.release-actions button{font-size:12px;padding:10px;grid-column:2;grid-row:1}#release-dates{grid-column:1/-1}.release-info{padding:12px 16px;gap:6px}.release-info>span{font-size:12px}.release-group{padding:14px 16px}.release-group h2{font-size:23px;gap:12px}.release-icon{width:44px;height:44px}.release-delivery{grid-template-columns:minmax(0,1fr) auto;padding:14px 0;gap:10px}.release-copy{grid-column:1/-1}.release-module{grid-column:1;padding:0;border:0;min-height:25px}.release-card-link{grid-column:2;padding-right:0}.release-delivery h3{font-size:17px}.release-delivery p{font-size:14px}.release-metadata{justify-content:flex-start}}
-@page sprint-release{size:A4 portrait;margin:14mm 12mm}
+/* Sem margem de topo e rodapé na página: o navegador não tem onde imprimir data, endereço e numeração. O respiro vem da moldura. */
+@page sprint-release{size:A4 portrait;margin:0 12mm}
 @media print{
   body.release-view{background:#fff!important;color:#102044;print-color-adjust:exact;-webkit-print-color-adjust:exact}
   body.release-view :is(.sidebar,.sidebar-overlay,.topbar){display:none!important}
@@ -120,4 +121,39 @@ body.release-view .content{padding:24px clamp(24px,3.3vw,56px) 18px}
   body.release-view .release-module svg{width:5mm;height:5mm}
   body.release-view .release-card-link{grid-column:3;padding:0;font-size:8pt}
   body.release-view .release-card-link svg{width:3mm;height:3mm}
+}
+.release-summary-status{margin-left:14px;color:#385274}
+.release-stale{display:block;margin-top:4px;color:#b45309;font-size:11px}
+@media print{.release-summary-status,.release-stale{display:none!important}}
+/* Seleção dos itens que vão para o PDF. */
+.release-selection{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 14px;padding:10px 16px;border:1px dashed #b9c8e4;border-radius:9px;background:#fbfcff;font-size:12px;color:#385274}
+.release-selection[hidden]{display:none}
+.release-selection strong{color:#0b1645}
+.release-selection button,.release-group-selection button{padding:5px 10px;border:1px solid #c9d6ee;border-radius:6px;background:#fff;color:#1d4ed8;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.release-selection button:hover,.release-group-selection button:hover{border-color:#1d6ef5}
+.release-group-selection{display:flex;gap:8px;justify-content:flex-end;padding:4px 0 6px}
+.release-delivery{position:relative}
+.release-pick{position:absolute;left:18px;top:50%;width:17px;height:17px;margin:-8px 0 0;cursor:pointer;accent-color:#1d6ef5}
+.release-excluded>*:not(.release-pick){opacity:.38}
+.release-group-excluded summary{opacity:.6}
+@media print{.release-selection,.release-group-selection,.release-pick,.release-excluded,.release-group-excluded{display:none!important}}
+/* Moldura de impressão: blocos comuns na tela; tabela com topo e rodapé repetidos em cada página do PDF. */
+.release-print-frame,.release-print-frame>thead,.release-print-frame>tbody,.release-print-frame>tfoot,.release-print-frame>*>tr,.release-print-frame>*>tr>td{display:block;width:auto;margin:0;padding:0;border:0}
+/* Neutraliza o estilo global de células de tabela do dashboard (sem quebra de linha, largura máxima e corte). */
+.release-print-frame>*>tr:hover{background:transparent}
+.release-print-frame>*>tr>td,.release-print-frame>*>tr:hover>td{max-width:none;overflow:visible;text-overflow:clip;white-space:normal;font-size:inherit;color:inherit;background:transparent;text-align:left;vertical-align:top}
+.release-print-space,.release-print-only{display:none}
+@media print{
+  body.release-view .release-print-frame{display:table;width:100%;border-collapse:collapse}
+  body.release-view .release-print-frame>thead{display:table-header-group}
+  body.release-view .release-print-frame>tfoot{display:table-footer-group}
+  body.release-view .release-print-frame>tbody{display:table-row-group}
+  body.release-view .release-print-frame>*>tr{display:table-row}
+  body.release-view .release-print-frame>*>tr>td{display:table-cell}
+  body.release-view .release-print-space{display:table-cell;height:12mm}
+  body.release-view .release-print-only{display:inline}
+  body.release-view .release-screen-only{display:none}
+  /* Somente o que interessa a CS e clientes: sem seletor, botão, data de sincronização, notas técnicas, links internos e módulos vazios. */
+  body.release-view :is(.release-actions,.release-metadata,.release-info>span,.release-footer,.release-card-link,.release-module-empty){display:none!important}
+  body.release-view .release-delivery{grid-template-columns:minmax(0,1fr) 32mm}
 }
