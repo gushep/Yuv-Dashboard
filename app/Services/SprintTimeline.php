@@ -161,9 +161,10 @@ class SprintTimeline
     }
 
     /**
-     * Série diária (fim de cada dia útil) de escopo e entregas da sprint, até hoje.
+     * Série diária (fim de cada dia útil) de escopo e entregas da sprint, até hoje,
+     * também separada em planejado, não planejado e suporte conforme o card estava naquele dia.
      *
-     * @return list<array{date: string, scope: int, done: int, scopeHours: float, doneHours: float}>
+     * @return list<array{date: string, scope: int, done: int, scopeHours: float, doneHours: float, categories: array<string, array{scope: int, done: int}>}>
      */
     public function burnup(int $sprint, string $start, string $end, ?string $today = null): array
     {
@@ -172,18 +173,22 @@ class SprintTimeline
         foreach (SprintRules::workingDays($start, min($end, $today)) as $day) {
             $scope = $done = 0;
             $scopeHours = $doneHours = 0.0;
+            $categories = array_fill_keys(['planned', 'unplanned', 'support'], ['scope' => 0, 'done' => 0]);
             foreach ($this->membersAt($sprint, SprintRules::endOfDay($day)) as $state) {
                 if (SprintRules::isRemoved($state['Status'] ?? '')) {
                     continue;
                 }
+                $category = SprintRules::category($state['Tipo'] ?? '', $state['Planejada'] ?? '');
                 $scope++;
+                $categories[$category]['scope']++;
                 $scopeHours += (float) ($state['EstH'] ?? 0);
                 if (SprintRules::isDone($state['Status'] ?? '')) {
                     $done++;
+                    $categories[$category]['done']++;
                     $doneHours += (float) ($state['EstH'] ?? 0);
                 }
             }
-            $points[] = ['date' => $day, 'scope' => $scope, 'done' => $done, 'scopeHours' => round($scopeHours, 2), 'doneHours' => round($doneHours, 2)];
+            $points[] = ['date' => $day, 'scope' => $scope, 'done' => $done, 'scopeHours' => round($scopeHours, 2), 'doneHours' => round($doneHours, 2), 'categories' => $categories];
         }
 
         return $points;

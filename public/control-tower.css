@@ -36,6 +36,21 @@
 .tower-burnup{grid-row:span 3}
 .tower-chart{position:relative;height:300px;margin:8px 0}
 .tower-note{font-size:11px;color:#4b5568}
+/* Origem do card: as mesmas cores do gráfico de trajetória (planejado, não planejado, suporte). */
+#page-control-tower{--origin-planned:#1d6ef5;--origin-unplanned:#e8890c;--origin-support:#0d9488}
+.tower-origins{display:grid;gap:9px;margin:12px 0 14px}
+.tower-origin-row{display:grid;grid-template-columns:110px 1fr minmax(190px,auto);align-items:center;gap:12px;font-size:12px}
+.tower-origin-row strong{font-weight:700}
+.tower-origin-track{height:10px;border-radius:999px;background:#eef2f7;overflow:hidden}
+.tower-origin-fill{height:100%;border-radius:999px}
+.tower-origin-count{color:#4b5568}
+.tower-origin-count b{color:#102044}
+.tower-origin-filter{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px;font-size:11px;font-weight:600;color:#4b5568}
+@media(max-width:600px){.tower-origin-row{grid-template-columns:1fr}.tower-origin-row .tower-origin-track{order:3}}
+.tower-origin{display:inline-flex;align-items:center;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600;white-space:nowrap;border:1px solid}
+.tower-origin-planned{color:#1550c0;background:#eff5ff;border-color:#c9dcfd}
+.tower-origin-unplanned{color:#9a5200;background:#fff6eb;border-color:#fbd9ad}
+.tower-origin-support{color:#0b6e66;background:#ecfbf8;border-color:#a7e3da}
 .tower-list{margin:6px 0 0;padding-left:18px;font-size:12px;line-height:1.5}
 .tower-list small{display:block;color:#4b5568}
 .tower-alert.tower-red{color:#991b1b}.tower-alert.tower-yellow{color:#92400e}

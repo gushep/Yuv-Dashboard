@@ -62,6 +62,7 @@ class ControlTowerService
                 'notStarted' => SprintRules::isNotStarted($state['Status'] ?? ''),
                 // Compromisso da sprint = card marcado como Planejada no Monday.
                 'committed' => SprintRules::normalize($state['Planejada'] ?? '') === 'planejada',
+                'category' => SprintRules::category($state['Tipo'] ?? '', $state['Planejada'] ?? ''),
                 'type' => (string) ($state['Tipo'] ?? ''),
             ];
         }
@@ -101,6 +102,7 @@ class ControlTowerService
                 'doneNotDelivered' => count(array_filter($items, fn (array $item): bool => $item['doneNotDelivered'])),
                 'remaining' => count($remaining),
                 'committed' => count($committed), 'committedDone' => count($committed) - count($remainingCommitted),
+                'categories' => $this->categoryTotals($items),
             ],
             'burnup' => $timeline->burnup($sprint, $range['start'], $range['end'], $today),
             'scopeChanges' => $scope,
@@ -115,6 +117,24 @@ class ControlTowerService
             'alerts' => $this->alerts($stalled, $blocked, $support, $signals[0]),
             'thresholds' => ['stalledDays' => self::STALLED_DAYS, 'blockedRedDays' => self::BLOCKED_RED_DAYS, 'scopeYellow' => self::SCOPE_YELLOW, 'scopeRed' => self::SCOPE_RED, 'probabilityGreen' => self::PROBABILITY_GREEN, 'probabilityRed' => self::PROBABILITY_RED],
         ];
+    }
+
+    /**
+     * Entregue e pendente de cada origem do card; pendente inclui o que está feito, mas aguardando entrega.
+     *
+     * @param  array<string, array<string, mixed>>  $items
+     * @return array<string, array{scope: int, done: int, doneNotDelivered: int, remaining: int}>
+     */
+    private function categoryTotals(array $items): array
+    {
+        $totals = array_fill_keys(['planned', 'unplanned', 'support'], ['scope' => 0, 'done' => 0, 'doneNotDelivered' => 0, 'remaining' => 0]);
+        foreach ($items as $item) {
+            $totals[$item['category']]['scope']++;
+            $totals[$item['category']][$item['done'] ? 'done' : 'remaining']++;
+            $totals[$item['category']]['doneNotDelivered'] += (int) $item['doneNotDelivered'];
+        }
+
+        return $totals;
     }
 
     /** @return array{key: string, label: string, level: string, detail: string} */

@@ -9,9 +9,16 @@ window.ControlTower = (() => {
     red: ['Risco alto: manobra necessária', 'Há sinais vermelhos; decida as manobras abaixo.']
   };
   const LEVEL = {green:'Verde', yellow:'Amarelo', red:'Vermelho', unknown:'Sem dados'};
-  const state = {active:false, sprint:null, data:null, loading:false, error:'', request:0, chart:null,
+  const state = {active:false, sprint:null, data:null, loading:false, error:'', request:0, chart:null, origin:'',
     filters:{q:'', situations:new Set(), owner:'', priority:'', commitment:''}, sort:{key:null, dir:1}};
   const OPEN_SITUATIONS = ['notStarted', 'progress', 'blocked'];
+  /** Origem do card na sprint; a cor liga a barra de progresso à etiqueta da tabela. */
+  const ORIGIN = {
+    planned: {label:'Planejado', color:'#1d6ef5', rank:0},
+    unplanned: {label:'Não planejado', color:'#e8890c', rank:1},
+    support: {label:'Suporte', color:'#0d9488', rank:2},
+  };
+  const ORIGINS = Object.keys(ORIGIN);
 
   /* Tabela de compromisso: situação, etiquetas e ordenação. */
   const AVATAR_COLORS = ['#ff7a21','#0871e9','#9d75df','#16a96b','#e1306c','#0d9488','#d97706','#475569'];
@@ -29,6 +36,10 @@ window.ControlTower = (() => {
   function priorityBadge(item) {
     return item.priority ? `<span class="b ${PRIORITY[priorityKey(item)]?.[0] || 'bo'}">${escape(item.priority)}</span>` : '<span class="tower-muted">Sem prioridade</span>';
   }
+  function originBadge(item) {
+    const title = item.category === 'planned' ? 'Compromisso da sprint' : item.category === 'support' ? `Tipo Suporte · Planejada: ${item.planned || 'vazio'}` : `Planejada: ${item.planned || 'vazio'}`;
+    return `<span class="tower-origin tower-origin-${item.category}" title="${escape(title)}">${ORIGIN[item.category].label}</span>`;
+  }
   function avatar(name) {
     const initials = name.split(/\s+/).filter(Boolean).map(part => part[0]).filter((_, index, all) => index === 0 || index === all.length - 1).join('').toLocaleUpperCase('pt-BR');
     const color = AVATAR_COLORS[[...name].reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_COLORS.length];
@@ -40,14 +51,14 @@ window.ControlTower = (() => {
     return `<span class="tower-owner">${names.map(avatar).join('')}<span>${escape(names.join(', '))}</span></span>`;
   }
   const SORTS = {
-    committed: (a, b) => Number(b.committed) - Number(a.committed),
+    committed: (a, b) => ORIGIN[a.category].rank - ORIGIN[b.category].rank,
     name: (a, b) => a.name.localeCompare(b.name, 'pt-BR'),
     status: (a, b) => SITUATION[situation(a)][1] - SITUATION[situation(b)][1] || a.status.localeCompare(b.status, 'pt-BR'),
     owner: (a, b) => (owners(a)[0] ? 0 : 1) - (owners(b)[0] ? 0 : 1) || (owners(a)[0] || '').localeCompare(owners(b)[0] || '', 'pt-BR'),
     priority: (a, b) => priorityRank(a) - priorityRank(b),
     estimate: (a, b) => (a.estimate === null) - (b.estimate === null) || (a.estimate ?? 0) - (b.estimate ?? 0),
   };
-  /** Ordem padrão: em aberto antes dos concluídos, compromisso primeiro, maior prioridade primeiro. */
+  /** Ordem padrão: em aberto antes dos concluídos; planejado, não planejado e suporte; maior prioridade primeiro. */
   const defaultOrder = (a, b) => Number(a.done) - Number(b.done) || SORTS.committed(a, b) || SORTS.priority(a, b) || SORTS.name(a, b);
   function matches(item) {
     const f = state.filters;
@@ -56,7 +67,7 @@ window.ControlTower = (() => {
       && (!f.situations.size || f.situations.has(kind))
       && (!f.owner || (f.owner === '-' ? !owners(item).length : owners(item).includes(f.owner)))
       && (!f.priority || (f.priority === '-' ? !item.priority : item.priority === f.priority))
-      && (!f.commitment || item.committed === (f.commitment === 'yes'));
+      && (!f.commitment || item.category === f.commitment);
   }
   function fillSelect(id, values, emptyLabel, selected) {
     const select = el(id);
@@ -71,7 +82,7 @@ window.ControlTower = (() => {
     const {key, dir} = state.sort;
     const shown = items.filter(matches).sort(key ? (a, b) => SORTS[key](a, b) * dir || defaultOrder(a, b) : defaultOrder);
     el('tower-filter-count').textContent = `${shown.length} de ${items.length} card(s)`;
-    document.querySelectorAll('#page-control-tower .tower-chip').forEach(chip => {
+    document.querySelectorAll('#page-control-tower .tower-situations .tower-chip').forEach(chip => {
       const kind = chip.dataset.situation;
       chip.dataset.label ||= chip.textContent;
       chip.textContent = `${chip.dataset.label} · ${items.filter(item => situation(item) === kind).length}`;
@@ -82,7 +93,7 @@ window.ControlTower = (() => {
       th.setAttribute('aria-sort', sortKey === key ? (dir === 1 ? 'ascending' : 'descending') : 'none');
     });
     el('tower-items').innerHTML = shown.length ? shown.map(item => `<tr class="${item.done ? 'tower-done' : ''}">
-      <td>${item.committed ? '<span class="b bq" title="Compromisso da sprint">Planejada</span>' : `<span class="b bo">${escape(item.planned || 'Sem planejamento')}</span>`}</td>
+      <td>${originBadge(item)}</td>
       <td>${link(item)}${item.type ? `<small>${escape(item.type)}</small>` : ''}</td>
       <td>${statusBadge(item)}</td><td>${ownerCell(item)}</td><td>${priorityBadge(item)}</td>
       <td>${item.estimate === null ? '<span class="tower-muted">Sem estimativa</span>' : `${String(item.estimate).replace('.', ',')}h`}</td></tr>`).join('')
@@ -149,9 +160,10 @@ window.ControlTower = (() => {
       ? `Previsão (Monte Carlo, ${forecast.runs.toLocaleString('pt-BR')} simulações sobre ${forecast.samples} dias úteis de histórico): com 85% de confiança, pelo menos ${forecast.p85} card(s) concluídos até o fim; resultado mais provável, ${forecast.p50}. Chance de concluir todo o escopo restante (${data.totals.remaining}): ${forecast.probabilityAll.toLocaleString('pt-BR')}%.`
       : 'Previsão indisponível: o histórico de entregas ainda é curto (mínimo de 10 dias úteis com dados).';
     renderChart(data);
+    renderOrigins(data);
 
     el('tower-maneuvers-text').textContent = data.maneuvers.text;
-    el('tower-maneuvers').innerHTML = data.maneuvers.suggestions.map(item => `<li>${link(item)} <small>${escape(item.status || 'Sem status')} · ${escape(item.priority || 'sem prioridade')} · ${item.committed ? 'planejada (compromisso)' : 'não planejado'}</small></li>`).join('');
+    el('tower-maneuvers').innerHTML = data.maneuvers.suggestions.map(item => `<li>${link(item)} <small>${escape(item.status || 'Sem status')} · ${escape(item.priority || 'sem prioridade')} · ${ORIGIN[item.category].label.toLocaleLowerCase('pt-BR')}</small></li>`).join('');
 
     el('tower-alerts').innerHTML = data.alerts.length ? data.alerts.map(alert => `<li class="tower-alert tower-${alert.level}">${escape(alert.text)}</li>`).join('') : '<li>Nenhum alerta no momento.</li>';
 
@@ -168,22 +180,46 @@ window.ControlTower = (() => {
     el('tower-footer').textContent = `Regras: card parado = ${t.stalledDays}+ dias úteis no mesmo status; impedimento vermelho a partir de ${t.blockedRedDays} dias úteis; escopo adicionado amarelo acima de ${t.scopeYellow}% e vermelho acima de ${t.scopeRed}% da linha de base (suporte fora da conta); entrega verde a partir de ${t.probabilityGreen}% de chance e vermelha abaixo de ${t.probabilityRed}%. Histórico do Monday disponível desde ${data.historyStart ? new Date(data.historyStart).toLocaleDateString('pt-BR') : '—'}.`;
   }
 
+  /**
+   * Burnup de escopo e concluídos. Com uma origem selecionada, mostra só os cards dela; a projeção
+   * aparece apenas em "Todos", porque a previsão considera o escopo inteiro da sprint.
+   */
   function renderChart(data) {
     const labels = window.SprintRules.workingDays(data.dates.start, data.dates.end);
-    const byDay = Object.fromEntries(data.burnup.map(point => [point.date, point]));
+    const origin = state.origin;
+    const byDay = Object.fromEntries(data.burnup.map(point => [point.date, origin ? point.categories?.[origin] : point]));
     const last = data.burnup.at(-1);
     const projection = (extra) => labels.map(date => !last || date < last.date ? null : date === last.date ? last.done : last.done + extra);
+    const suffix = origin ? ` · ${ORIGIN[origin].label}` : '';
     const datasets = [
-      {label:'Escopo', data:labels.map(date => byDay[date]?.scope ?? null), borderColor:'#7c3aed', backgroundColor:'#7c3aed', tension:.2, spanGaps:false},
-      {label:'Concluídos', data:labels.map(date => byDay[date]?.done ?? null), borderColor:'#16a34a', backgroundColor:'#16a34a', tension:.2},
+      {label:`Escopo${suffix}`, data:labels.map(date => byDay[date]?.scope ?? null), borderColor:'#7c3aed', backgroundColor:'#7c3aed', tension:.2, spanGaps:false},
+      {label:`Concluídos${suffix}`, data:labels.map(date => byDay[date]?.done ?? null), borderColor:'#16a34a', backgroundColor:'#16a34a', tension:.2},
     ];
-    if (data.forecast.available && last && data.remainingDays > 0) {
+    if (!origin && data.forecast.available && last && data.remainingDays > 0) {
       datasets.push({label:'Projeção provável (50%)', data:projection(data.forecast.p50), borderColor:'#16a34a', borderDash:[6,4], pointRadius:0});
       datasets.push({label:'Projeção com 85% de confiança', data:projection(data.forecast.p85), borderColor:'#d97706', borderDash:[3,4], pointRadius:0});
     }
     state.chart?.destroy();
     state.chart = new Chart(el('tower-burnup-chart').getContext('2d'), {type:'line', data:{labels:labels.map(day), datasets},
-      options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false}, plugins:{legend:{labels:{boxWidth:12, font:{size:11}}}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}}}});
+      options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+        plugins:{legend:{labels:{boxWidth:12, font:{size:11}}},
+          subtitle:{display:Boolean(origin), text:'Projeção disponível apenas em "Todos": a previsão considera o escopo inteiro da sprint.', font:{size:11}, color:'#4b5568', padding:{bottom:8}}},
+        scales:{y:{beginAtZero:true, ticks:{precision:0}}}}});
+    document.querySelectorAll('#page-control-tower .tower-origin-filter .tower-chip').forEach(chip => chip.setAttribute('aria-pressed', String(chip.dataset.origin === origin)));
+  }
+
+  /** Uma barra por origem: quanto do escopo atual já foi entregue e quanto falta. */
+  function renderOrigins(data) {
+    el('tower-origins').innerHTML = ORIGINS.map(origin => {
+      const t = data.totals.categories[origin];
+      const percent = t.scope ? Math.round(t.done / t.scope * 100) : 0;
+      const waiting = t.doneNotDelivered ? ` (${t.doneNotDelivered} aguardando entrega)` : '';
+      return `<div class="tower-origin-row">
+        <strong>${ORIGIN[origin].label}</strong>
+        <div class="tower-origin-track" role="progressbar" aria-label="${ORIGIN[origin].label}: entregues" aria-valuemin="0" aria-valuemax="${t.scope}" aria-valuenow="${t.done}"><div class="tower-origin-fill" style="width:${percent}%;background:${ORIGIN[origin].color}"></div></div>
+        <span class="tower-origin-count">${t.scope ? `<b>${t.done} de ${t.scope}</b> entregues · ${t.remaining} pendente(s)${waiting}` : 'Nenhum card'}</span>
+      </div>`;
+    }).join('');
   }
 
   function seenAlerts() { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); } catch { return new Set(); } }
@@ -225,9 +261,12 @@ window.ControlTower = (() => {
     if (!el('page-control-tower')) return;
     el('tower-sprint').onchange = event => { state.sprint = Number(event.target.value); load(); };
     el('tower-refresh').onclick = () => syncMonday(true);
+    document.querySelectorAll('#page-control-tower .tower-origin-filter .tower-chip').forEach(chip => {
+      chip.onclick = () => { state.origin = chip.dataset.origin; if (state.data?.available) renderChart(state.data); };
+    });
     const filters = {q:'tower-filter-q', owner:'tower-filter-owner', priority:'tower-filter-priority', commitment:'tower-filter-commitment'};
     const refreshItems = () => { if (state.data?.available) renderItems(); };
-    document.querySelectorAll('#page-control-tower .tower-chip').forEach(chip => {
+    document.querySelectorAll('#page-control-tower .tower-situations .tower-chip').forEach(chip => {
       chip.onclick = () => {
         const kind = chip.dataset.situation, selected = state.filters.situations;
         selected.has(kind) ? selected.delete(kind) : selected.add(kind);
