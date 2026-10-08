@@ -150,6 +150,7 @@ window.ControlTower = (() => {
     el('tower-days').textContent = `${data.remainingDays} de ${data.workingDays}`;
     el('tower-commitment').textContent = `${data.totals.committedDone} de ${data.totals.committed}`;
     el('tower-scope').textContent = `${data.totals.done} de ${data.totals.scope}${data.totals.doneNotDelivered ? ` · ${data.totals.doneNotDelivered} aguardando entrega` : ''}`;
+    el('tower-not-started').textContent = `${data.totals.notStarted} de ${data.totals.scope}`;
     el('tower-decision').textContent = data.decision.text;
     el('tower-decision').classList.toggle('tower-late', data.decision.late);
 

@@ -13,7 +13,7 @@
 .tower-green .tower-light-dot{background:#16a34a;box-shadow:0 0 0 6px rgba(22,163,74,.15)}
 .tower-yellow .tower-light-dot{background:#d97706;box-shadow:0 0 0 6px rgba(217,119,6,.15)}
 .tower-red .tower-light-dot{background:#dc2626;box-shadow:0 0 0 6px rgba(220,38,38,.15)}
-.tower-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tower-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .tower-facts div{padding:8px 12px;border-radius:8px;background:#f5f8fc}
 .tower-facts span{display:block;font-size:11px;color:#4b5568}
 .tower-facts strong{font-size:17px}

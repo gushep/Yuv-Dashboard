@@ -36,6 +36,7 @@ class ControlTowerTest extends TestCase
             ->assertJsonPath('remainingDays', 3)
             ->assertJsonPath('totals.scope', 5)
             ->assertJsonPath('totals.done', 1)
+            ->assertJsonPath('totals.notStarted', 1)
             ->assertJsonPath('totals.committed', 3)
             ->assertJsonPath('totals.committedDone', 1)
             ->assertJsonPath('status', 'red')
