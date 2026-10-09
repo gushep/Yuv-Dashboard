@@ -359,7 +359,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <div class="g3">
         <div class="card"><div class="card-head"><div class="card-title">Retrabalho por Sprint</div><div class="card-sub">% · meta &lt;15%</div></div><div class="cw h200"><canvas id="cRework"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Bugs em Produção</div><div class="card-sub">por sprint · meta = 0</div></div><div class="cw h200"><canvas id="cBugs"></canvas></div></div>
-        <div class="card"><div class="card-head"><div class="card-title">Valor Agregado</div><div class="card-sub">itens de alto impacto entregues</div></div><div class="cw h200"><canvas id="cValor"></canvas></div></div>
+        <div class="card"><div class="card-head"><div class="card-title">Novas Funcionalidades</div><div class="card-sub">novas funcionalidades entregues</div></div><div class="cw h200"><canvas id="cValor"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Índice de Escopo Limpo</div><div class="card-sub">planejados + implementados + sem retrabalho · meta &gt;60%</div></div><div class="cw h200"><canvas id="cClean"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Carga de Épicos por Sprint</div><div class="card-sub">% tasks vinculadas a épicos</div></div><div class="cw h200"><canvas id="cEpicLoad"></canvas></div></div>
       </div>
@@ -461,8 +461,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           <span class="tcnt" id="raw-cnt"></span>
           <div class="tfilters" id="raw-filters">
             <button class="tfbtn" id="rfbug" onclick="toggleRawFilter('bug')">🐛 Bug prod.</button>
-            <button class="tfbtn" id="rfval" onclick="toggleRawFilter('val')">★ Valor ag.</button>
-            <button class="tfbtn" id="rfrework" onclick="toggleRawFilter('rework')">↩ Retrabalho</button>
+            <button class="tfbtn" id="rfval" onclick="toggleRawFilter('val')">★ Novas func.</button>
+  <button class="tfbtn" id="rfrework" onclick="toggleRawFilter('rework')">↩ Retrabalho</button>
             <button class="tfbtn" id="rfepic" onclick="toggleRawFilter('epic')">◈ Épico</button>
           </div>
         </div>
@@ -487,7 +487,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
               <th onclick="sortRaw('Planejada')">Planejado</th>
               <th onclick="sortRaw('Retrabalho')">Retrab.</th>
               <th onclick="sortRaw('BugProducao')">Bug Prod.</th>
-              <th onclick="sortRaw('ValorAgregado')">Valor Ag.</th>
+              <th onclick="sortRaw('ValorAgregado')">Nova Func.</th>
             </tr></thead>
             <tbody id="raw-body"></tbody>
           </table>
@@ -924,7 +924,7 @@ function renderDashboard(){
     {label:'Bugs em produção',data:SPRINTS.map(s=>filtSp(s).filter(x=>x.BugProducao).length),backgroundColor:SPRINTS.map(s=>filtSp(s).filter(x=>x.BugProducao).length>0?'rgba(220,38,38,.7)':'rgba(22,163,74,.5)'),borderRadius:4},
   ]},options:{...bOpts('',0)}});
   mk('cValor',{type:'bar',data:{labels:L,datasets:[
-    {label:'Valor agregado',data:SPRINTS.map(s=>filtSp(s).filter(x=>x.ValorAgregado).length),backgroundColor:'rgba(13,148,136,.7)',borderRadius:4},
+    {label:'Novas funcionalidades',data:SPRINTS.map(s=>filtSp(s).filter(x=>x.ValorAgregado).length),backgroundColor:'rgba(13,148,136,.7)',borderRadius:4},
   ]},options:{...bOpts('',0)}});
   mk('cClean',{type:'line',data:{labels:L,datasets:[
     {label:'Escopo limpo (%)',data:spMs.map(m=>m.cleanPct),borderColor:'#059669',backgroundColor:'rgba(5,150,105,.07)',fill:true,tension:.4,pointBackgroundColor:'#059669',pointBorderColor:'#fff',pointRadius:5,pointBorderWidth:2},
@@ -965,7 +965,7 @@ function renderSprint(sp){
     {lbl:'Taxa de Arrastamento',val:`${m.arrastPct}%`,sub:`${m.drag} itens · meta <25%`,cls:m.arrastPct<=25?'green':'red',trend:prevM?trendHtml(m.arrastPct,prevM.arrastPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Cobertura de Estimativa',val:`${m.aderencia}%`,sub:`${m.withEst}/${m.tot} itens com estimativa · meta >90%`,cls:m.aderencia>=90?'green':'red',trend:prevM?trendHtml(m.aderencia,prevM.aderencia,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Bugs em Produção',val:m.bugs,sub:m.bugs===0?'nenhum bug registrado':'itens com bug após deploy',cls:m.bugs===0?'green':'red',trend:prevM?trendHtml(m.bugs,prevM.bugs,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
-    {lbl:'Valor Agregado',val:m.valor,sub:`itens de alto impacto`,cls:'blue',trend:prevM?trendHtml(m.valor,prevM.valor,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Novas Funcionalidades',val:m.valor,sub:`itens de nova funcionalidade`,cls:'blue',trend:prevM?trendHtml(m.valor,prevM.valor,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Carga de Épicos',val:`${m.epicPct}%`,sub:`${m.epicItems} tasks${epicDone.length?` · ${epicDone.length} épico(s) concluído(s)`:''}`,cls:'neutral',trend:prevM?trendHtml(m.epicPct,prevM.epicPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
   ];
   kpis.forEach(k=>{
@@ -1023,14 +1023,14 @@ function renderSprintTable(d){
   wrap.innerHTML=`<div class="tbar">
     <span class="tbar-title">Itens</span><span class="tcnt">${d.length}</span>
     <div class="tfilters">
-      <button class="tfbtn" id="sf-val" onclick="spFilterToggle('val')">★ Valor ag.</button>
+      <button class="tfbtn" id="sf-val" onclick="spFilterToggle('val')">★ Novas func.</button>
       <button class="tfbtn" id="sf-epic" onclick="spFilterToggle('epic')">◈ Épico</button>
       <button class="tfbtn" id="sf-bug" onclick="spFilterToggle('bug')">🐛 Bug prod.</button>
     </div>
     <input class="tsrch" type="text" id="sp-search" placeholder="Buscar..." oninput="spFilterRender()" style="margin-left:auto">
   </div>
   <div class="tscroll"><table><thead><tr>
-    <th>Item</th><th>Responsável</th><th>Status</th><th>Tipo</th><th>Prioridade</th><th>Épico</th><th>Est(h)</th><th>Real(h)</th><th>Retrab.</th><th>Bug Prod.</th><th>Valor Ag.</th>
+    <th>Item</th><th>Responsável</th><th>Status</th><th>Tipo</th><th>Prioridade</th><th>Épico</th><th>Est(h)</th><th>Real(h)</th><th>Retrab.</th><th>Bug Prod.</th><th>Nova Func.</th>
   </tr></thead><tbody id="sp-body"></tbody></table></div>`;
   window._spItems=d;
   window._spFilters=new Set();
@@ -1279,7 +1279,7 @@ function renderTimeIndividual(dev,rows,spFilter){
   const dWrap=document.getElementById('dev-table-wrap');
   dWrap.innerHTML=`<div class="tbar"><span class="tbar-title">Itens</span><span class="tcnt">${devItems2.length}</span></div>
   <div class="tscroll"><table><thead><tr>
-    <th>Item</th><th>Sprint</th><th>Status</th><th>Tipo</th><th>Épico</th><th>Est(h)</th><th>Real(h)</th><th>Retrab.</th><th>Bug Prod.</th><th>Valor Ag.</th>
+    <th>Item</th><th>Sprint</th><th>Status</th><th>Tipo</th><th>Épico</th><th>Est(h)</th><th>Real(h)</th><th>Retrab.</th><th>Bug Prod.</th><th>Nova Func.</th>
   </tr></thead><tbody>${devItems2.map(x=>`<tr>
     <td title="${esc(x.Nome)}">${esc(x.Nome)}</td>
     <td class="cm">S${x.Sprint}</td>

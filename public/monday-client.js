@@ -20,7 +20,7 @@ const mondayFields = [
   ['Planejada', 'Planejada', ['Planejada']],
   ['Retrabalho', 'Retrabalho', ['Retrabalho']],
   ['BugProducao', 'Bug Produção', ['Bug Produção', 'Bug Producao']],
-  ['ValorAgregado', 'Valor Agregado', ['Valor Agregado']]
+  ['ValorAgregado', 'Novas Funcionalidades', ['Novas Funcionalidades', 'Nova Funcionalidade', 'Valor Agregado']]
 ];
 
 function mondayMessage(id, message, kind = '') {
