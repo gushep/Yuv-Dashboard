@@ -362,6 +362,20 @@ class SprintTimeline
     private function valueAt(string $itemId, string $field, CarbonImmutable $at, mixed $current): mixed
     {
         $changes = $this->changes[$itemId][$field] ?? [];
+        // Do momento do sync em diante, parte do que o Monday mostra agora: o log copiado pode estar atrasado.
+        if ($this->syncedAt !== null && $at->gte($this->syncedAt)) {
+            $value = $current;
+            foreach ($changes as $change) {
+                if ($change['at']->gt($at)) {
+                    break;
+                }
+                if ($change['at']->gt($this->syncedAt)) {
+                    $value = $change['after'];
+                }
+            }
+
+            return $value;
+        }
         $value = null;
         $found = false;
         foreach ($changes as $change) {
