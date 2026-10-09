@@ -19,7 +19,7 @@ Os indicadores contextualizam o trabalho do time. Horas sem apontamento não rep
 | Tela | Finalidade |
 | --- | --- |
 | Torre de controle | Tela inicial. Farol da sprint, trajetória dia a dia (burnup), previsão probabilística, ponto de decisão, manobras sugeridas, alertas e compromisso da sprint. |
-| Dashboard e sprints | Visão dos indicadores e detalhamento por sprint. |
+| Dashboard e sprints | Visão dos indicadores e detalhamento por sprint. Nos indicadores da sprint, passar o mouse sobre um card mostra o que ele apresenta e o critério de cálculo; clicar abre a lista das tasks daquele indicador, com link para o card na Monday. |
 | Épicos, time e dados | Consulta das informações do quadro por diferentes perspectivas. |
 | Sustentação — Painel do Bombeiro | Demandas de Suporte por status e prioridade, com avisos visuais e toque Den Den Mushi para novas demandas. |
 | Painel da Sprint | Acompanhamento do trabalho vinculado à sprint selecionada. |
@@ -33,13 +33,14 @@ Os indicadores contextualizam o trabalho do time. Horas sem apontamento não rep
 
 A aplicação consulta a API GraphQL da Monday pelo backend, com paginação, mapeamento de colunas e cache. Na tela **Configurações**, informe o token, selecione o quadro e confira o mapeamento das colunas.
 
-Os principais campos são Sprint, Tipo, Status, Responsável, Tempo Estimado e Tempo Real. Prioridade, épico e esforço restante apoiam os painéis que os utilizam. Os comentários dos cards são consultados para a release; o módulo é exibido quando existe nos dados.
+Os principais campos são Sprint, Tipo, Status, Responsável, Tempo Estimado e Tempo Real. Prioridade, épico, esforço restante e Novas Funcionalidades (antiga Valor Agregado; o mapeamento reconhece os dois nomes de coluna) apoiam os painéis que os utilizam. Os comentários dos cards são consultados para a release; o módulo é exibido quando existe nos dados.
 
 ### Regras dos indicadores
 
 - **Definições únicas (todas as telas):** concluído é somente `Implementado`; `Aguardando Deploy` e `QA - Aprovado` são feitos, não entregues; `Cancelado`, `Descontinuado` e `Despriorizado` saem do total da sprint e contam como retirados do escopo. Capacidade padrão e pessoas fora das métricas individuais são configuradas em **Configurações**.
-- **Histórico:** o log de atividades da Monday é copiado para a tabela `monday_activity_events`, porque a Monday guarda apenas alguns meses. Com ele, sprints encerradas aparecem como estavam no fim efetivo (véspera do início da sprint seguinte) e a Torre de controle reconstitui cada dia da sprint.
-- **Torre de controle:** linha de base do escopo no fim do 2º dia útil; suporte que entra no meio da sprint é medido pela reserva, não como escopo adicionado; card parado = 3 dias úteis no mesmo status. O compromisso da sprint são os cards marcados como Planejada no Monday; a torre é somente de acompanhamento e não guarda marcações próprias. Os limites ficam em `App\Services\ControlTowerService`.
+- **Histórico:** o log de atividades da Monday é copiado para a tabela `monday_activity_events`, porque a Monday guarda apenas alguns meses. Com ele, sprints encerradas aparecem como estavam no fim efetivo (véspera do início da sprint seguinte) e a Torre de controle reconstitui cada dia da sprint. Como a cópia do log pode atrasar em relação à última sincronização, do horário da sincronização em diante vale o estado atual do card na Monday, e só mudanças do log posteriores a ela são aplicadas.
+- **Indicadores da sprint:** os cards se dividem em três origens que somam o total de itens: Suporte (Tipo = Suporte), Sprint Planejados (campo Planejada = Planejada, sem suporte) e Sprint Não Planejados (os demais, sem suporte). A descrição e o critério de cada indicador ficam em `SPRINT_KPI_INFO`, em `resources/views/dashboard.blade.php`.
+- **Torre de controle:** no painel de status, Tasks implementadas e Não iniciados (Backlog, Pronto para começar ou sem status) são mostrados sobre o total da sprint; Em andamento (já saiu do Backlog e ainda não foi implementado, incluindo Aguardando Deploy, QA - Aprovado e impedidos) é mostrado sobre o que falta implementar. Linha de base do escopo no fim do 2º dia útil; suporte que entra no meio da sprint é medido pela reserva, não como escopo adicionado; card parado = 3 dias úteis no mesmo status. O compromisso da sprint são os cards marcados como Planejada no Monday; a torre é somente de acompanhamento e não guarda marcações próprias. Os limites ficam em `App\Services\ControlTowerService`.
 - **Consumo de horas:** Tipo = Suporte entra em Suporte; qualquer outro Tipo entra em Sprint. Considera as horas reais independentemente do status e da classificação Planejado / Não planejado.
 - **Reserva de suporte:** o padrão é 40 horas para o time inteiro por sprint, configurável e persistido por sprint. Essa comparação não altera a capacidade dos demais painéis.
 - **Atribuição individual:** horas compartilhadas sem distribuição confiável permanecem nos totais do time e aparecem como horas sem atribuição individual.

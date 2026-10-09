@@ -115,6 +115,23 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .trend-neutral{background:#f8fafc;color:var(--muted);border:1px solid var(--border)}
 .kpi-meta{font-size:10px;color:var(--muted);margin-top:5px}
 .kpi-breakdown{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.kpi.kpi-clickable{cursor:pointer}
+.kpi.kpi-clickable:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.kpi-tip{position:fixed;z-index:60;max-width:300px;padding:10px 12px;border-radius:8px;background:var(--text);color:#fff;font-size:11.5px;line-height:1.45;box-shadow:var(--shadow-md);pointer-events:none}
+.kpi-tip[hidden]{display:none}
+.kpi-tip-crit{margin-top:6px;color:#cbd5e1}
+.kpi-tip-hint{margin-top:6px;font-size:10.5px;color:var(--muted)}
+.kpi-modal{width:min(1000px,calc(100vw - 32px));max-height:calc(100vh - 64px);padding:0;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);box-shadow:var(--shadow-md)}
+.kpi-modal[open]{display:flex;flex-direction:column}
+.kpi-modal::backdrop{background:rgba(0,0,0,.45)}
+.kpi-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border)}
+.kpi-modal-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+.kpi-modal-sub{font-size:11.5px;color:var(--text2);margin-top:4px;line-height:1.4}
+.kpi-modal-close{flex:none;border:0;background:var(--bg);color:var(--text2);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px}
+.kpi-modal-close:hover{background:var(--border)}
+.kpi-modal-body{overflow:auto}
+.kpi-modal-body a{color:var(--blue);text-decoration:none}
+.kpi-modal-body a:hover{text-decoration:underline}
 .kpi-bd-item{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600}
 
 /* CHART GRID */
@@ -374,6 +391,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <div class="page" id="page-sprint">
       <div class="sec"><span class="sec-label">indicadores da sprint</span><div class="sec-line"></div></div>
       <div class="kpi-grid" id="sprint-kpis"></div>
+      <div class="kpi-tip" id="kpi-tip" role="tooltip" hidden></div>
+      <dialog class="kpi-modal" id="kpi-modal" aria-label="Tasks do indicador" onclick="if(event.target===this) this.close()"></dialog>
       <div class="sec"><span class="sec-label">composição</span><div class="sec-line"></div></div>
       <div class="g2">
         <div class="card"><div class="card-head"><div class="card-title">Por Status</div><div class="card-sub">distribuição dos itens</div></div><div class="cw h220"><canvas id="sStatus"></canvas></div></div>
@@ -702,7 +721,27 @@ function spMetrics(sp){
   const cleanScope=d.filter(x=>x.Planejada==='Planejada'&&SprintRules.isDone(x.Status)&&!x.Retrabalho).length;
   const unplanCrit=d.filter(x=>x.Planejada==='Não Planejado'&&x.Prioridade==='Crítica').length;
   const unplanBug=d.filter(x=>x.Planejada==='Não Planejado'&&x.Tipo==='Bug').length;
-  return {tot,done,waiting,open,removed,unplan,rework,bugs,valor,drag,withEst,epicItems,cleanScope,unplanCrit,unplanBug,
+  const supportItems=d.filter(x=>SprintRules.normalize(x.Tipo)==='suporte');
+  const support=supportItems.length;
+  const supportDone=supportItems.filter(x=>SprintRules.isDone(x.Status)).length;
+  // Planejados e não planejados da sprint excluem o suporte, como as origens da torre de controle.
+  const sprintItems=d.filter(x=>SprintRules.normalize(x.Tipo)!=='suporte');
+  const plannedItems=sprintItems.filter(x=>SprintRules.normalize(x.Planejada)==='planejada');
+  const unplannedItems=sprintItems.filter(x=>SprintRules.normalize(x.Planejada)!=='planejada');
+  const planned=plannedItems.length,plannedDone=plannedItems.filter(x=>SprintRules.isDone(x.Status)).length;
+  const unplanned=unplannedItems.length,unplannedDone=unplannedItems.filter(x=>SprintRules.isDone(x.Status)).length;
+  const unplannedCrit=unplannedItems.filter(x=>x.Prioridade==='Crítica').length;
+  const unplannedBug=unplannedItems.filter(x=>x.Tipo==='Bug').length;
+  // Tasks por indicador, listadas no modal ao clicar no card.
+  const lists={
+    tot:d,done:d.filter(x=>SprintRules.isDone(x.Status)),waiting:d.filter(x=>SprintRules.isDoneNotDelivered(x.Status)),
+    open:d.filter(x=>SprintRules.isOpen(x.Status)),planned:plannedItems,unplanned:unplannedItems,support:supportItems,
+    rework:d.filter(x=>x.Retrabalho),clean:d.filter(x=>x.Planejada==='Planejada'&&SprintRules.isDone(x.Status)&&!x.Retrabalho),
+    drag:d.filter(x=>isArrastado(x)),noEst:d.filter(x=>!(x.EstH>0)),bugs:d.filter(x=>x.BugProducao),
+    valor:d.filter(x=>x.ValorAgregado),epic:d.filter(x=>x.Epico),
+  };
+  return {lists,tot,done,waiting,open,removed,unplan,rework,bugs,valor,drag,withEst,epicItems,cleanScope,unplanCrit,unplanBug,support,supportDone,
+    planned,plannedDone,unplanned,unplannedDone,unplannedCrit,unplannedBug,unplannedPct:pct(unplanned,tot),
     conclusao:pct(done,tot),reworkPct:pct(rework,tot),aderencia:pct(withEst,tot),
     arrastPct:pct(drag,tot),cleanPct:pct(cleanScope,tot),epicPct:pct(epicItems,tot),
     interruptPct:pct(unplan,tot)};
@@ -946,6 +985,59 @@ function renderDashboard(){
 }
 
 // ── SPRINT PAGE ───────────────────────────────────────────────────────────────
+/**
+ * O que cada indicador da sprint apresenta, como é calculado e quais tasks lista ao clicar.
+ * Cancelado, Descontinuado e Despriorizado ficam fora de todos os indicadores.
+ */
+const SPRINT_KPI_INFO={
+  'Total de Itens':{text:'Quantidade de cards da sprint, separada em planejados, não planejados e suporte.',criteria:'Todos os cards com esta sprint no Monday, exceto os retirados do escopo (Cancelado, Descontinuado e Despriorizado).',list:'tot'},
+  'Taxa de Conclusão':{text:'Quanto da sprint já foi implementado.',criteria:'Cards com status Implementado ÷ total de itens. Aguardando Deploy e QA - Aprovado ainda não contam. Meta: acima de 80%.',list:'done',listTitle:'Tasks implementadas'},
+  'Feitos Não Entregues':{text:'Cards prontos que ainda não chegaram em produção.',criteria:'Status Aguardando Deploy ou QA - Aprovado.',list:'waiting'},
+  'Não Entregues':{text:'Cards que ainda exigem trabalho do time nesta sprint.',criteria:'Tudo que não está Implementado, Aguardando Deploy ou QA - Aprovado.',list:'open'},
+  'Sprint Planejados':{text:'Trabalho que entrou no planejamento da sprint.',criteria:'Campo Planejada igual a "Planejada" e Tipo diferente de Suporte.',list:'planned'},
+  'Sprint Não Planejados':{text:'Trabalho que entrou na sprint fora do planejamento.',criteria:'Tipo diferente de Suporte e campo Planejada diferente de "Planejada" (inclusive vazio). Verde até 20% do total de itens.',list:'unplanned'},
+  'Tickets de Suporte':{text:'Demandas de suporte atendidas na sprint.',criteria:'Tipo igual a Suporte, independente do campo Planejada.',list:'support'},
+  'Retrabalho':{text:'Cards que precisaram voltar para ajuste.',criteria:'Coluna Retrabalho marcada ÷ total de itens. Meta: abaixo de 15%.',list:'rework'},
+  'Índice Escopo Limpo':{text:'Trabalho planejado entregue de primeira.',criteria:'Campo Planejada igual a "Planejada", status Implementado e sem Retrabalho, ÷ total de itens. Meta: acima de 60%.',list:'clean'},
+  'Taxa de Arrastamento':{text:'Cards que vieram de sprints anteriores.',criteria:'O mesmo card (ou uma cópia "(copy)") já esteve em uma sprint anterior, ÷ total de itens. Meta: abaixo de 25%.',list:'drag'},
+  'Cobertura de Estimativa':{text:'Cards com tempo estimado preenchido.',criteria:'Tempo estimado maior que zero ÷ total de itens. Meta: acima de 90%.',list:'noEst',listTitle:'Tasks sem estimativa'},
+  'Bugs em Produção':{text:'Cards que geraram bug depois do deploy.',criteria:'Coluna Bug Produção marcada. Meta: zero.',list:'bugs'},
+  'Novas Funcionalidades':{text:'Entregas que trazem funcionalidade nova.',criteria:'Coluna Novas Funcionalidades (antiga Valor Agregado) marcada.',list:'valor'},
+  'Carga de Épicos':{text:'Quanto da sprint está ligado a épicos.',criteria:'Cards com o campo Épico preenchido ÷ total de itens.',list:'epic'},
+};
+function showKpiTip(card,info){
+  const tip=document.getElementById('kpi-tip');
+  tip.innerHTML=`<div>${esc(info.text)}</div><div class="kpi-tip-crit"><b>Critério:</b> ${esc(info.criteria)}</div><div class="kpi-tip-hint">Clique para ver as tasks</div>`;
+  tip.hidden=false;
+  const r=card.getBoundingClientRect(),w=tip.offsetWidth,h=tip.offsetHeight;
+  const left=Math.max(8,Math.min(r.left+r.width/2-w/2,window.innerWidth-w-8));
+  const top=r.bottom+8+h>window.innerHeight?r.top-h-8:r.bottom+8;
+  tip.style.left=`${left}px`;tip.style.top=`${Math.max(8,top)}px`;
+}
+function hideKpiTip(){const tip=document.getElementById('kpi-tip');if(tip) tip.hidden=true;}
+window.addEventListener('scroll',hideKpiTip,true);
+function openKpiModal(label,info,items,sp){
+  const modal=document.getElementById('kpi-modal');
+  const title=info.listTitle||label;
+  const name=x=>x.Url?`<a href="${esc(x.Url)}" target="_blank" rel="noopener">${esc(x.Nome)}</a>`:esc(x.Nome);
+  modal.innerHTML=`<div class="kpi-modal-head">
+      <div><div class="kpi-modal-title">${esc(title)} <span class="tcnt">${items.length}</span></div><div class="kpi-modal-sub">Sprint ${esc(sp)} · ${esc(info.criteria)}</div></div>
+      <button type="button" class="kpi-modal-close" aria-label="Fechar" onclick="document.getElementById('kpi-modal').close()">✕</button>
+    </div>
+    <div class="tscroll kpi-modal-body"><table><thead><tr>
+      <th>Item</th><th>Responsável</th><th>Status</th><th>Tipo</th><th>Planejada</th><th>Prioridade</th><th>Est(h)</th><th>Real(h)</th>
+    </tr></thead><tbody>${items.map(x=>`<tr>
+      <td title="${esc(x.Nome)}">${name(x)}</td>
+      <td class="cm">${esc(x.Responsavel)||'—'}</td>
+      <td>${stBadge(x.Status)}</td>
+      <td><span class="b bo">${esc(x.Tipo)||'—'}</span></td>
+      <td class="cm">${esc(x.Planejada)||'—'}</td>
+      <td>${prioBadge(x.Prioridade)}</td>
+      <td class="cm">${x.EstH||'—'}</td>
+      <td class="cm">${x.RealH||'—'}</td>
+    </tr>`).join('')||'<tr><td colspan="8" class="nd">Nenhuma task neste indicador</td></tr>'}</tbody></table></div>`;
+  modal.showModal();
+}
 function renderSprint(sp){
   const d=filtSp(sp);
   const m=spMetrics(sp);
@@ -955,11 +1047,13 @@ function renderSprint(sp){
   const grid=document.getElementById('sprint-kpis');
   grid.innerHTML='';
   const kpis=[
-    {lbl:'Total de Itens',val:m.tot,sub:`${m.unplan} não planejados · ${m.removed} retirados do escopo`,cls:'neutral',trend:null},
+    {lbl:'Total de Itens',val:m.tot,sub:`${m.planned} planejados · ${m.unplanned} não planejados · ${m.support} suporte · ${m.removed} retirados do escopo`,cls:'neutral',trend:null},
     {lbl:'Taxa de Conclusão',val:`${m.conclusao}%`,sub:`${m.done}/${m.tot} · meta >80%`,cls:m.conclusao>=80?'green':'red',trend:prevM?trendHtml(m.conclusao,prevM.conclusao,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Feitos Não Entregues',val:m.waiting,sub:`Aguardando Deploy ou QA aprovado`,cls:prevM?(m.waiting<=prevM.waiting?'green':'red'):'neutral',trend:prevM?trendHtml(m.waiting,prevM.waiting,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Não Entregues',val:m.open,sub:`itens em aberto`,cls:prevM?(m.open<=prevM.open?'green':'red'):'neutral',trend:prevM?trendHtml(m.open,prevM.open,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
-    {lbl:'Não Planejados',val:`${m.unplan}`,sub:`${m.unplanCrit} críticos · ${m.unplanBug} bugs`,cls:m.interruptPct<=20?'green':'red',trend:prevM?trendHtml(m.unplan,prevM.unplan,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Sprint Planejados',val:m.planned,sub:`${m.plannedDone}/${m.planned} implementados · sem suporte`,cls:'neutral',trend:prevM?trendHtml(m.planned,prevM.planned,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Sprint Não Planejados',val:m.unplanned,sub:`${m.unplannedDone}/${m.unplanned} implementados · ${m.unplannedCrit} críticos · ${m.unplannedBug} bugs · sem suporte`,cls:m.unplannedPct<=20?'green':'red',trend:prevM?trendHtml(m.unplanned,prevM.unplanned,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Tickets de Suporte',val:m.support,sub:`${m.supportDone}/${m.support} implementados`,cls:'neutral',trend:prevM?trendHtml(m.support,prevM.support,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Retrabalho',val:`${m.reworkPct}%`,sub:`${m.rework} itens · meta <15%`,cls:m.reworkPct<=15?'green':'red',trend:prevM?trendHtml(m.reworkPct,prevM.reworkPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Índice Escopo Limpo',val:`${m.cleanPct}%`,sub:`${m.cleanScope} itens · meta >60%`,cls:m.cleanPct>=60?'green':'red',trend:prevM?trendHtml(m.cleanPct,prevM.cleanPct,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Taxa de Arrastamento',val:`${m.arrastPct}%`,sub:`${m.drag} itens · meta <25%`,cls:m.arrastPct<=25?'green':'red',trend:prevM?trendHtml(m.arrastPct,prevM.arrastPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
@@ -969,9 +1063,18 @@ function renderSprint(sp){
     {lbl:'Carga de Épicos',val:`${m.epicPct}%`,sub:`${m.epicItems} tasks${epicDone.length?` · ${epicDone.length} épico(s) concluído(s)`:''}`,cls:'neutral',trend:prevM?trendHtml(m.epicPct,prevM.epicPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
   ];
   kpis.forEach(k=>{
-    const div=document.createElement('div');div.className=`kpi ${k.cls}`;
+    const info=SPRINT_KPI_INFO[k.lbl];
+    const div=document.createElement('div');div.className=`kpi ${k.cls}${info?' kpi-clickable':''}`;
     const valFs=String(k.val).length>8?'font-size:18px':'';
     div.innerHTML=`<div class="kpi-accent"></div><div class="kpi-label">${k.lbl}</div><div class="kpi-val" style="${valFs}">${k.val}</div><div class="kpi-sub">${k.sub}</div>${k.trend||''}${k.meta&&k.trend?`<div class="kpi-meta">${k.meta}</div>`:''}`;
+    if(info){
+      const open=()=>{hideKpiTip();openKpiModal(k.lbl,info,m.lists[info.list]||[],sp);};
+      div.tabIndex=0;div.setAttribute('role','button');div.setAttribute('aria-label',`${k.lbl}: ${info.text} Clique para ver as tasks.`);
+      div.addEventListener('mouseenter',()=>showKpiTip(div,info));
+      div.addEventListener('mouseleave',hideKpiTip);
+      div.addEventListener('click',open);
+      div.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
+    }
     grid.appendChild(div);
   });
   // Charts composição

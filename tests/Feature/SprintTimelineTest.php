@@ -62,6 +62,23 @@ class SprintTimelineTest extends TestCase
         $this->assertArrayNotHasKey('8', $timeline->membersAt(17, SprintRules::endOfDay('2026-10-07')));
     }
 
+    public function test_current_state_follows_the_synced_card_when_the_copied_history_is_behind(): void
+    {
+        $connection = $this->configureScenarioConnection();
+        $this->seedScenarioHistory();
+        $snapshot = $this->scenarioSnapshot();
+        $snapshot['rows'][3]['Status'] = 'Implementado';
+        $timeline = SprintTimeline::fromDatabase($snapshot, $connection);
+
+        $this->assertSame('Em progresso', $timeline->stateAt('4', SprintRules::endOfDay('2026-10-06'))['Status']);
+        $this->assertSame('Implementado', $timeline->stateAt('4', SprintRules::endOfDay('2026-10-07'))['Status']);
+
+        $this->historyEvent('4', 'status', ['label' => ['text' => 'Implementado']], ['label' => ['text' => 'Parado']], '2026-10-07 13:00');
+        $timeline = SprintTimeline::fromDatabase($snapshot, $connection);
+
+        $this->assertSame('Parado', $timeline->stateAt('4', SprintRules::endOfDay('2026-10-07'))['Status']);
+    }
+
     public function test_burnup_counts_scope_and_done_cards_at_the_end_of_each_working_day(): void
     {
         $points = collect($this->timeline()->burnup(17, '2026-09-28', '2026-10-09', '2026-10-07'))->keyBy('date');
