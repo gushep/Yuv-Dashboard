@@ -102,6 +102,7 @@ class ControlTowerService
                 'doneNotDelivered' => count(array_filter($items, fn (array $item): bool => $item['doneNotDelivered'])),
                 'remaining' => count($remaining),
                 'notStarted' => count(array_filter($remaining, fn (array $item): bool => $item['notStarted'])),
+                'inProgress' => count(array_filter($remaining, fn (array $item): bool => ! $item['notStarted'])),
                 'committed' => count($committed), 'committedDone' => count($committed) - count($remainingCommitted),
                 'categories' => $this->categoryTotals($items),
             ],

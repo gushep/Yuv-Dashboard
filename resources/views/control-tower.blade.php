@@ -12,8 +12,9 @@
       <div class="tower-facts">
         <div><span>Dias úteis restantes</span><strong id="tower-days"></strong></div>
         <div><span>Compromisso concluído</span><strong id="tower-commitment"></strong></div>
-        <div><span>Escopo concluído</span><strong id="tower-scope"></strong></div>
+        <div><span>Tasks implementadas</span><strong id="tower-scope"></strong></div>
         <div title="Cards em Backlog, Pronto para começar ou sem status, de qualquer origem"><span>Não iniciados</span><strong id="tower-not-started"></strong></div>
+        <div title="Cards que já saíram do Backlog e ainda não foram implementados, de qualquer origem, sobre o total que ainda falta implementar"><span>Em andamento</span><strong id="tower-in-progress"></strong></div>
       </div>
       <p class="tower-decision" id="tower-decision"></p>
     </section>
