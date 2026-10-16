@@ -19,7 +19,7 @@ Os indicadores contextualizam o trabalho do time. Horas sem apontamento não rep
 | Tela | Finalidade |
 | --- | --- |
 | Torre de controle | Tela inicial. Farol da sprint, trajetória dia a dia (burnup), previsão probabilística, ponto de decisão, manobras sugeridas, alertas e compromisso da sprint. |
-| Dashboard e sprints | Visão dos indicadores e detalhamento por sprint. Nos indicadores da sprint, passar o mouse sobre um card mostra o que ele apresenta e o critério de cálculo; clicar abre a lista das tasks daquele indicador, com link para o card na Monday. |
+| Dashboard e sprints | Visão dos indicadores e detalhamento por sprint. O item Sprints do menu abre a sprint ativa mais recente (a que contém o dia de hoje; sem ela, a última já iniciada), e o filtro no topo da tela troca para as demais. Nos indicadores da sprint, passar o mouse sobre um card mostra o que ele apresenta e o critério de cálculo; clicar abre a lista das tasks daquele indicador, com link para o card na Monday. |
 | Épicos, time e dados | Consulta das informações do quadro por diferentes perspectivas. |
 | Sustentação — Painel do Bombeiro | Demandas de Suporte por status e prioridade, com avisos visuais e toque Den Den Mushi para novas demandas. |
 | Painel da Sprint | Acompanhamento do trabalho vinculado à sprint selecionada. |
