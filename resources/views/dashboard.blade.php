@@ -32,23 +32,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .sidebar-close{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;cursor:pointer;color:var(--muted);border:none;background:transparent;transition:background .15s}
 .sidebar-close:hover{background:var(--bg);color:var(--text)}
 .sidebar-nav{flex:1;padding:10px 0;overflow-y:auto}
-.nav-item,.sprint-toggle,.sidebar-action{display:flex;align-items:center;gap:12px;width:100%;padding:9px 20px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;font-weight:500;text-align:left;white-space:nowrap;cursor:pointer;color:var(--text2);transition:all .15s;user-select:none}
-.sprint-toggle[hidden]{display:none}
+.nav-item,.sidebar-action{display:flex;align-items:center;gap:12px;width:100%;padding:9px 20px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;font-weight:500;text-align:left;white-space:nowrap;cursor:pointer;color:var(--text2);transition:all .15s;user-select:none}
 .nav-item:hover,.sidebar-action:hover{color:var(--blue);background:var(--blue-bg)}
 .nav-item.active{color:var(--blue);border-left-color:var(--blue);background:var(--blue-bg);font-weight:600}
-.nav-item:focus-visible,.sprint-toggle:focus-visible,.sidebar-action:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.nav-item:focus-visible,.sidebar-action:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
 .nav-item svg,.sidebar-action svg{width:20px;height:20px;flex-shrink:0}
 .nav-group-label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;padding:14px 18px 4px}
-.sprint-toggle:hover{color:var(--blue)}
-.sprint-toggle.active{color:var(--blue);font-weight:600}
-.sprint-toggle svg{width:20px;height:20px;flex-shrink:0}
-.sprint-arrow{margin-left:auto;width:12px;height:12px;transition:transform .2s;opacity:.5}
-.sprint-arrow.open{transform:rotate(90deg)}
-.sprint-children{display:none;background:var(--bg)}
-.sprint-children.open{display:block}
-.sprint-children .nav-item{font-size:12px;padding:7px 20px 7px 44px;border-left:none}
-.sprint-children .nav-item svg{width:15px;height:15px}
-.sprint-children .nav-item.active{background:var(--blue-bg2);color:var(--blue)}
 .sidebar-footer{padding:6px 0 10px;border-top:1px solid var(--border)}
 .sidebar-footer form{margin:0}
 .sidebar-version{padding:6px 20px 0;font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap}
@@ -71,10 +60,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   /* Menu sempre recolhido em ícones; expande sobre o conteúdo no hover/teclado e recolhe ao abrir uma página (.suppressed). */
   .sidebar{transform:translateX(0);width:var(--sidebar-rail-w);transition:width .18s ease,box-shadow .18s ease}
   .sidebar:is(:hover,:has(:focus-visible)):not(.suppressed){width:var(--sidebar-w);box-shadow:var(--shadow-md);transition-delay:.12s}
-  .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) :is(.logo-text span,.nav-label,.sprint-arrow,.sprint-children,.sidebar-version){display:none}
+  .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) :is(.logo-text span,.nav-label,.sidebar-version){display:none}
   .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) .sidebar-logo{padding:0 10px}
   .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) .sidebar-brand-image{width:44px}
-  .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) .sprint-toggle.active{background:var(--blue-bg);border-left-color:var(--blue)}
   .main{margin-left:var(--sidebar-rail-w)}
   .hamburger{display:none}
   .sidebar-close{display:none}
@@ -261,14 +249,12 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <span class="nav-label">Dashboard</span>
     </button>
     @endcan
-    <button type="button" class="sprint-toggle" onclick="toggleSprints()" id="sprint-toggle" aria-expanded="false" aria-controls="sprint-children" @cannot('access-screen', 'sprint') hidden @endcannot>
+    @can('access-screen', 'sprint')
+    <button type="button" class="nav-item" onclick="navigate('sprint')" id="nav-sprint">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
       <span class="nav-label">Sprints</span>
-      <svg class="sprint-arrow" id="sprint-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
     </button>
-    <div class="sprint-children" id="sprint-children">
-      <div id="sprint-nav-items"></div>
-    </div>
+    @endcan
     @can('access-screen', 'epicos')
     <button type="button" class="nav-item" onclick="navigate('epicos')" id="nav-epicos">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg>
@@ -389,6 +375,12 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 
     <!-- SPRINT -->
     <div class="page" id="page-sprint">
+      <div class="filter-bar">
+        <div class="fgroup">
+          <label class="flabel" for="sprintSel">Sprint</label>
+          <select id="sprintSel" onchange="navigate('sprint',Number(this.value))" class="fsel" aria-label="Selecionar sprint"></select>
+        </div>
+      </div>
       <div class="sec"><span class="sec-label">indicadores da sprint</span><div class="sec-line"></div></div>
       <div class="kpi-grid" id="sprint-kpis"></div>
       <div class="kpi-tip" id="kpi-tip" role="tooltip" hidden></div>
@@ -810,18 +802,20 @@ function navigate(page,sp=null){
   if(previousPage==='release'&&page!=='release') window.SprintRelease?.leave();
   if(previousPage==='control-tower'&&page!=='control-tower') window.ControlTower?.leave();
   if(previousPage==='users'&&page!=='users') window.Users?.leave();
+  if(page==='sprint'&&!SPRINTS.includes(sp)) sp=defaultSprint();
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   currentPage=page; currentSprint=sp;
-  setActiveNav(page==='sprint'?`nav-sprint-${sp}`:`nav-${page}`);
+  setActiveNav(`nav-${page}`);
+  if(page==='sprint'&&sp!==null) document.getElementById('sprintSel').value=String(sp);
   document.getElementById('page-'+page)?.classList.add('active');
-  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar']};
+  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar']};
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
   document.getElementById('tb-right').textContent=sp?`S${sp}`:sprintRangeLabel();
   dismissSidebar();
   if(page==='dashboard') renderDashboard();
-  else if(page==='sprint') renderSprint(sp);
+  else if(page==='sprint'&&sp!==null) renderSprint(sp);
   else if(page==='epicos') renderEpicos();
   else if(page==='time'){if(!timeInited)initTime();renderTime();}
   else if(page==='raw') renderRaw();
@@ -841,15 +835,12 @@ function setActiveNav(id){
   document.querySelectorAll('.nav-item').forEach(e=>{e.classList.remove('active');e.removeAttribute('aria-current');});
   const ni=document.getElementById(id);
   if(ni){ni.classList.add('active');ni.setAttribute('aria-current','page');}
-  document.getElementById('sprint-toggle').classList.toggle('active',id.startsWith('nav-sprint-'));
 }
-function setSprintsOpen(open){
-  document.getElementById('sprint-children').classList.toggle('open',open);
-  document.getElementById('sprint-arrow').classList.toggle('open',open);
-  document.getElementById('sprint-toggle').setAttribute('aria-expanded',String(open));
-}
-function toggleSprints(){
-  setSprintsOpen(!document.getElementById('sprint-children').classList.contains('open'));
+/** Sprint ativa mais recente: a que contém hoje; sem ela, a última já iniciada; sem datas, a de maior número. */
+function defaultSprint(){
+  const today=SprintRules.today(), dates=window.MONDAY_SPRINT_DATES||{};
+  const started=SPRINTS.filter(s=>dates[s]?.start&&dates[s].start<=today);
+  return started.filter(s=>dates[s].end>=today).at(-1)??started.at(-1)??SPRINTS.at(-1)??null;
 }
 function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('overlay').classList.add('open');}
 /** Fecha a gaveta (mobile) e recolhe o menu expandido (desktop) até o mouse sair dele. */
@@ -860,16 +851,9 @@ function dismissSidebar(){
   if(sidebar.matches(':hover,:has(:focus-visible)')) sidebar.classList.add('suppressed');
 }
 function initSprintNav(){
-  const nav=document.getElementById('sprint-nav-items');
-  nav.replaceChildren();
-  SPRINTS.forEach(s=>{
-    const el=document.createElement('button');
-    el.type='button'; el.className='nav-item'; el.id=`nav-sprint-${s}`;
-    el.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span class="nav-label">Sprint ${s}</span>`;
-    el.onclick=()=>navigate('sprint',s);
-    if(currentPage==='sprint'&&currentSprint===s) el.classList.add('active');
-    nav.appendChild(el);
-  });
+  const sprintSel=document.getElementById('sprintSel');
+  sprintSel.replaceChildren(...[...SPRINTS].reverse().map(s=>new Option(`Sprint ${s}`,String(s))));
+  if(currentSprint!==null) sprintSel.value=String(currentSprint);
   // raw filters
   const rsp=document.getElementById('rawSpSel');
   rsp.length=1;

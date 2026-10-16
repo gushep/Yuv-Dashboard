@@ -135,6 +135,7 @@ class UserManagementTest extends TestCase
             ->assertSee('id="nav-capacity"', false)
             ->assertDontSee('id="nav-settings"', false)
             ->assertDontSee('id="nav-users"', false)
+            ->assertDontSee('id="nav-sprint"', false)
             ->assertSee('const ALLOWED_SCREENS=["capacity","release"]', false);
     }
 
