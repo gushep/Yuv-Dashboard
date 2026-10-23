@@ -164,7 +164,7 @@ class SprintTimeline
      * Série diária (fim de cada dia útil) de escopo e entregas da sprint, até hoje,
      * também separada em planejado, não planejado e suporte conforme o card estava naquele dia.
      *
-     * @return list<array{date: string, scope: int, done: int, scopeHours: float, doneHours: float, categories: array<string, array{scope: int, done: int}>}>
+     * @return list<array{date: string, scope: int, done: int, scopeHours: float, doneHours: float, categories: array<string, array{scope: int, done: int, scopeHours: float, doneHours: float}>}>
      */
     public function burnup(int $sprint, string $start, string $end, ?string $today = null): array
     {
@@ -173,21 +173,25 @@ class SprintTimeline
         foreach (SprintRules::workingDays($start, min($end, $today)) as $day) {
             $scope = $done = 0;
             $scopeHours = $doneHours = 0.0;
-            $categories = array_fill_keys(['planned', 'unplanned', 'support'], ['scope' => 0, 'done' => 0]);
+            $categories = array_fill_keys(['planned', 'unplanned', 'support'], ['scope' => 0, 'done' => 0, 'scopeHours' => 0.0, 'doneHours' => 0.0]);
             foreach ($this->membersAt($sprint, SprintRules::endOfDay($day)) as $state) {
                 if (SprintRules::isRemoved($state['Status'] ?? '')) {
                     continue;
                 }
                 $category = SprintRules::category($state['Tipo'] ?? '', $state['Planejada'] ?? '');
+                $hours = (float) ($state['EstH'] ?? 0);
                 $scope++;
                 $categories[$category]['scope']++;
-                $scopeHours += (float) ($state['EstH'] ?? 0);
+                $categories[$category]['scopeHours'] += $hours;
+                $scopeHours += $hours;
                 if (SprintRules::isDone($state['Status'] ?? '')) {
                     $done++;
                     $categories[$category]['done']++;
-                    $doneHours += (float) ($state['EstH'] ?? 0);
+                    $categories[$category]['doneHours'] += $hours;
+                    $doneHours += $hours;
                 }
             }
+            $categories = array_map(fn (array $totals): array => [...$totals, 'scopeHours' => round($totals['scopeHours'], 2), 'doneHours' => round($totals['doneHours'], 2)], $categories);
             $points[] = ['date' => $day, 'scope' => $scope, 'done' => $done, 'scopeHours' => round($scopeHours, 2), 'doneHours' => round($doneHours, 2), 'categories' => $categories];
         }
 
@@ -245,7 +249,7 @@ class SprintTimeline
             if (! SprintRules::isOpen($state['Status'] ?? '')) {
                 continue;
             }
-            $since = $this->lastChange($id, 'Status', $now) ?? $this->createdAt[$id] ?? null;
+            $since = $this->statusSince($id, (string) ($state['Status'] ?? ''), $now);
             $sinceDate = $since?->setTimezone(SprintRules::TIMEZONE)->toDateString();
             $ages[] = $this->summary($state) + [
                 'since' => $sinceDate,
@@ -290,6 +294,7 @@ class SprintTimeline
     /**
      * Congela as sprints encerradas no estado do último dia: status, horas e escopo voltam ao que eram no fim da sprint.
      * Sprints que terminaram antes do início do histórico ficam com o estado atual.
+     * Cada linha leva "Arrastado" (ver wasInEarlierSprint).
      *
      * @return list<array<string, mixed>>
      */
@@ -314,7 +319,21 @@ class SprintTimeline
             }
         }
 
-        return $rows;
+        return array_map(fn (array $row): array => [...$row, 'Arrastado' => $this->wasInEarlierSprint((string) ($row['Id'] ?? ''), (int) $row['Sprint'])], $rows);
+    }
+
+    /**
+     * O card já esteve ligado a uma sprint anterior à informada, pelo log da coluna Sprint ou pela ligação atual.
+     * O time costuma mover os pendentes no último dia, então a sprint congelada sozinha não mostra a passagem.
+     */
+    public function wasInEarlierSprint(string $itemId, int $sprint): bool
+    {
+        $numbers = $this->currentSprints[$itemId] ?? [];
+        foreach ($this->changes[$itemId]['Sprint'] ?? [] as $change) {
+            array_push($numbers, ...(array) $change['before'], ...(array) $change['after']);
+        }
+
+        return $numbers !== [] && min($numbers) < $sprint;
     }
 
     /**
@@ -389,17 +408,39 @@ class SprintTimeline
         return $found ? $value : $current;
     }
 
-    private function lastChange(string $itemId, string $field, CarbonImmutable $at): ?CarbonImmutable
+    /** Criação do card pelo log copiado; null se foi criado antes do início do histórico. */
+    public function createdAt(string $itemId): ?CarbonImmutable
+    {
+        return $this->createdAt[$itemId] ?? null;
+    }
+
+    /**
+     * Quando o card entrou no status informado, pela última mudança de status no log. Se o Monday já mostra
+     * um status diferente do último registrado, a mudança aconteceu depois do log: vale o horário do sync.
+     * Sem nenhuma mudança de status no log, retorna null.
+     */
+    public function enteredStatusAt(string $itemId, string $status, CarbonImmutable $at): ?CarbonImmutable
     {
         $last = null;
-        foreach ($this->changes[$itemId][$field] ?? [] as $change) {
+        foreach ($this->changes[$itemId]['Status'] ?? [] as $change) {
             if ($change['at']->gt($at)) {
                 break;
             }
-            $last = $change['at'];
+            $last = $change;
         }
+        if ($last === null) {
+            return null;
+        }
+        $changedAfterHistory = $this->syncedAt !== null && $this->syncedAt->gt($last['at']) && $at->gte($this->syncedAt)
+            && SprintRules::normalize((string) $last['after']) !== SprintRules::normalize($status);
 
-        return $last;
+        return $changedAfterHistory ? $this->syncedAt : $last['at'];
+    }
+
+    /** Desde quando o card está no status informado; sem mudança de status no log, desde a criação. */
+    private function statusSince(string $itemId, string $status, CarbonImmutable $at): ?CarbonImmutable
+    {
+        return $this->enteredStatusAt($itemId, $status, $at) ?? $this->createdAt[$itemId] ?? null;
     }
 
     /** Quando o card passou a fazer parte da sprint depois da linha de base. */

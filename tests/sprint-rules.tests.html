@@ -13,6 +13,7 @@
     check('Status em andamento ou desconhecido continua em aberto',R.isOpen('Em progresso') && R.isOpen('Próx. Sprint') && R.isOpen('CR - Aguardando') && R.isOpen(''));
     check('Impedimentos e itens não iniciados reconhecidos sem acento',R.isBlocked('Limitação Externa') && R.isBlocked('Parado') && R.isNotStarted('Pronto para começar') && R.isNotStarted('Backlog') && R.isNotStarted('') && R.isOpen(''));
     check('Kanban encerra entregues e retirados',R.isClosed('Implementado') && R.isClosed('Cancelado') && !R.isClosed('Aguardando Deploy'));
+    check('Kanban coloca status de QA em teste',R.isInTest('QA - Testes') && R.isInTest('qa - reprovado') && R.isInTest('QA - Aprovado') && !R.isInTest('CR - Aguardando') && !R.isInTest('Em progresso'));
     check('Capacidade padrão de 80h',R.capacityMinutes()===4800);
     R.applySettings({capacityHours:'60',excludedPeople:['Ana Souza']});
     check('Configuração altera capacidade e pessoas fora das métricas',R.capacityMinutes()===3600 && R.isExcludedPerson(' ana souza ') && !R.isExcludedPerson('Bia'));

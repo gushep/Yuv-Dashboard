@@ -37,6 +37,18 @@ class SprintTimelineTest extends TestCase
         $this->assertNull($rows->firstWhere('Id', '1')['AsOf'] ?? null);
     }
 
+    public function test_cards_moved_from_an_earlier_sprint_are_marked_as_carried_over(): void
+    {
+        $this->configureScenarioConnection();
+        $this->seedScenarioHistory();
+        // Card 4 passou da 16 para a 17 no último dia da 16, então a 16 congelada já não o mostra.
+        $this->historyEvent('4', 'sprint', ['linkedPulseIds' => [['linkedPulseId' => 9016]]], ['linkedPulseIds' => [['linkedPulseId' => 9017]]], '2026-09-25 18:00');
+
+        $rows = collect(SprintTimeline::fromDatabase($this->scenarioSnapshot(), MondayConnection::current())->frozenRows('2026-10-07'));
+        $this->assertSame(['1', '4'], $rows->where('Sprint', 17)->where('Arrastado', true)->pluck('Id')->sort()->values()->all());
+        $this->assertFalse($rows->where('Sprint', 16)->contains('Arrastado', true));
+    }
+
     public function test_sprints_that_ended_before_the_history_starts_are_not_frozen(): void
     {
         $this->configureScenarioConnection();
@@ -93,7 +105,8 @@ class SprintTimelineTest extends TestCase
 
     public function test_burnup_splits_each_day_into_planned_unplanned_and_support_cards(): void
     {
-        $points = collect($this->timeline()->burnup(17, '2026-09-28', '2026-10-09', '2026-10-07'))->keyBy('date');
+        $points = collect($this->timeline()->burnup(17, '2026-09-28', '2026-10-09', '2026-10-07'))->keyBy('date')
+            ->map(fn (array $point): array => [...$point, 'categories' => array_map(fn (array $totals): array => ['scope' => $totals['scope'], 'done' => $totals['done']], $point['categories'])]);
 
         $empty = ['scope' => 0, 'done' => 0];
         $this->assertSame(['planned' => ['scope' => 3, 'done' => 0], 'unplanned' => $empty, 'support' => $empty], $points['2026-09-28']['categories']);
@@ -125,6 +138,20 @@ class SprintTimelineTest extends TestCase
         $this->assertFalse($ages['6']['knownSince']);
         $this->assertTrue($ages['7']['notStarted']);
         $this->assertFalse($ages->has('1'));
+    }
+
+    public function test_status_age_restarts_at_the_sync_when_the_card_changed_status_after_the_copied_history(): void
+    {
+        $connection = $this->configureScenarioConnection();
+        $this->seedScenarioHistory();
+        $snapshot = $this->scenarioSnapshot();
+        $snapshot['rows'][3]['Status'] = 'QA - Testes';
+
+        $age = collect(SprintTimeline::fromDatabase($snapshot, $connection)->statusAges(17, '2026-10-07'))->firstWhere('id', '4');
+
+        $this->assertSame('QA - Testes', $age['status']);
+        $this->assertSame('2026-10-07', $age['since']);
+        $this->assertSame(0, $age['workingDays']);
     }
 
     public function test_daily_throughput_counts_cards_that_became_implemented_on_each_working_day(): void

@@ -109,7 +109,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .kpi-tip[hidden]{display:none}
 .kpi-tip-crit{margin-top:6px;color:#cbd5e1}
 .kpi-tip-hint{margin-top:6px;font-size:10.5px;color:var(--muted)}
-.kpi-modal{width:min(1000px,calc(100vw - 32px));max-height:calc(100vh - 64px);padding:0;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);box-shadow:var(--shadow-md)}
+.kpi-modal{width:min(1000px,calc(100vw - 32px));max-height:calc(100vh - 64px);margin:auto;padding:0;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);box-shadow:var(--shadow-md)}
 .kpi-modal[open]{display:flex;flex-direction:column}
 .kpi-modal::backdrop{background:rgba(0,0,0,.45)}
 .kpi-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border)}
@@ -225,6 +225,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="consumption.css">
 <link rel="stylesheet" href="release.css">
 <link rel="stylesheet" href="control-tower.css">
+<link rel="stylesheet" href="kpi-table.css">
+<link rel="stylesheet" href="burndown.css">
 <link rel="stylesheet" href="users.css">
 </head>
 <body>
@@ -241,6 +243,12 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v3M5 5l2 2M19 5l-2 2"/><circle cx="12" cy="12" r="4"/><path d="M8 21h8M12 16v5"/></svg>
       <span class="nav-label">Torre de controle</span>
       <span class="nav-badge" id="tower-badge" hidden></span>
+    </button>
+    @endcan
+    @can('access-screen', 'burndown')
+    <button type="button" class="nav-item" onclick="navigate('burndown')" id="nav-burndown">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 6l4 5 3-2 5 7"/></svg>
+      <span class="nav-label">Burndown</span>
     </button>
     @endcan
     @can('access-screen', 'dashboard')
@@ -353,17 +361,17 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <div class="kpi-grid" id="dash-kpis"></div>
       <div class="sec"><span class="sec-label">entrega</span><div class="sec-line"></div></div>
       <div class="g2">
-        <div class="card"><div class="card-head"><div class="card-title">Taxa de Conclusão por Sprint</div><div class="card-sub">% implementados · meta &gt;80%</div></div><div class="cw h200"><canvas id="cConclusion"></canvas></div></div>
+        <div class="card"><div class="card-head"><div class="card-title">Taxa de Conclusão por Sprint</div><div class="card-sub">% implementados · meta &gt;90%</div></div><div class="cw h200"><canvas id="cConclusion"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Volume por Sprint</div><div class="card-sub">planejados vs não planejados</div></div><div class="cw h200"><canvas id="cVolume"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Taxa de Arrastamento</div><div class="card-sub">itens carregados de sprints anteriores · meta &lt;25%</div></div><div class="cw h200"><canvas id="cDrag"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Cobertura de Estimativa</div><div class="card-sub">% itens com estimativa preenchida · meta &gt;90%</div></div><div class="cw h200"><canvas id="cAdher"></canvas></div></div>
       </div>
       <div class="sec"><span class="sec-label">qualidade</span><div class="sec-line"></div></div>
       <div class="g3">
-        <div class="card"><div class="card-head"><div class="card-title">Retrabalho por Sprint</div><div class="card-sub">% · meta &lt;15%</div></div><div class="cw h200"><canvas id="cRework"></canvas></div></div>
+        <div class="card"><div class="card-head"><div class="card-title">Retrabalho por Sprint</div><div class="card-sub">% · meta &lt;10%</div></div><div class="cw h200"><canvas id="cRework"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Bugs em Produção</div><div class="card-sub">por sprint · meta = 0</div></div><div class="cw h200"><canvas id="cBugs"></canvas></div></div>
-        <div class="card"><div class="card-head"><div class="card-title">Novas Funcionalidades</div><div class="card-sub">novas funcionalidades entregues</div></div><div class="cw h200"><canvas id="cValor"></canvas></div></div>
-        <div class="card"><div class="card-head"><div class="card-title">Índice de Escopo Limpo</div><div class="card-sub">planejados + implementados + sem retrabalho · meta &gt;60%</div></div><div class="cw h200"><canvas id="cClean"></canvas></div></div>
+        <div class="card"><div class="card-head"><div class="card-title">Melhorias</div><div class="card-sub">melhorias entregues</div></div><div class="cw h200"><canvas id="cValor"></canvas></div></div>
+        <div class="card"><div class="card-head"><div class="card-title">Índice de Escopo Limpo</div><div class="card-sub">planejados ÷ total, sem suporte · meta &gt;60%</div></div><div class="cw h200"><canvas id="cClean"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Carga de Épicos por Sprint</div><div class="card-sub">% tasks vinculadas a épicos</div></div><div class="cw h200"><canvas id="cEpicLoad"></canvas></div></div>
       </div>
       <div class="sec"><span class="sec-label">composição</span><div class="sec-line"></div></div>
@@ -434,7 +442,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
         <div class="sec"><span class="sec-label">comparativo do time</span><div class="sec-line"></div></div>
         <div class="g2">
           <div class="card"><div class="card-head"><div class="card-title">Total e Implementados por Dev</div><div class="card-sub">volume vs entrega</div></div><div class="cw h220"><canvas id="tDevItems"></canvas></div></div>
-          <div class="card"><div class="card-head"><div class="card-title">Retrabalho por Dev</div><div class="card-sub">% · meta &lt;15%</div></div><div class="cw h220"><canvas id="tDevRework"></canvas></div></div>
+          <div class="card"><div class="card-head"><div class="card-title">Retrabalho por Dev</div><div class="card-sub">% · meta &lt;10%</div></div><div class="cw h220"><canvas id="tDevRework"></canvas></div></div>
           <div class="card"><div class="card-head"><div class="card-title">Cobertura de Estimativa por Dev</div><div class="card-sub">% itens estimados · meta &gt;90%</div></div><div class="cw h220"><canvas id="tDevAdher"></canvas></div></div>
           <div class="card"><div class="card-head"><div class="card-title">Perfil de Trabalho por Dev</div><div class="card-sub">distribuição por tipo</div></div><div class="cw h220"><canvas id="tDevProfile"></canvas></div></div>
           <div class="card"><div class="card-head"><div class="card-title">Horas Registradas por Dev</div><div class="card-sub">por sprint · cap. 60h</div></div><div class="cw h220"><canvas id="tDevHours"></canvas></div></div>
@@ -472,7 +480,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           <span class="tcnt" id="raw-cnt"></span>
           <div class="tfilters" id="raw-filters">
             <button class="tfbtn" id="rfbug" onclick="toggleRawFilter('bug')">🐛 Bug prod.</button>
-            <button class="tfbtn" id="rfval" onclick="toggleRawFilter('val')">★ Novas func.</button>
+            <button class="tfbtn" id="rfval" onclick="toggleRawFilter('val')">★ Melhorias</button>
   <button class="tfbtn" id="rfrework" onclick="toggleRawFilter('rework')">↩ Retrabalho</button>
             <button class="tfbtn" id="rfepic" onclick="toggleRawFilter('epic')">◈ Épico</button>
           </div>
@@ -498,7 +506,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
               <th onclick="sortRaw('Planejada')">Planejado</th>
               <th onclick="sortRaw('Retrabalho')">Retrab.</th>
               <th onclick="sortRaw('BugProducao')">Bug Prod.</th>
-              <th onclick="sortRaw('ValorAgregado')">Nova Func.</th>
+              <th onclick="sortRaw('ValorAgregado')">Melhorias</th>
             </tr></thead>
             <tbody id="raw-body"></tbody>
           </table>
@@ -517,6 +525,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     @include('consumption')
     @include('release')
     @include('control-tower')
+    @include('burndown')
     @include('users')
 
     <!-- SEM ACESSO -->
@@ -535,10 +544,17 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <div class="cap-info"><span class="cap-info-icon" aria-hidden="true">i</span><strong id="cap-reference"></strong><span id="cap-calendar"></span><label class="cap-dev-filter">Dev <select id="cap-developer" aria-label="Filtrar desenvolvedor"><option value="all">Todos</option></select></label><span id="cap-last-sync" role="status">Carregando dados...</span></div><p id="cap-pace" class="cap-pace" role="status"></p>
       <div id="cap-error" class="cap-message cap-error" role="status" hidden></div>
       <details id="cap-quality" class="cap-quality" hidden><summary id="cap-warning-summary"></summary><div id="cap-warning" class="cap-message cap-warning"></div></details>
-      <div class="cap-table-scroll"><table class="cap-table"><thead><tr>
-        <th>Desenvolvedor</th><th title="Edite a capacidade desta pessoa e sprint; o valor é salvo ao sair do campo">Disponíveis ✎</th><th title="Soma das estimativas dos itens planejados">Previstas</th><th title="Disponíveis − Previstas">Saldo previsto</th><th>Real planejado</th><th title="Tempo real dos itens não planejados: suporte + outros tipos">Real não planejado</th><th title="Real planejado + Real não planejado">Registradas</th><th title="Disponíveis − Registradas">Saldo atual</th><th title="Registradas ÷ capacidade transcorrida até hoje">Utilização até hoje</th><th title="Estimativas dos itens planejados concluídos ÷ todas as estimativas planejadas">Entrega do planejado</th><th title="Real suporte ÷ Registradas">Impacto do suporte</th>
-      </tr></thead><tbody id="cap-body"><tr><td colspan="11" class="cap-empty">Carregando...</td></tr></tbody></table></div>
-      <div class="cap-formulas"><div><span class="cap-formula-icon cap-orange" aria-hidden="true">▥</span><span><strong>Utilização até hoje</strong><small>Registradas ÷ capacidade até hoje</small></span></div><div><span class="cap-formula-icon cap-blue" aria-hidden="true">◎</span><span><strong>Entrega do planejado</strong><small>Estimativas concluídas ÷ estimativas planejadas</small></span></div><div><span class="cap-formula-icon cap-purple" aria-hidden="true">◔</span><span><strong>Impacto do suporte</strong><small>Real suporte ÷ Registradas</small></span></div></div>
+      <div class="cap-table-scroll"><table class="cap-table"><thead><tr class="cap-groups">
+        <th rowspan="2">Desenvolvedor</th><th rowspan="2" title="Edite a capacidade desta pessoa e sprint; o valor é salvo ao sair do campo">Disponíveis ✎</th>
+        <th colspan="4" class="cap-group-start cap-group-estimate">Horas previstas <small>tempo estimado</small></th>
+        <th colspan="4" class="cap-group-start cap-group-real">Horas registradas <small>tempo real</small></th>
+        <th colspan="3" class="cap-group-start cap-group-kpi">Indicadores</th>
+      </tr><tr>
+        <th class="cap-group-start" title="Soma das estimativas dos itens planejados">Planejadas</th><th title="Soma das estimativas dos itens não planejados: suporte + outros tipos">Não planejadas</th><th class="cap-total" title="Planejadas + Não planejadas">Total</th><th class="cap-balance" title="Disponíveis − Horas previstas totais">Saldo final</th>
+        <th class="cap-group-start" title="Tempo real dos itens planejados">Planejadas</th><th title="Tempo real dos itens não planejados: suporte + outros tipos">Não planejadas</th><th class="cap-total" title="Planejadas + Não planejadas">Total</th><th class="cap-balance" title="Disponíveis − Horas registradas totais">Saldo atual</th>
+        <th class="cap-group-start" title="Registradas ÷ capacidade transcorrida até hoje">Utilização até hoje</th><th title="Estimativas dos itens planejados concluídos ÷ todas as estimativas planejadas">Entrega do planejado</th><th title="Real suporte ÷ Registradas">Impacto do suporte</th>
+      </tr></thead><tbody id="cap-body"><tr><td colspan="13" class="cap-empty">Carregando...</td></tr></tbody></table></div>
+      <div class="cap-formulas"><div><span class="cap-formula-icon cap-green" aria-hidden="true">⇥</span><span><strong>Saldo final</strong><small>Disponíveis − previstas totais: o que sobra (ou falta) se tudo o que está previsto for executado</small></span></div><div><span class="cap-formula-icon cap-green" aria-hidden="true">◷</span><span><strong>Saldo atual</strong><small>Disponíveis − registradas totais: horas ainda livres na sprint até agora</small></span></div><div><span class="cap-formula-icon cap-orange" aria-hidden="true">▥</span><span><strong>Utilização até hoje</strong><small>Registradas ÷ capacidade até hoje</small></span></div><div><span class="cap-formula-icon cap-blue" aria-hidden="true">◎</span><span><strong>Entrega do planejado</strong><small>Estimativas concluídas ÷ estimativas planejadas</small></span></div><div><span class="cap-formula-icon cap-purple" aria-hidden="true">◔</span><span><strong>Impacto do suporte</strong><small>Real suporte ÷ Registradas</small></span></div></div>
       <p class="cap-note">Saldo atual inclui o período restante da sprint. Horas sem apontamento não indicam, por si só, ociosidade.</p>
       <p class="cap-note">Entrega do planejado considera as estimativas das tarefas concluídas, e não o tempo real gasto.</p>
       <section id="cap-pending" class="cap-extra" hidden></section>
@@ -571,6 +587,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <div class="fire-board" id="fire-board" aria-label="Kanban de demandas de suporte">
         <section class="fire-lane fire-lane-backlog" aria-labelledby="fire-backlog-title"><header><h2 id="fire-backlog-title">Backlog</h2><span id="fire-backlog-count">0</span></header><div class="fire-lane-list" id="fire-backlog"></div></section>
         <section class="fire-lane fire-lane-progress" aria-labelledby="fire-progress-title"><header><h2 id="fire-progress-title">Em andamento</h2><span id="fire-progress-count">0</span></header><div class="fire-lane-list" id="fire-progress"></div></section>
+        <section class="fire-lane fire-lane-test" aria-labelledby="fire-test-title"><header><h2 id="fire-test-title">Em teste</h2><span id="fire-test-count">0</span></header><div class="fire-lane-list" id="fire-test"></div></section>
         <section class="fire-lane fire-lane-done" aria-labelledby="fire-done-title"><header><h2 id="fire-done-title">Concluído</h2><span id="fire-done-count">0</span></header><div class="fire-lane-list" id="fire-done"></div></section>
       </div>
     </div>
@@ -590,6 +607,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <div class="fire-board" id="sp-board" aria-label="Kanban de demandas da sprint que não são de suporte">
         <section class="fire-lane fire-lane-backlog" aria-labelledby="sp-backlog-title"><header><h2 id="sp-backlog-title">Backlog</h2><span id="sp-backlog-count">0</span></header><div class="fire-lane-list" id="sp-backlog"></div></section>
         <section class="fire-lane fire-lane-progress" aria-labelledby="sp-progress-title"><header><h2 id="sp-progress-title">Em andamento</h2><span id="sp-progress-count">0</span></header><div class="fire-lane-list" id="sp-progress"></div></section>
+        <section class="fire-lane fire-lane-test" aria-labelledby="sp-test-title"><header><h2 id="sp-test-title">Em teste</h2><span id="sp-test-count">0</span></header><div class="fire-lane-list" id="sp-test"></div></section>
         <section class="fire-lane fire-lane-done" aria-labelledby="sp-done-title"><header><h2 id="sp-done-title">Concluído</h2><span id="sp-done-count">0</span></header><div class="fire-lane-list" id="sp-done"></div></section>
       </div>
       <div class="sprint-panel-note">Backlog inclui “Pronto pra iniciar” e “Pronto para começar” · “Implementado” equivale a concluído</div>
@@ -664,6 +682,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
   <span id="carousel-status" role="status">Troca automática a cada 30 segundos</span>
 </div>
 <script src="sprint-rules.js"></script>
+<script src="kpi-table.js"></script>
 <script>
 const DATA=[];
 
@@ -683,8 +702,9 @@ const clean=v=>v==null?'':String(v).trim();
 const esc=v=>clean(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function filtSp(sp){return DATA.filter(x=>x.Sprint===sp);}
 function devPeople(r){return clean(r.Responsavel).split(',').map(x=>x.trim()).filter(Boolean);}
-/** Arrastado: o mesmo card (Id) já esteve em sprint anterior; cópias "(copy)" sem Id comum são reconhecidas pelo nome. */
+/** Arrastado: o mesmo card (Id) já esteve em sprint anterior, pelo histórico do Monday ou pelas linhas carregadas; cópias "(copy)" sem Id comum são reconhecidas pelo nome. */
 function isArrastado(item){
+  if(item.Arrastado) return true;
   if(item.Id&&DATA.some(x=>x.Id===item.Id&&x.Sprint<item.Sprint)) return true;
   const base=item.Nome.replace(/\s*\(copy\)\s*/gi,'').trim().toLowerCase();
   if(base.length<8||!/\(copy\)/i.test(item.Nome)) return false;
@@ -703,6 +723,9 @@ function spMetrics(sp){
   const done=d.filter(x=>SprintRules.isDone(x.Status)).length;
   const waiting=d.filter(x=>SprintRules.isDoneNotDelivered(x.Status)).length;
   const open=d.filter(x=>SprintRules.isOpen(x.Status)).length;
+  // Desenvolvimento concluído: já saiu do dev (Implementado, Aguardando Deploy, QA em teste ou aprovado); QA - Reprovado volta ao dev.
+  const devFinishedItems=d.filter(x=>SprintRules.isDone(x.Status)||SprintRules.isDoneNotDelivered(x.Status)||(SprintRules.isInTest(x.Status)&&SprintRules.normalize(x.Status)!=='qa - reprovado'));
+  const devFinished=devFinishedItems.length;
   const unplan=d.filter(x=>x.Planejada==='Não Planejado').length;
   const rework=d.filter(x=>x.Retrabalho).length;
   const bugs=d.filter(x=>x.BugProducao).length;
@@ -710,7 +733,6 @@ function spMetrics(sp){
   const drag=d.filter(x=>isArrastado(x)).length;
   const withEst=d.filter(x=>x.EstH>0).length;
   const epicItems=d.filter(x=>x.Epico).length;
-  const cleanScope=d.filter(x=>x.Planejada==='Planejada'&&SprintRules.isDone(x.Status)&&!x.Retrabalho).length;
   const unplanCrit=d.filter(x=>x.Planejada==='Não Planejado'&&x.Prioridade==='Crítica').length;
   const unplanBug=d.filter(x=>x.Planejada==='Não Planejado'&&x.Tipo==='Bug').length;
   const supportItems=d.filter(x=>SprintRules.normalize(x.Tipo)==='suporte');
@@ -724,18 +746,21 @@ function spMetrics(sp){
   const unplanned=unplannedItems.length,unplannedDone=unplannedItems.filter(x=>SprintRules.isDone(x.Status)).length;
   const unplannedCrit=unplannedItems.filter(x=>x.Prioridade==='Crítica').length;
   const unplannedBug=unplannedItems.filter(x=>x.Tipo==='Bug').length;
+  // Escopo limpo = escopo estável: quanto dos cards fora do suporte foi planejado, independente do status.
+  const cleanItems=plannedItems;
+  const cleanScope=cleanItems.length;
   // Tasks por indicador, listadas no modal ao clicar no card.
   const lists={
-    tot:d,done:d.filter(x=>SprintRules.isDone(x.Status)),waiting:d.filter(x=>SprintRules.isDoneNotDelivered(x.Status)),
+    tot:d,done:d.filter(x=>SprintRules.isDone(x.Status)),devFinished:devFinishedItems,waiting:d.filter(x=>SprintRules.isDoneNotDelivered(x.Status)),
     open:d.filter(x=>SprintRules.isOpen(x.Status)),planned:plannedItems,unplanned:unplannedItems,support:supportItems,
-    rework:d.filter(x=>x.Retrabalho),clean:d.filter(x=>x.Planejada==='Planejada'&&SprintRules.isDone(x.Status)&&!x.Retrabalho),
+    rework:d.filter(x=>x.Retrabalho),clean:cleanItems,
     drag:d.filter(x=>isArrastado(x)),noEst:d.filter(x=>!(x.EstH>0)),bugs:d.filter(x=>x.BugProducao),
     valor:d.filter(x=>x.ValorAgregado),epic:d.filter(x=>x.Epico),
   };
   return {lists,tot,done,waiting,open,removed,unplan,rework,bugs,valor,drag,withEst,epicItems,cleanScope,unplanCrit,unplanBug,support,supportDone,
     planned,plannedDone,unplanned,unplannedDone,unplannedCrit,unplannedBug,unplannedPct:pct(unplanned,tot),
-    conclusao:pct(done,tot),reworkPct:pct(rework,tot),aderencia:pct(withEst,tot),
-    arrastPct:pct(drag,tot),cleanPct:pct(cleanScope,tot),epicPct:pct(epicItems,tot),
+    conclusao:pct(done,tot),devFinished,devFinishedPct:pct(devFinished,tot),reworkPct:pct(rework,tot),aderencia:pct(withEst,tot),
+    arrastPct:pct(drag,tot),cleanPct:pct(cleanScope,sprintItems.length),epicPct:pct(epicItems,tot),
     interruptPct:pct(unplan,tot)};
 }
 function precStats(rows){
@@ -760,7 +785,49 @@ function bOpts(unit='',yMin=undefined){
   if(yMin!==undefined) o.scales.y.min=yMin;
   return o;
 }
-function donutOpts(){return{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#64748b',font:FONT,boxWidth:12}}}};}
+/**
+ * Mostra os números sem depender do hover: % em cada fatia e total no centro das roscas, valor na ponta das barras.
+ * Só atua nos gráficos que ligam plugins.valueLabels.display.
+ */
+Chart.register({id:'valueLabels',defaults:{display:false},afterDatasetsDraw(chart,args,opts){
+  if(!opts.display) return;
+  const {ctx}=chart;
+  ctx.save();ctx.font="600 10.5px 'DM Sans',sans-serif";ctx.textBaseline='middle';
+  chart.data.datasets.forEach((ds,i)=>{
+    const meta=chart.getDatasetMeta(i);
+    if(meta.hidden) return;
+    if(meta.type==='doughnut'){
+      const total=ds.data.reduce((s,v,j)=>s+(chart.getDataVisibility(j)?Number(v)||0:0),0);
+      ctx.textAlign='center';ctx.fillStyle='#fff';
+      meta.data.forEach((arc,j)=>{
+        const v=Number(ds.data[j])||0;
+        if(!total||!v||!chart.getDataVisibility(j)||v/total<.05) return;
+        const {x,y}=arc.tooltipPosition();
+        ctx.fillText(`${Math.round(v/total*100)}%`,x,y);
+      });
+      const {x,y}=meta.data[0]||{};
+      if(x===undefined) return;
+      ctx.fillStyle='#0d1117';ctx.font="700 18px 'DM Sans',sans-serif";ctx.fillText(String(total),x,y-7);
+      ctx.fillStyle='#64748b';ctx.font="500 10px 'DM Sans',sans-serif";ctx.fillText(opts.unit||'itens',x,y+9);
+      return;
+    }
+    const horizontal=chart.options.indexAxis==='y';
+    ctx.textAlign=horizontal?'left':'center';ctx.fillStyle='#334155';
+    meta.data.forEach((bar,j)=>{
+      const v=Number(ds.data[j])||0;
+      if(v) ctx.fillText(String(v),horizontal?bar.x+4:bar.x,horizontal?bar.y:bar.y-7);
+    });
+  });
+  ctx.restore();
+}});
+/** Legenda da rosca com quantidade e % de cada fatia. */
+function donutLegendLabels(chart){
+  const data=chart.data.datasets[0]?.data||[];
+  const total=data.reduce((s,v,j)=>s+(chart.getDataVisibility(j)?Number(v)||0:0),0);
+  return Chart.overrides.doughnut.plugins.legend.labels.generateLabels(chart)
+    .map(l=>({...l,text:`${l.text}: ${data[l.index]}${!l.hidden&&total?` (${Math.round(data[l.index]/total*100)}%)`:''}`}));
+}
+function donutOpts(){return{responsive:true,maintainAspectRatio:false,plugins:{valueLabels:{display:true},legend:{position:'right',labels:{color:'#64748b',font:FONT,boxWidth:12,generateLabels:donutLegendLabels}}}};}
 function hbarOpts(unit=''){return{...bOpts(unit),indexAxis:'y',plugins:{legend:{labels:{color:'#64748b',font:FONT,boxWidth:12}}}};}
 
 // ── BADGES ────────────────────────────────────────────────────────────────────
@@ -801,6 +868,7 @@ function navigate(page,sp=null){
   if(previousPage==='consumption'&&page!=='consumption') window.Consumption?.leave();
   if(previousPage==='release'&&page!=='release') window.SprintRelease?.leave();
   if(previousPage==='control-tower'&&page!=='control-tower') window.ControlTower?.leave();
+  if(previousPage==='burndown'&&page!=='burndown') window.Burndown?.leave();
   if(previousPage==='users'&&page!=='users') window.Users?.leave();
   if(page==='sprint'&&!SPRINTS.includes(sp)) sp=defaultSprint();
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
@@ -808,7 +876,7 @@ function navigate(page,sp=null){
   setActiveNav(`nav-${page}`);
   if(page==='sprint'&&sp!==null) document.getElementById('sprintSel').value=String(sp);
   document.getElementById('page-'+page)?.classList.add('active');
-  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar']};
+  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar'],burndown:['Burndown','quanto falta implementar na sprint, dia a dia']};
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
@@ -827,6 +895,7 @@ function navigate(page,sp=null){
   else if(page==='consumption') window.Consumption?.enter(previousPage==='sprint'?previousSprint:null);
   else if(page==='release') window.SprintRelease?.enter(previousPage==='sprint'?previousSprint:null);
   else if(page==='control-tower') window.ControlTower?.enter(previousPage==='sprint'?previousSprint:null);
+  else if(page==='burndown') window.Burndown?.enter(previousPage==='sprint'?previousSprint:null);
   else if(page==='users') window.Users?.enter();
   if(page==='carousel') scheduleMondayRefresh();
   if((previousPage==='bombeiro'&&page!=='bombeiro')||(previousPage==='sprint-panel'&&page!=='sprint-panel')||(previousPage==='carousel'&&page!=='carousel')) scheduleMondayRefresh();
@@ -904,11 +973,11 @@ function renderDashboard(){
   grid.innerHTML='';
   const kpis=[
     {lbl:'Total de Itens',val:all.length,sub:`${SPRINTS.length} sprints · média ${avgTot}/sprint`,cls:'neutral'},
-    {lbl:'Taxa de Conclusão',val:`${avgConclusion}%`,sub:`média · meta >80%`,cls:avgConclusion>=80?'green':'red'},
+    {lbl:'Taxa de Conclusão',val:`${avgConclusion}%`,sub:`média · meta >90%`,cls:avgConclusion>=90?'green':'red'},
     {lbl:'Feitos Não Entregues',val:totalWaiting,sub:`total · média ${avgWaiting}/sprint`,cls:avgWaiting<=2?'green':'yellow'},
     {lbl:'Não Entregues',val:totalOpen,sub:`total · média ${avgOpen}/sprint`,cls:avgOpen<=3?'green':'yellow'},
     {lbl:'Não Planejados',val:totalUnplan,sub:`total · ${totalUnplanCrit} críticos · ${totalUnplanBug} bugs`,cls:avgInterruptPct<=20?'green':'red'},
-    {lbl:'Retrabalho',val:`${avgRework}%`,sub:`média · meta <15%`,cls:avgRework<=15?'green':'red'},
+    {lbl:'Retrabalho',val:`${avgRework}%`,sub:`média · meta <10%`,cls:avgRework<=10?'green':'red'},
     {lbl:'Índice Escopo Limpo',val:`${avgClean}%`,sub:`média · meta >60%`,cls:avgClean>=60?'green':'red'},
     {lbl:'Taxa de Arrastamento',val:`${avgDrag}%`,sub:`média · meta <25%`,cls:avgDrag<=25?'green':'red'},
     {lbl:'Cobertura de Estimativa',val:`${avgAdher}%`,sub:`média · meta >90%`,cls:avgAdher>=90?'green':'red'},
@@ -924,7 +993,7 @@ function renderDashboard(){
   // Charts entrega
   mk('cConclusion',{type:'line',data:{labels:L,datasets:[
     {label:'Conclusão (%)',data:spMs.map(m=>m.conclusao),borderColor:'#1d6ef5',backgroundColor:'rgba(29,110,245,.07)',fill:true,tension:.4,pointBackgroundColor:'#1d6ef5',pointBorderColor:'#fff',pointRadius:5,pointBorderWidth:2},
-    {label:'Meta (80%)',data:SPRINTS.map(()=>80),borderColor:'#dc2626',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
+    {label:'Meta (90%)',data:SPRINTS.map(()=>90),borderColor:'#dc2626',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
   ]},options:{...bOpts('%'),scales:{...bOpts('%').scales,y:{...bOpts('%').scales.y,min:0,max:100}}}});
   mk('cVolume',{type:'bar',data:{labels:L,datasets:[
     {label:'Planejado',data:spMs.map(m=>m.tot-m.unplan),backgroundColor:'rgba(29,110,245,.7)',borderRadius:4,stack:'s'},
@@ -940,14 +1009,14 @@ function renderDashboard(){
   ]},options:{...bOpts('%'),scales:{...bOpts('%').scales,y:{...bOpts('%').scales.y,min:0,max:100}}}});
   // Charts qualidade
   mk('cRework',{type:'bar',data:{labels:L,datasets:[
-    {label:'Retrabalho (%)',data:spMs.map(m=>m.reworkPct),backgroundColor:spMs.map(m=>m.reworkPct>15?'rgba(220,38,38,.7)':'rgba(124,58,237,.6)'),borderRadius:4},
-    {label:'Meta (15%)',data:SPRINTS.map(()=>15),type:'line',borderColor:'#d97706',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
+    {label:'Retrabalho (%)',data:spMs.map(m=>m.reworkPct),backgroundColor:spMs.map(m=>m.reworkPct>10?'rgba(220,38,38,.7)':'rgba(124,58,237,.6)'),borderRadius:4},
+    {label:'Meta (10%)',data:SPRINTS.map(()=>10),type:'line',borderColor:'#d97706',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
   ]},options:{...bOpts('%')}});
   mk('cBugs',{type:'bar',data:{labels:L,datasets:[
     {label:'Bugs em produção',data:SPRINTS.map(s=>filtSp(s).filter(x=>x.BugProducao).length),backgroundColor:SPRINTS.map(s=>filtSp(s).filter(x=>x.BugProducao).length>0?'rgba(220,38,38,.7)':'rgba(22,163,74,.5)'),borderRadius:4},
   ]},options:{...bOpts('',0)}});
   mk('cValor',{type:'bar',data:{labels:L,datasets:[
-    {label:'Novas funcionalidades',data:SPRINTS.map(s=>filtSp(s).filter(x=>x.ValorAgregado).length),backgroundColor:'rgba(13,148,136,.7)',borderRadius:4},
+    {label:'Melhorias',data:SPRINTS.map(s=>filtSp(s).filter(x=>x.ValorAgregado).length),backgroundColor:'rgba(13,148,136,.7)',borderRadius:4},
   ]},options:{...bOpts('',0)}});
   mk('cClean',{type:'line',data:{labels:L,datasets:[
     {label:'Escopo limpo (%)',data:spMs.map(m=>m.cleanPct),borderColor:'#059669',backgroundColor:'rgba(5,150,105,.07)',fill:true,tension:.4,pointBackgroundColor:'#059669',pointBorderColor:'#fff',pointRadius:5,pointBorderWidth:2},
@@ -975,18 +1044,19 @@ function renderDashboard(){
  */
 const SPRINT_KPI_INFO={
   'Total de Itens':{text:'Quantidade de cards da sprint, separada em planejados, não planejados e suporte.',criteria:'Todos os cards com esta sprint no Monday, exceto os retirados do escopo (Cancelado, Descontinuado e Despriorizado).',list:'tot'},
-  'Taxa de Conclusão':{text:'Quanto da sprint já foi implementado.',criteria:'Cards com status Implementado ÷ total de itens. Aguardando Deploy e QA - Aprovado ainda não contam. Meta: acima de 80%.',list:'done',listTitle:'Tasks implementadas'},
+  'Taxa de Conclusão':{text:'Quanto da sprint já foi implementado.',criteria:'Cards com status Implementado ÷ total de itens. Aguardando Deploy e QA - Aprovado ainda não contam. Meta: acima de 90%.',list:'done',listTitle:'Tasks implementadas'},
+  'Desenvolvimento Concluído':{text:'Quanto da sprint já saiu do desenvolvimento: entregue ou em QA.',criteria:'Status Implementado, Aguardando Deploy, QA - Testes ou QA - Aprovado ÷ total de itens. QA - Reprovado não conta, porque o card volta ao desenvolvimento.',list:'devFinished',listTitle:'Tasks com desenvolvimento concluído'},
   'Feitos Não Entregues':{text:'Cards prontos que ainda não chegaram em produção.',criteria:'Status Aguardando Deploy ou QA - Aprovado.',list:'waiting'},
   'Não Entregues':{text:'Cards que ainda exigem trabalho do time nesta sprint.',criteria:'Tudo que não está Implementado, Aguardando Deploy ou QA - Aprovado.',list:'open'},
   'Sprint Planejados':{text:'Trabalho que entrou no planejamento da sprint.',criteria:'Campo Planejada igual a "Planejada" e Tipo diferente de Suporte.',list:'planned'},
   'Sprint Não Planejados':{text:'Trabalho que entrou na sprint fora do planejamento.',criteria:'Tipo diferente de Suporte e campo Planejada diferente de "Planejada" (inclusive vazio). Verde até 20% do total de itens.',list:'unplanned'},
   'Tickets de Suporte':{text:'Demandas de suporte atendidas na sprint.',criteria:'Tipo igual a Suporte, independente do campo Planejada.',list:'support'},
-  'Retrabalho':{text:'Cards que precisaram voltar para ajuste.',criteria:'Coluna Retrabalho marcada ÷ total de itens. Meta: abaixo de 15%.',list:'rework'},
-  'Índice Escopo Limpo':{text:'Trabalho planejado entregue de primeira.',criteria:'Campo Planejada igual a "Planejada", status Implementado e sem Retrabalho, ÷ total de itens. Meta: acima de 60%.',list:'clean'},
+  'Retrabalho':{text:'Cards que precisaram voltar para ajuste.',criteria:'Coluna Retrabalho marcada ÷ total de itens. Meta: abaixo de 10%.',list:'rework'},
+  'Índice Escopo Limpo':{text:'Quanto da sprint foi trabalho planejado, e não interrupção.',criteria:'Cards com Planejada igual a "Planejada" ÷ total de itens fora do suporte, independente do status. Suporte fica fora da conta. Meta: acima de 60%.',list:'clean',listTitle:'Tasks planejadas (fora do suporte)'},
   'Taxa de Arrastamento':{text:'Cards que vieram de sprints anteriores.',criteria:'O mesmo card (ou uma cópia "(copy)") já esteve em uma sprint anterior, ÷ total de itens. Meta: abaixo de 25%.',list:'drag'},
   'Cobertura de Estimativa':{text:'Cards com tempo estimado preenchido.',criteria:'Tempo estimado maior que zero ÷ total de itens. Meta: acima de 90%.',list:'noEst',listTitle:'Tasks sem estimativa'},
   'Bugs em Produção':{text:'Cards que geraram bug depois do deploy.',criteria:'Coluna Bug Produção marcada. Meta: zero.',list:'bugs'},
-  'Novas Funcionalidades':{text:'Entregas que trazem funcionalidade nova.',criteria:'Coluna Novas Funcionalidades (antiga Valor Agregado) marcada.',list:'valor'},
+  'Melhorias':{text:'Entregas marcadas como melhoria.',criteria:'Coluna Melhorias (antigas Novas Funcionalidades e Valor Agregado) marcada.',list:'valor'},
   'Carga de Épicos':{text:'Quanto da sprint está ligado a épicos.',criteria:'Cards com o campo Épico preenchido ÷ total de itens.',list:'epic'},
 };
 function showKpiTip(card,info){
@@ -1008,18 +1078,18 @@ function openKpiModal(label,info,items,sp){
       <div><div class="kpi-modal-title">${esc(title)} <span class="tcnt">${items.length}</span></div><div class="kpi-modal-sub">Sprint ${esc(sp)} · ${esc(info.criteria)}</div></div>
       <button type="button" class="kpi-modal-close" aria-label="Fechar" onclick="document.getElementById('kpi-modal').close()">✕</button>
     </div>
-    <div class="tscroll kpi-modal-body"><table><thead><tr>
-      <th>Item</th><th>Responsável</th><th>Status</th><th>Tipo</th><th>Planejada</th><th>Prioridade</th><th>Est(h)</th><th>Real(h)</th>
-    </tr></thead><tbody>${items.map(x=>`<tr>
-      <td title="${esc(x.Nome)}">${name(x)}</td>
-      <td class="cm">${esc(x.Responsavel)||'—'}</td>
-      <td>${stBadge(x.Status)}</td>
-      <td><span class="b bo">${esc(x.Tipo)||'—'}</span></td>
-      <td class="cm">${esc(x.Planejada)||'—'}</td>
-      <td>${prioBadge(x.Prioridade)}</td>
-      <td class="cm">${x.EstH||'—'}</td>
-      <td class="cm">${x.RealH||'—'}</td>
-    </tr>`).join('')||'<tr><td colspan="8" class="nd">Nenhuma task neste indicador</td></tr>'}</tbody></table></div>`;
+    <div class="kpi-modal-body"></div>`;
+  const hours=v=>{const n=parseFloat(String(v??'').replace(',','.'));return Number.isFinite(n)&&n>0?n:null;};
+  KpiTable.render(modal.querySelector('.kpi-modal-body'),{rows:items,columns:[
+    {label:'Item',html:x=>`<span title="${esc(x.Nome)}">${name(x)}</span>`,value:x=>x.Nome},
+    {label:'Responsável',html:x=>esc(x.Responsavel)||'—',className:'cm',value:x=>x.Responsavel,filter:devPeople,empty:'Sem responsável'},
+    {label:'Status',html:x=>stBadge(x.Status),value:x=>x.Status,filter:true,empty:'Sem status'},
+    {label:'Tipo',html:x=>`<span class="b bo">${esc(x.Tipo)||'—'}</span>`,value:x=>x.Tipo,filter:true,empty:'Sem tipo'},
+    {label:'Planejada',html:x=>esc(x.Planejada)||'—',className:'cm',value:x=>x.Planejada,filter:true,empty:'Vazio'},
+    {label:'Prioridade',html:x=>prioBadge(x.Prioridade),value:x=>x.Prioridade,sort:x=>KpiTable.priorityRank(x.Prioridade),filter:true,empty:'Sem prioridade'},
+    {label:'Est(h)',html:x=>x.EstH||'—',className:'cm',value:x=>x.EstH,sort:x=>hours(x.EstH)},
+    {label:'Real(h)',html:x=>x.RealH||'—',className:'cm',value:x=>x.RealH,sort:x=>hours(x.RealH)},
+  ]});
   modal.showModal();
 }
 function renderSprint(sp){
@@ -1032,18 +1102,19 @@ function renderSprint(sp){
   grid.innerHTML='';
   const kpis=[
     {lbl:'Total de Itens',val:m.tot,sub:`${m.planned} planejados · ${m.unplanned} não planejados · ${m.support} suporte · ${m.removed} retirados do escopo`,cls:'neutral',trend:null},
-    {lbl:'Taxa de Conclusão',val:`${m.conclusao}%`,sub:`${m.done}/${m.tot} · meta >80%`,cls:m.conclusao>=80?'green':'red',trend:prevM?trendHtml(m.conclusao,prevM.conclusao,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Taxa de Conclusão',val:`${m.conclusao}%`,sub:`${m.done}/${m.tot} · meta >90%`,cls:m.conclusao>=90?'green':'red',trend:prevM?trendHtml(m.conclusao,prevM.conclusao,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Desenvolvimento Concluído',val:`${m.devFinishedPct}%`,sub:`${m.devFinished}/${m.tot} · implementados + em QA`,cls:'blue',trend:prevM?trendHtml(m.devFinishedPct,prevM.devFinishedPct,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Feitos Não Entregues',val:m.waiting,sub:`Aguardando Deploy ou QA aprovado`,cls:prevM?(m.waiting<=prevM.waiting?'green':'red'):'neutral',trend:prevM?trendHtml(m.waiting,prevM.waiting,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Não Entregues',val:m.open,sub:`itens em aberto`,cls:prevM?(m.open<=prevM.open?'green':'red'):'neutral',trend:prevM?trendHtml(m.open,prevM.open,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Sprint Planejados',val:m.planned,sub:`${m.plannedDone}/${m.planned} implementados · sem suporte`,cls:'neutral',trend:prevM?trendHtml(m.planned,prevM.planned,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Sprint Não Planejados',val:m.unplanned,sub:`${m.unplannedDone}/${m.unplanned} implementados · ${m.unplannedCrit} críticos · ${m.unplannedBug} bugs · sem suporte`,cls:m.unplannedPct<=20?'green':'red',trend:prevM?trendHtml(m.unplanned,prevM.unplanned,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Tickets de Suporte',val:m.support,sub:`${m.supportDone}/${m.support} implementados`,cls:'neutral',trend:prevM?trendHtml(m.support,prevM.support,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
-    {lbl:'Retrabalho',val:`${m.reworkPct}%`,sub:`${m.rework} itens · meta <15%`,cls:m.reworkPct<=15?'green':'red',trend:prevM?trendHtml(m.reworkPct,prevM.reworkPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
-    {lbl:'Índice Escopo Limpo',val:`${m.cleanPct}%`,sub:`${m.cleanScope} itens · meta >60%`,cls:m.cleanPct>=60?'green':'red',trend:prevM?trendHtml(m.cleanPct,prevM.cleanPct,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Retrabalho',val:`${m.reworkPct}%`,sub:`${m.rework} itens · meta <10%`,cls:m.reworkPct<=10?'green':'red',trend:prevM?trendHtml(m.reworkPct,prevM.reworkPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Índice Escopo Limpo',val:`${m.cleanPct}%`,sub:`${m.cleanScope} de ${m.planned+m.unplanned} planejados · sem suporte · meta >60%`,cls:m.cleanPct>=60?'green':'red',trend:prevM?trendHtml(m.cleanPct,prevM.cleanPct,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Taxa de Arrastamento',val:`${m.arrastPct}%`,sub:`${m.drag} itens · meta <25%`,cls:m.arrastPct<=25?'green':'red',trend:prevM?trendHtml(m.arrastPct,prevM.arrastPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Cobertura de Estimativa',val:`${m.aderencia}%`,sub:`${m.withEst}/${m.tot} itens com estimativa · meta >90%`,cls:m.aderencia>=90?'green':'red',trend:prevM?trendHtml(m.aderencia,prevM.aderencia,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Bugs em Produção',val:m.bugs,sub:m.bugs===0?'nenhum bug registrado':'itens com bug após deploy',cls:m.bugs===0?'green':'red',trend:prevM?trendHtml(m.bugs,prevM.bugs,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
-    {lbl:'Novas Funcionalidades',val:m.valor,sub:`itens de nova funcionalidade`,cls:'blue',trend:prevM?trendHtml(m.valor,prevM.valor,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Melhorias',val:m.valor,sub:`itens de melhoria`,cls:'blue',trend:prevM?trendHtml(m.valor,prevM.valor,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Carga de Épicos',val:`${m.epicPct}%`,sub:`${m.epicItems} tasks${epicDone.length?` · ${epicDone.length} épico(s) concluído(s)`:''}`,cls:'neutral',trend:prevM?trendHtml(m.epicPct,prevM.epicPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
   ];
   kpis.forEach(k=>{
@@ -1082,7 +1153,7 @@ function renderSprint(sp){
   d.filter(x=>x.Epico).forEach(x=>{epicMap[x.Epico]=(epicMap[x.Epico]||0)+1;});
   const eE=Object.entries(epicMap).sort((a,b)=>b[1]-a[1]);
   if(eE.length){
-    mk('sEpicos',{type:'bar',data:{labels:eE.map(x=>x[0]),datasets:[{label:'Tasks',data:eE.map(x=>x[1]),backgroundColor:'rgba(217,119,6,.7)',borderRadius:4}]},options:{...hbarOpts(),plugins:{legend:{display:false}}}});
+    mk('sEpicos',{type:'bar',data:{labels:eE.map(x=>x[0]),datasets:[{label:'Tasks',data:eE.map(x=>x[1]),backgroundColor:'rgba(217,119,6,.7)',borderRadius:4}]},options:{...hbarOpts(),layout:{padding:{right:24}},plugins:{legend:{display:false},valueLabels:{display:true}}}});
   } else {
     document.getElementById('sEpicos')?.parentElement?.parentElement?.classList.add('nd');
     document.getElementById('sEpicos')?.parentElement?.parentElement?.querySelector('.card-head')?.remove();
@@ -1101,7 +1172,8 @@ function renderSprint(sp){
   mk('sDev',{type:'bar',data:{labels:devNames.map(n=>n.split(' ')[0]),datasets:[
     {label:'Total',data:devNames.map(n=>devMap[n]),backgroundColor:'rgba(29,110,245,.3)',borderRadius:3},
     {label:'Implementados',data:devNames.map(n=>devDone[n]||0),backgroundColor:'rgba(5,150,105,.7)',borderRadius:3},
-  ]},options:{...bOpts(),plugins:{legend:{labels:{color:'#64748b',font:FONT,boxWidth:12}}}}});
+  ]},options:{...bOpts(),layout:{padding:{top:14}},plugins:{legend:{labels:{color:'#64748b',font:FONT,boxWidth:12}},valueLabels:{display:true},
+    tooltip:{callbacks:{afterBody:items=>{const n=devNames[items[0]?.dataIndex];return n?`${devDone[n]||0} de ${devMap[n]} implementados (${pct(devDone[n]||0,devMap[n])}%)`:'';}}}}}});
   renderSprintTable(d);
 }
 function renderSprintTable(d){
@@ -1110,14 +1182,14 @@ function renderSprintTable(d){
   wrap.innerHTML=`<div class="tbar">
     <span class="tbar-title">Itens</span><span class="tcnt">${d.length}</span>
     <div class="tfilters">
-      <button class="tfbtn" id="sf-val" onclick="spFilterToggle('val')">★ Novas func.</button>
+      <button class="tfbtn" id="sf-val" onclick="spFilterToggle('val')">★ Melhorias</button>
       <button class="tfbtn" id="sf-epic" onclick="spFilterToggle('epic')">◈ Épico</button>
       <button class="tfbtn" id="sf-bug" onclick="spFilterToggle('bug')">🐛 Bug prod.</button>
     </div>
     <input class="tsrch" type="text" id="sp-search" placeholder="Buscar..." oninput="spFilterRender()" style="margin-left:auto">
   </div>
   <div class="tscroll"><table><thead><tr>
-    <th>Item</th><th>Responsável</th><th>Status</th><th>Tipo</th><th>Prioridade</th><th>Épico</th><th>Est(h)</th><th>Real(h)</th><th>Retrab.</th><th>Bug Prod.</th><th>Nova Func.</th>
+    <th>Item</th><th>Responsável</th><th>Status</th><th>Tipo</th><th>Prioridade</th><th>Épico</th><th>Est(h)</th><th>Real(h)</th><th>Retrab.</th><th>Bug Prod.</th><th>Melhorias</th>
   </tr></thead><tbody id="sp-body"></tbody></table></div>`;
   window._spItems=d;
   window._spFilters=new Set();
@@ -1286,8 +1358,8 @@ function renderTimeOverview(rows){
     {label:'Implementados',data:stats.map(x=>x.done),backgroundColor:'rgba(5,150,105,.7)',borderRadius:3},
   ]},options:{...bOpts(),plugins:{legend:{labels:{color:'#64748b',font:FONT,boxWidth:12}}}}});
   mk('tDevRework',{type:'bar',data:{labels,datasets:[
-    {label:'Retrabalho (%)',data:stats.map(x=>x.reworkPct),backgroundColor:stats.map(x=>x.reworkPct>15?'rgba(220,38,38,.7)':'rgba(124,58,237,.6)'),borderRadius:3},
-    {label:'Meta (15%)',data:stats.map(()=>15),type:'line',borderColor:'#d97706',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
+    {label:'Retrabalho (%)',data:stats.map(x=>x.reworkPct),backgroundColor:stats.map(x=>x.reworkPct>10?'rgba(220,38,38,.7)':'rgba(124,58,237,.6)'),borderRadius:3},
+    {label:'Meta (10%)',data:stats.map(()=>10),type:'line',borderColor:'#d97706',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
   ]},options:{...bOpts('%')}});
   mk('tDevAdher',{type:'bar',data:{labels,datasets:[
     {label:'Cobertura de estimativa (%)',data:stats.map(x=>x.aderencia),backgroundColor:'rgba(13,148,136,.7)',borderRadius:3},
@@ -1313,11 +1385,11 @@ function renderTimeIndividual(dev,rows,spFilter){
   const grid=document.getElementById('dev-kpis');grid.innerHTML='';
   const kpis=[
     {lbl:'Total de Itens',val:st.tot,sub:`${pctOfTeam}% do total do time`,cls:'blue'},
-    {lbl:'Taxa de Conclusão',val:`${st.conclusao}%`,sub:`${st.done}/${st.tot} implementados`,cls:st.conclusao>=80?'green':'red'},
+    {lbl:'Taxa de Conclusão',val:`${st.conclusao}%`,sub:`${st.done}/${st.tot} implementados`,cls:st.conclusao>=90?'green':'red'},
     {lbl:'Não Entregues',val:st.open,sub:`itens em aberto`,cls:st.open===0?'green':'yellow'},
     {lbl:'Épicos',val:st.epicItems,sub:`tasks de épico${st.epicDone?` · ${st.epicDone} concluído(s)`:''}`,cls:'neutral'},
     {lbl:'Bugs que Participou',val:st.bugs,sub:`itens com bug`,cls:st.bugs===0?'green':'red'},
-    {lbl:'Retrabalho Gerado',val:`${st.reworkPct}%`,sub:`${st.rework} itens · meta <15%`,cls:st.reworkPct<=15?'green':'red'},
+    {lbl:'Retrabalho Gerado',val:`${st.reworkPct}%`,sub:`${st.rework} itens · meta <10%`,cls:st.reworkPct<=10?'green':'red'},
     {lbl:'Horas Registradas',val:`${st.allocH}h`,sub:`cap. ${cap}h`,cls:'neutral'},
     {lbl:'Taxa de Ocupação',val:`${ocup}%`,sub:`horas reais / capacidade`,cls:ocup>=70&&ocup<=110?'green':ocup<70?'yellow':'red'},
     {lbl:'Gap de Registro',val:`${gap}h`,sub:`capacidade − horas reais`,cls:gap<=10?'green':gap<=20?'yellow':'red'},
@@ -1337,7 +1409,7 @@ function renderTimeIndividual(dev,rows,spFilter){
     const L=SPRINTS.map(s=>`S${s}`);
     mk('tDevConclusion',{type:'line',data:{labels:L,datasets:[
       {label:'Conclusão (%)',data:spRows.map(x=>x.conclusao),borderColor:'#1d6ef5',backgroundColor:'rgba(29,110,245,.07)',fill:true,tension:.4,pointBackgroundColor:'#1d6ef5',pointBorderColor:'#fff',pointRadius:5,pointBorderWidth:2},
-      {label:'Meta (80%)',data:SPRINTS.map(()=>80),borderColor:'#dc2626',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
+      {label:'Meta (90%)',data:SPRINTS.map(()=>90),borderColor:'#dc2626',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
     ]},options:{...bOpts('%'),scales:{...bOpts('%').scales,y:{...bOpts('%').scales.y,min:0,max:100}}}});
     mk('tDevVolume',{type:'bar',data:{labels:L,datasets:[{label:'Itens',data:spRows.map(x=>x.tot),backgroundColor:'rgba(29,110,245,.5)',borderRadius:4}]},options:{...bOpts()}});
     mk('tDevHoursEvo',{type:'bar',data:{labels:L,datasets:[
@@ -1345,8 +1417,8 @@ function renderTimeIndividual(dev,rows,spFilter){
       {label:`Capacidade (${SprintRules.settings.capacityHours}h)`,data:SPRINTS.map(()=>SprintRules.settings.capacityHours),type:'line',borderColor:'#dc2626',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
     ]},options:{...bOpts('h')}});
     mk('tDevReworkEvo',{type:'bar',data:{labels:L,datasets:[
-      {label:'Retrabalho (%)',data:spRows.map(x=>x.reworkPct),backgroundColor:spRows.map(x=>x.reworkPct>15?'rgba(220,38,38,.7)':'rgba(124,58,237,.6)'),borderRadius:4},
-      {label:'Meta (15%)',data:SPRINTS.map(()=>15),type:'line',borderColor:'#d97706',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
+      {label:'Retrabalho (%)',data:spRows.map(x=>x.reworkPct),backgroundColor:spRows.map(x=>x.reworkPct>10?'rgba(220,38,38,.7)':'rgba(124,58,237,.6)'),borderRadius:4},
+      {label:'Meta (10%)',data:SPRINTS.map(()=>10),type:'line',borderColor:'#d97706',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
     ]},options:{...bOpts('%')}});
     // Profile donuts
     const devItems=rows.filter(x=>devPeople(x).filter(p=>!SprintRules.isExcludedPerson(p)).includes(dev));
@@ -1366,7 +1438,7 @@ function renderTimeIndividual(dev,rows,spFilter){
   const dWrap=document.getElementById('dev-table-wrap');
   dWrap.innerHTML=`<div class="tbar"><span class="tbar-title">Itens</span><span class="tcnt">${devItems2.length}</span></div>
   <div class="tscroll"><table><thead><tr>
-    <th>Item</th><th>Sprint</th><th>Status</th><th>Tipo</th><th>Épico</th><th>Est(h)</th><th>Real(h)</th><th>Retrab.</th><th>Bug Prod.</th><th>Nova Func.</th>
+    <th>Item</th><th>Sprint</th><th>Status</th><th>Tipo</th><th>Épico</th><th>Est(h)</th><th>Real(h)</th><th>Retrab.</th><th>Bug Prod.</th><th>Melhorias</th>
   </tr></thead><tbody>${devItems2.map(x=>`<tr>
     <td title="${esc(x.Nome)}">${esc(x.Nome)}</td>
     <td class="cm">S${x.Sprint}</td>
@@ -1456,6 +1528,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script src="consumption.js"></script>
 <script src="release.js"></script>
 <script src="control-tower.js"></script>
+<script src="burndown.js"></script>
 <script src="users.js"></script>
 </body></html>
 

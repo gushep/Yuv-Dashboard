@@ -9,6 +9,7 @@ namespace App;
 enum Screen: string
 {
     case ControlTower = 'control-tower';
+    case Burndown = 'burndown';
     case Dashboard = 'dashboard';
     case Sprints = 'sprint';
     case Epics = 'epicos';
@@ -28,6 +29,7 @@ enum Screen: string
     {
         return match ($this) {
             self::ControlTower => 'Torre de controle',
+            self::Burndown => 'Burndown',
             self::Dashboard => 'Dashboard',
             self::Sprints => 'Sprints',
             self::Epics => 'Épicos',

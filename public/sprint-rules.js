@@ -17,6 +17,8 @@ window.SprintRules = (() => {
   const isNotStarted = status => NOT_STARTED.includes(normalize(status));
   /** Encerrado nos kanbans: entregue ou retirado do escopo. */
   const isClosed = status => isDone(status) || isRemoved(status);
+  /** Em teste nos kanbans: qualquer status de QA (Testes, Reprovado, Aprovado). */
+  const isInTest = status => /^qa\b/.test(normalize(status));
   const isExcludedPerson = name => settings.excludedPeople.some(person => normalize(person) === normalize(name));
   const capacityMinutes = () => Math.round(settings.capacityHours * 60);
   function applySettings(values = {}) {
@@ -63,5 +65,5 @@ window.SprintRules = (() => {
     };
   }
 
-  return { normalize, isDone, isDoneNotDelivered, isRemoved, isOpen, isBlocked, isNotStarted, isClosed, isExcludedPerson, capacityMinutes, applySettings, settings, today, workingDays, pace };
+  return { normalize, isDone, isDoneNotDelivered, isRemoved, isOpen, isBlocked, isNotStarted, isClosed, isInTest, isExcludedPerson, capacityMinutes, applySettings, settings, today, workingDays, pace };
 })();

@@ -135,6 +135,43 @@ class SprintReleaseTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_description_is_read_from_an_existing_description_column(): void
+    {
+        Http::fake(['api.monday.com/v2' => Http::response(['data' => ['boards' => [[
+            'name' => 'Tarefas', 'columns' => [['id' => 'description', 'title' => 'Descrição']],
+            'items_page' => ['cursor' => null, 'items' => [['id' => '1', 'name' => 'Filtro', 'column_values' => [
+                ['id' => 'sprint', 'text' => 'Sprint 17'], ['id' => 'description', 'text' => "  Novo filtro de alarmes por filial.\n  "],
+            ]]]],
+        ]]]])]);
+
+        $snapshot = app(MondayService::class)->sync('token', '123', ['Sprint' => 'sprint']);
+
+        $this->assertSame('Novo filtro de alarmes por filial.', $snapshot['rows'][0]['Descricao']);
+    }
+
+    public function test_monday_description_takes_priority_and_skips_comments_while_empty_ones_fall_back(): void
+    {
+        $this->prepareSnapshot();
+        $snapshot = Cache::get('monday-sync-1');
+        $snapshot['rows'][0]['Descricao'] = "Novo filtro de alarmes:\n• por filial";
+        $snapshot['rows'][1]['Descricao'] = "Novo filtro de alarmes:\n• por filial";
+        $snapshot['rows'][2]['Descricao'] = '   ';
+        Cache::put('monday-sync-1', $snapshot, 3600);
+        Http::fake(['api.monday.com/v2' => Http::response(['data' => ['items' => [
+            ['id' => '2', 'updates' => [['id' => 'u2', 'text_body' => 'Corrigida a exibição dos filtros nos relatórios.', 'creator' => ['name' => 'Ana'], 'replies' => []]]],
+            ['id' => '3', 'updates' => []], ['id' => '4', 'updates' => []],
+        ]]])]);
+
+        $response = $this->postJson('/api/release', ['sprint' => 17])->assertOk()->assertJsonPath('commentsUnavailable', 0);
+
+        $items = collect($response->json('groups'))->flatMap(fn (array $group): array => $group['items'])->keyBy('id');
+        $this->assertSame("Novo filtro de alarmes:\n• por filial", $items['1']['description']);
+        $this->assertSame('monday', $items['1']['descriptionSource']);
+        $this->assertSame('Corrigida a exibição dos filtros nos relatórios.', $items['2']['description']);
+        $this->assertSame('comentario', $items['2']['descriptionSource']);
+        Http::assertSent(fn ($request): bool => $request['variables']['ids'] === ['2', '3', '4']);
+    }
+
     public function test_comment_cache_is_reused_and_refreshed_on_new_sync(): void
     {
         $this->prepareSnapshot();

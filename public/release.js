@@ -89,7 +89,7 @@ window.SprintRelease = (() => {
     const items = data.groups.flatMap(group => group.items);
     const count = source => items.filter(item => item.descriptionSource === source).length;
     const pending = (data.withoutDescription || 0) + (data.staleSummaries || 0);
-    return `Descrições: ${count('ficha')} da ficha · ${count('resumo')} resumo(s) · ${data.withoutDescription || 0} sem descrição${data.staleSummaries ? ` · ${data.staleSummaries} desatualizado(s)` : ''}${pending ? ` — peça no Claude Code: "gera os resumos da release da sprint ${data.sprint}"` : ''}`;
+    return `Descrições: ${count('monday')} do Monday · ${count('ficha')} da ficha · ${count('resumo')} resumo(s) · ${data.withoutDescription || 0} sem descrição${data.staleSummaries ? ` · ${data.staleSummaries} desatualizado(s)` : ''}${pending ? ` — peça no Claude Code: "gera os resumos da release da sprint ${data.sprint}"` : ''}`;
   }
   function render() {
     if (!state.active) return;
