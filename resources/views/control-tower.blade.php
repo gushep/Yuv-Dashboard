@@ -10,11 +10,11 @@
     <section class="tower-status" id="tower-status" aria-live="polite">
       <div class="tower-light"><span class="tower-light-dot" aria-hidden="true"></span><div><strong id="tower-status-label"></strong><p id="tower-status-detail"></p></div></div>
       <div class="tower-facts">
-        <div><span>Dias úteis restantes</span><strong id="tower-days"></strong></div>
-        <div><span>Compromisso concluído</span><strong id="tower-commitment"></strong></div>
-        <div><span>Tasks implementadas</span><strong id="tower-scope"></strong></div>
-        <div title="Cards em Backlog, Pronto para começar ou sem status, de qualquer origem"><span>Não iniciados</span><strong id="tower-not-started"></strong></div>
-        <div title="Cards que já saíram do Backlog e ainda não foram implementados, de qualquer origem, sobre o total que ainda falta implementar"><span>Em andamento</span><strong id="tower-in-progress"></strong></div>
+        <div data-indicator="days"><span>Dias úteis restantes</span><strong id="tower-days"></strong></div>
+        <div data-indicator="commitment"><span>Compromisso concluído</span><strong id="tower-commitment"></strong></div>
+        <div data-indicator="implemented"><span>Tasks implementadas</span><strong id="tower-scope"></strong></div>
+        <div data-indicator="notStarted"><span>Não iniciados</span><strong id="tower-not-started"></strong></div>
+        <div data-indicator="inProgress"><span>Em andamento</span><strong id="tower-in-progress"></strong></div>
       </div>
       <p class="tower-decision" id="tower-decision"></p>
     </section>
@@ -79,4 +79,6 @@
     </section>
     <footer class="tower-note" id="tower-footer"></footer>
   </div>
+  <div class="kpi-tip" id="tower-tip" role="tooltip" hidden></div>
+  <dialog class="kpi-modal" id="tower-modal" aria-label="Tasks do indicador" onclick="if(event.target===this) this.close()"></dialog>
 </div>

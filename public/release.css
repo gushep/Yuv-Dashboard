@@ -74,7 +74,7 @@ body.release-view .content{padding:24px clamp(24px,3.3vw,56px) 18px}
 .release-delivery:last-child{padding-bottom:5px}
 .release-copy{grid-column:1;min-width:0}
 .release-delivery h3{font-size:18px;font-weight:700;line-height:1.35;color:#0b1645}
-.release-delivery p{font-size:16px;line-height:1.45;color:#5e719b;margin-top:3px}
+.release-delivery p{font-size:16px;line-height:1.45;color:#5e719b;margin-top:3px;white-space:pre-line}
 .release-module{grid-column:2;width:auto;min-height:40px;padding-left:34px;display:flex;align-items:center;gap:12px;border-left:1px solid #dce4f1;font-size:16px;color:#13234f}
 .release-module::before{content:none}
 .release-module svg{width:25px;height:25px;flex:none;color:var(--release-color)}

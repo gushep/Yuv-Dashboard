@@ -16,7 +16,9 @@ window.Bombeiro = (() => {
   }
   function statusBucket(status) {
     const value = normalized(status);
-    return value === 'backlog' ? 'backlog' : window.SprintRules.isClosed(status) ? 'done' : 'progress';
+    if (value === 'backlog') return 'backlog';
+    if (window.SprintRules.isClosed(status)) return 'done';
+    return window.SprintRules.isInTest(status) ? 'test' : 'progress';
   }
   function priorityMeta(priority) {
     const label = String(priority ?? '').trim() || 'Não informada';
@@ -71,7 +73,7 @@ window.Bombeiro = (() => {
     const title = document.createElement('div');
     title.className = 'fire-task-title';
     title.append(document.createTextNode(String(row.Nome || 'Sem título')));
-    if (bucket === 'progress' || cancelled) {
+    if (bucket === 'progress' || bucket === 'test' || cancelled) {
       const suffix = document.createElement('span');
       suffix.className = 'fire-original-status';
       suffix.textContent = ` (${String(row.Status || '').trim() || 'Status não informado'})`;
@@ -121,7 +123,7 @@ window.Bombeiro = (() => {
     } else {
       board.style.removeProperty('--fire-board-height');
     }
-    for (const id of ['fire-backlog', 'fire-progress', 'fire-done']) {
+    for (const id of ['fire-backlog', 'fire-progress', 'fire-test', 'fire-done']) {
       const list = el(id);
       list.style.setProperty('--fire-fit', '1');
       if (list.scrollHeight <= list.clientHeight + 1) continue;
@@ -138,12 +140,12 @@ window.Bombeiro = (() => {
   function render() {
     if (!el('page-bombeiro')) return;
     const rows = selectedRows(state.rows, state.sprint);
-    const counts = ['backlog', 'progress', 'done'].map(bucket => rows.filter(row => statusBucket(row.Status) === bucket).length);
-    const doneCount = counts[2];
+    const counts = ['backlog', 'progress', 'test', 'done'].map(bucket => rows.filter(row => statusBucket(row.Status) === bucket).length);
+    const doneCount = counts[3];
     const printZoom = Math.max(0.35, Math.min(0.65, 8.5 / Math.max(1, ...counts)));
     el('page-bombeiro').style.setProperty('--fire-print-zoom', String(printZoom));
     el('fire-board').classList.toggle('done-wide', doneCount >= 7);
-    for (const [bucket, id] of [['backlog', 'fire-backlog'], ['progress', 'fire-progress'], ['done', 'fire-done']]) {
+    for (const [bucket, id] of [['backlog', 'fire-backlog'], ['progress', 'fire-progress'], ['test', 'fire-test'], ['done', 'fire-done']]) {
       const laneRows = sortByPriority(rows.filter(row => statusBucket(row.Status) === bucket));
       el(`${id}-count`).textContent = String(laneRows.length);
       const list = el(id);

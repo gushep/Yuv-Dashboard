@@ -88,6 +88,7 @@ window.Capacity = (() => {
       const capacity = Number.isInteger(overrides[key]) ? overrides[key] : defaultMinutes();
       const elapsed = elapsedMinutes(capacity, dates, today);
       const result = {name, rows, capacity, elapsed, plannedEstimate:0, completedEstimate:0, missingEstimate:0,
+        unplannedEstimate:0, supportEstimate:0, otherEstimate:0, missingUnplannedEstimate:0, totalEstimate:0,
         realPlanned:0, realUnplanned:0, realSupport:0, otherUnplanned:0, registered:0, knownReal:0, missingReal:0,
         knownPlanned:0, knownSupport:0, knownOther:0};
       for (const row of rows) {
@@ -96,6 +97,10 @@ window.Capacity = (() => {
         if (category === 'planned' && !window.SprintRules.isRemoved(row.Status)) {
           if (estimate === null) result.missingEstimate++;
           else { result.plannedEstimate += estimate; if (isDone(row.Status)) result.completedEstimate += estimate; }
+        } else if (category === 'unplanned' && !window.SprintRules.isRemoved(row.Status)) {
+          if (estimate === null) result.missingUnplannedEstimate++;
+          else if (normalized(row.Tipo) === 'suporte') result.supportEstimate += estimate;
+          else result.otherEstimate += estimate;
         }
         if (real === null) { result.missingReal++; continue; }
         result.knownReal++;
@@ -105,6 +110,8 @@ window.Capacity = (() => {
         else { result.otherUnplanned += real; result.knownOther++; }
       }
       result.realUnplanned = result.realSupport + result.otherUnplanned;
+      result.unplannedEstimate = result.supportEstimate + result.otherEstimate;
+      result.totalEstimate = result.plannedEstimate + result.unplannedEstimate;
       result.utilization = result.knownReal && elapsed > 0 ? result.registered / elapsed * 100 : null;
       result.delivery = result.plannedEstimate > 0 ? result.completedEstimate / result.plannedEstimate * 100 : null;
       result.supportImpact = result.registered > 0 ? result.realSupport / result.registered * 100 : null;
@@ -122,7 +129,7 @@ window.Capacity = (() => {
     tr.className = 'cap-detail-row';
     const td = document.createElement('td');
     td.className = 'cap-detail-cell';
-    td.colSpan = 11;
+    td.colSpan = 13;
     const lines = dev.rows.map(task => {
       const category = planning(task.Planejada);
       const name = escapeHtml(task.Nome || 'Sem título');
@@ -131,7 +138,7 @@ window.Capacity = (() => {
       const real = minutes(task.RealH), estimate = minutes(task.EstH);
       return `<tr><td>${taskName}</td><td>${badge(category === 'planned' ? 'Planejado' : 'Não planejado',category === 'planned' ? 'plan':'unplan')}</td><td>${badge(task.Tipo || 'Não informado',normalized(task.Tipo)==='suporte'?'support':'other')}</td><td>${badge(task.Status || 'Não informado',isDone(task.Status)?'done':'unknown')}</td><td>${estimate === null ? 'Sem estimativa' : formatMinutes(estimate)}</td><td>${real === null ? 'Sem apontamento' : formatMinutes(real)}</td></tr>`;
     }).join('');
-    td.innerHTML = `<div class="cap-detail"><h3>${escapeHtml(dev.name)} · itens da sprint</h3><div class="cap-detail-scroll"><table class="cap-detail-table"><thead><tr><th>Tarefa</th><th>Planejamento</th><th>Tipo</th><th>Status</th><th>Horas previstas</th><th>Tempo real</th></tr></thead><tbody>${lines}</tbody><tfoot><tr><td colspan="4">Total dos itens atribuídos</td><td>${formatMinutes(dev.plannedEstimate)}${dev.missingEstimate ? ` · ${dev.missingEstimate} sem estimativa` : ''}</td><td>${dev.knownReal ? formatMinutes(dev.registered) : 'Sem apontamento'}</td></tr></tfoot></table></div><p class="cap-detail-summary">Real planejado: ${formatMinutes(dev.realPlanned)} · Real não planejado: ${formatMinutes(dev.realUnplanned)} (suporte: ${formatMinutes(dev.realSupport)}; outros: ${formatMinutes(dev.otherUnplanned)}) · Registradas: ${formatMinutes(dev.registered)}${dev.missingReal ? ` · ${dev.missingReal} item(ns) sem apontamento` : ''}</p></div>`;
+    td.innerHTML = `<div class="cap-detail"><h3>${escapeHtml(dev.name)} · itens da sprint</h3><div class="cap-detail-scroll"><table class="cap-detail-table"><thead><tr><th>Tarefa</th><th>Planejamento</th><th>Tipo</th><th>Status</th><th>Horas previstas</th><th>Tempo real</th></tr></thead><tbody>${lines}</tbody><tfoot><tr><td colspan="4">Total dos itens atribuídos</td><td>${formatMinutes(dev.totalEstimate)}${dev.missingEstimate + dev.missingUnplannedEstimate ? ` · ${dev.missingEstimate + dev.missingUnplannedEstimate} sem estimativa` : ''}</td><td>${dev.knownReal ? formatMinutes(dev.registered) : 'Sem apontamento'}</td></tr></tfoot></table></div><p class="cap-detail-summary">Previstas planejadas: ${formatMinutes(dev.plannedEstimate)} · Previstas não planejadas: ${formatMinutes(dev.unplannedEstimate)} (suporte: ${formatMinutes(dev.supportEstimate)}; outros: ${formatMinutes(dev.otherEstimate)}) · Previstas totais: ${formatMinutes(dev.totalEstimate)}</p><p class="cap-detail-summary">Real planejado:${formatMinutes(dev.realPlanned)} · Real não planejado: ${formatMinutes(dev.realUnplanned)} (suporte: ${formatMinutes(dev.realSupport)}; outros: ${formatMinutes(dev.otherUnplanned)}) · Registradas: ${formatMinutes(dev.registered)}${dev.missingReal ? ` · ${dev.missingReal} item(ns) sem apontamento` : ''}</p></div>`;
     tr.append(td);
     return tr;
   }
@@ -186,13 +193,17 @@ window.Capacity = (() => {
     for (const [index, dev] of shown.entries()) {
       const tr = document.createElement('tr');
       const initials = dev.name.split(/\s+/).map(part => part[0]).slice(0,2).join('').toUpperCase();
-      const balancePlan = dev.capacity-dev.plannedEstimate, balanceNow = dev.capacity-dev.registered;
+      const balanceFinal = dev.capacity-dev.totalEstimate, balanceNow = dev.capacity-dev.registered;
+      const missingTotal = dev.missingEstimate + dev.missingUnplannedEstimate;
+      const missingNote = count => count ? `<br><small title="Itens sem estimativa ficam fora da soma">${count} sem estimativa</small>` : '';
+      const estimateParts = [dev.supportEstimate ? `Suporte ${formatMinutes(dev.supportEstimate)}` : '', dev.otherEstimate ? `Outros ${formatMinutes(dev.otherEstimate)}` : ''].filter(Boolean).join(' · ');
+      const unplannedEstimateCell = `${formatMinutes(dev.unplannedEstimate)}${estimateParts ? `<br><small>${estimateParts}</small>` : ''}${missingNote(dev.missingUnplannedEstimate)}`;
       const realTip = `Real planejado: ${formatMinutes(dev.realPlanned)} · Real não planejado: ${formatMinutes(dev.realUnplanned)} (suporte: ${formatMinutes(dev.realSupport)}; outros: ${formatMinutes(dev.otherUnplanned)})${dev.missingReal ? ` · ${dev.missingReal} sem apontamento` : ''}`;
       const unplannedParts = [dev.knownSupport ? `Suporte ${formatMinutes(dev.realSupport)}` : '',dev.knownOther ? `Outros ${formatMinutes(dev.otherUnplanned)}` : ''].filter(Boolean).join(' · ');
       const unplannedCell = dev.knownSupport || dev.knownOther ? `${formatMinutes(dev.realUnplanned)}<br><small>${unplannedParts}</small>` : '—';
       const utilTip = `Registradas: ${formatMinutes(dev.registered)} ÷ capacidade até hoje: ${formatMinutes(dev.elapsed)}. ${realTip}. Segunda a sexta; hoje conta como dia útil completo; sem feriados configurados.`;
       const deliveryTip = `Estimativas concluídas: ${formatMinutes(dev.completedEstimate)} ÷ estimativas planejadas: ${formatMinutes(dev.plannedEstimate)}. ${dev.missingEstimate} item(ns) planejado(s) sem estimativa.${dev.plannedEstimate ? '' : ' Denominador zero: indicador indisponível.'}`;
-      tr.innerHTML = `<td><button class="cap-dev-button" type="button" aria-expanded="${state.expanded.has(dev.name)}"><span class="cap-avatar cap-avatar-${index%4}">${escapeHtml(initials)}</span><span class="cap-dev-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</span><span class="cap-chevron">${state.expanded.has(dev.name)?'⌄':'›'}</span></button></td><td><input class="cap-hours-input" type="number" min="0" max="200" step="0.25" value="${dev.capacity/60}" aria-label="Capacidade em horas de ${escapeHtml(dev.name)} na sprint ${state.sprint}" title="Horas decimais: 1,5 equivale a 1h30">h</td><td>${formatMinutes(dev.plannedEstimate)}${dev.missingEstimate ? `<br><small title="Itens planejados sem estimativa">${dev.missingEstimate} sem estimativa</small>` : ''}</td><td class="${balancePlan<0?'cap-negative':''}">${formatMinutes(balancePlan)}</td><td>${dev.knownPlanned?formatMinutes(dev.realPlanned):'—'}</td><td>${unplannedCell}</td><td title="${escapeHtml(realTip)}">${dev.knownReal?formatMinutes(dev.registered):'—'}</td><td class="${balanceNow<0?'cap-negative':''}">${dev.knownReal?formatMinutes(balanceNow):'—'}</td><td title="${escapeHtml(utilTip)}">${percentBar(dev.utilization,'util')}</td><td title="${escapeHtml(deliveryTip)}">${percentBar(dev.delivery,'delivery')}${dev.missingEstimate ? `<small>${dev.missingEstimate} sem estimativa</small>` : ''}</td><td title="${escapeHtml(dev.registered ? `${formatMinutes(dev.realSupport)} ÷ ${formatMinutes(dev.registered)}` : 'Sem horas registradas: denominador zero')}"><span class="cap-impact">${formatPct(dev.supportImpact)}</span></td>`;
+      tr.innerHTML = `<td><button class="cap-dev-button" type="button" aria-expanded="${state.expanded.has(dev.name)}"><span class="cap-avatar cap-avatar-${index%4}">${escapeHtml(initials)}</span><span class="cap-dev-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</span><span class="cap-chevron">${state.expanded.has(dev.name)?'⌄':'›'}</span></button></td><td><input class="cap-hours-input" type="number" min="0" max="200" step="0.25" value="${dev.capacity/60}" aria-label="Capacidade em horas de ${escapeHtml(dev.name)} na sprint ${state.sprint}" title="Horas decimais: 1,5 equivale a 1h30">h</td><td class="cap-group-start">${formatMinutes(dev.plannedEstimate)}${missingNote(dev.missingEstimate)}</td><td>${unplannedEstimateCell}</td><td class="cap-total" title="${escapeHtml(`Previstas planejadas ${formatMinutes(dev.plannedEstimate)} + não planejadas ${formatMinutes(dev.unplannedEstimate)}`)}">${formatMinutes(dev.totalEstimate)}${missingNote(missingTotal)}</td><td class="cap-balance ${balanceFinal<0?'cap-negative':''}" title="${escapeHtml(`Disponíveis ${formatMinutes(dev.capacity)} − previstas totais ${formatMinutes(dev.totalEstimate)}`)}">${formatMinutes(balanceFinal)}</td><td class="cap-group-start">${dev.knownPlanned?formatMinutes(dev.realPlanned):'—'}</td><td>${unplannedCell}</td><td class="cap-total" title="${escapeHtml(realTip)}">${dev.knownReal?formatMinutes(dev.registered):'—'}</td><td class="cap-balance ${balanceNow<0?'cap-negative':''}" title="${escapeHtml(`Disponíveis ${formatMinutes(dev.capacity)} − registradas ${formatMinutes(dev.registered)}`)}">${dev.knownReal?formatMinutes(balanceNow):'—'}</td><td class="cap-group-start" title="${escapeHtml(utilTip)}">${percentBar(dev.utilization,'util')}</td><td title="${escapeHtml(deliveryTip)}">${percentBar(dev.delivery,'delivery')}${dev.missingEstimate ? `<small>${dev.missingEstimate} sem estimativa</small>` : ''}</td><td title="${escapeHtml(dev.registered ? `${formatMinutes(dev.realSupport)} ÷ ${formatMinutes(dev.registered)}` : 'Sem horas registradas: denominador zero')}"><span class="cap-impact">${formatPct(dev.supportImpact)}</span></td>`;
       tr.querySelector('.cap-dev-button').addEventListener('click', () => {
         state.expanded.has(dev.name) ? state.expanded.delete(dev.name) : state.expanded.add(dev.name);
         render();
@@ -203,7 +214,7 @@ window.Capacity = (() => {
     }
     if (!shown.length) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="11" class="cap-empty">${state.sprint === null ? 'Nenhuma sprint disponível.' : 'Nenhum desenvolvedor com itens atribuídos nesta sprint.'}</td>`;
+      tr.innerHTML = `<td colspan="13" class="cap-empty">${state.sprint === null ? 'Nenhuma sprint disponível.' : 'Nenhum desenvolvedor com itens atribuídos nesta sprint.'}</td>`;
       tbody.append(tr);
     }
     renderExtra('cap-pending','Pendências de atribuição',result.pending,true);

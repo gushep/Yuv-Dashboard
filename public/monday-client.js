@@ -20,7 +20,7 @@ const mondayFields = [
   ['Planejada', 'Planejada', ['Planejada']],
   ['Retrabalho', 'Retrabalho', ['Retrabalho']],
   ['BugProducao', 'Bug Produção', ['Bug Produção', 'Bug Producao']],
-  ['ValorAgregado', 'Novas Funcionalidades', ['Novas Funcionalidades', 'Nova Funcionalidade', 'Valor Agregado']]
+  ['ValorAgregado', 'Melhorias', ['Melhorias', 'Melhoria', 'Novas Funcionalidades', 'Nova Funcionalidade', 'Valor Agregado']]
 ];
 
 function mondayMessage(id, message, kind = '') {
@@ -244,6 +244,7 @@ async function syncMonday(force = true) {
     window.Consumption?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);
     if (canAccessScreen('control-tower')) window.ControlTower?.refreshAlerts();
+    window.Burndown?.refresh();
     const time = new Date(result.syncedAt).toLocaleString('pt-BR');
     mondayMessage('monday-sync-status', `${result.rows.length} registros carregados de ${result.fetched} tarefas · ${result.skipped} sem Sprint reconhecida · ${time}.`, 'success');
   } catch (error) {

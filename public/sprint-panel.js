@@ -12,7 +12,7 @@ window.SprintPanel = (() => {
   function statusBucket(status) {
     if (window.SprintRules.isClosed(status)) return 'done';
     if (window.SprintRules.isNotStarted(status)) return 'backlog';
-    return 'progress';
+    return window.SprintRules.isInTest(status) ? 'test' : 'progress';
   }
   function selectedRows(rows, sprint) {
     return [...new Map(rows.filter(row => Number(row.Sprint) === sprint).map(row => [String(row.Id),row])).values()];
@@ -30,7 +30,7 @@ window.SprintPanel = (() => {
     const title = document.createElement('div');
     title.className = 'fire-task-title';
     title.append(document.createTextNode(String(row.Nome || 'Sem título')));
-    if (bucket === 'progress') {
+    if (bucket === 'progress' || bucket === 'test') {
       const status = document.createElement('span');
       status.className = 'fire-original-status';
       status.textContent = ` (${String(row.Status || '').trim() || 'Status não informado'})`;
@@ -78,7 +78,7 @@ window.SprintPanel = (() => {
     if (!state.active || !page?.classList.contains('active') || !board) return;
     if (window.innerWidth <= 950) {
       board.style.removeProperty('--sp-board-height');
-      for (const id of ['sp-backlog','sp-progress','sp-done']) {
+      for (const id of ['sp-backlog','sp-progress','sp-test','sp-done']) {
         const list = el(id);
         list.style.removeProperty('--sp-columns');
         list.style.removeProperty('--fire-fit');
@@ -89,7 +89,7 @@ window.SprintPanel = (() => {
     const footerSpace = footer ? footer.getBoundingClientRect().height + 9 : 9;
     const available = Math.max(280,window.innerHeight - board.getBoundingClientRect().top - footerSpace);
     board.style.setProperty('--sp-board-height',`${available}px`);
-    for (const id of ['sp-backlog','sp-progress','sp-done']) {
+    for (const id of ['sp-backlog','sp-progress','sp-test','sp-done']) {
       const list = el(id), count = list.querySelectorAll('.fire-task').length;
       const firstColumns = count >= 13 ? 2 : 1;
       let best = {columns:firstColumns,scale:.5};
@@ -126,7 +126,7 @@ window.SprintPanel = (() => {
       ? `Última atualização: ${state.lastSuccess.toLocaleString('pt-BR')}${state.stale ? ' · dados desatualizados' : ''}`
       : 'Aguardando primeira consulta';
     if (state.active) el('tb-right').textContent = state.sprint === null ? 'Sprint' : `S${state.sprint}`;
-    for (const [bucket,id] of [['backlog','sp-backlog'],['progress','sp-progress'],['done','sp-done']]) {
+    for (const [bucket,id] of [['backlog','sp-backlog'],['progress','sp-progress'],['test','sp-test'],['done','sp-done']]) {
       const laneRows = sortByPriority(rows.filter(row => statusBucket(row.Status) === bucket));
       el(`${id}-count`).textContent = String(laneRows.length);
       const list = el(id);

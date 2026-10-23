@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MondayConnection;
+use App\Services\BurndownService;
 use App\Services\ControlTowerService;
 use App\Services\MondayActivityImporter;
 use App\Services\MondayService;
@@ -225,6 +226,24 @@ class MondayController extends Controller
             }
 
             return $tower->build($snapshot, $connection, isset($data['sprint']) ? (int) $data['sprint'] : null);
+        });
+    }
+
+    /**
+     * Burndown da sprint (atual, ou a informada).
+     */
+    public function burndown(Request $request, MondaySnapshotService $snapshots, MondayActivityImporter $importer, BurndownService $burndown): JsonResponse
+    {
+        $data = $request->validate(['sprint' => ['nullable', 'integer', 'between:1,999999']]);
+
+        return $this->attempt(function () use ($snapshots, $importer, $burndown, $data) {
+            $connection = MondayConnection::current();
+            $snapshot = $snapshots->current($connection, $connection->refresh_minutes === 0 ? 60 : $connection->refresh_minutes * 60);
+            if ($snapshots->fetchedFresh) {
+                $this->importActivityAfterResponse($importer, $connection);
+            }
+
+            return $burndown->build($snapshot, $connection, isset($data['sprint']) ? (int) $data['sprint'] : null);
         });
     }
 

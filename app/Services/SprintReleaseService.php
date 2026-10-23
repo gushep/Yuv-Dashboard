@@ -10,8 +10,8 @@ class SprintReleaseService
     public function __construct(private MondayService $monday, private ReleaseSummaryService $summaries) {}
 
     /**
-     * Release da sprint. A descrição de cada card vem, nesta ordem: do OBJETIVO da ficha de especificação,
-     * do resumo gerado no Claude Code (marcado como desatualizado se o card mudou) ou da extração conservadora dos comentários.
+     * Release da sprint. A descrição de cada card vem, nesta ordem: da coluna Descrição do Monday, do OBJETIVO da ficha
+     * de especificação, do resumo gerado no Claude Code (marcado como desatualizado se o card mudou) ou da extração conservadora dos comentários.
      *
      * @return array{sprint: ?int, sprints: array, dates: ?array, total: int, groups: list<array{type: string, items: array, count: int}>, syncedAt: string, commentsUnavailable: int, withoutDescription: int, staleSummaries: int, summaryMethod: string}
      */
@@ -23,10 +23,10 @@ class SprintReleaseService
         $unavailable = $withoutDescription = $stale = 0;
         foreach ($items as $id => $row) {
             $source = $comments[$id] ?? ['available' => false, 'comments' => []];
-            $unavailable += (int) ! $source['available'];
+            $unavailable += (int) (! $source['available'] && ! $this->hasMondayDescription($row));
             $type = trim((string) ($row['Tipo'] ?? ''));
             $type = $type !== '' ? $type : 'Sem tipo';
-            [$description, $origin, $isStale] = $this->describe((string) $id, (string) $row['Nome'], $source, $stored->get((string) $id), (string) ($row['Responsavel'] ?? ''));
+            [$description, $origin, $isStale] = $this->describe($row, $source, $stored->get((string) $id));
             $withoutDescription += (int) ($description === null);
             $stale += (int) $isStale;
             $groups[$type] ??= ['type' => $type, 'items' => []];
@@ -48,12 +48,13 @@ class SprintReleaseService
             'sprint' => $sprint, 'sprints' => $sprints, 'dates' => collect($snapshot['sprints'] ?? [])->firstWhere('number', $sprint),
             'total' => count($items), 'groups' => array_values($groups), 'syncedAt' => $snapshot['syncedAt'],
             'commentsUnavailable' => $unavailable, 'withoutDescription' => $withoutDescription, 'staleSummaries' => $stale,
-            'summaryMethod' => 'ficha-resumo-extracao',
+            'summaryMethod' => 'monday-ficha-resumo-extracao',
         ];
     }
 
     /**
-     * Cards implementados que precisam de resumo: sem ficha preenchida e sem resumo atualizado (ou todos, com $all).
+     * Cards implementados que precisam de resumo: sem Descrição no Monday, sem ficha preenchida e sem resumo atualizado
+     * (ou todos os sem Descrição no Monday, com $all).
      *
      * @return list<array{id: string, title: string, type: string, module: ?string, hash: string, currentSummary: ?string, text: string}>
      */
@@ -64,7 +65,7 @@ class SprintReleaseService
         $pending = [];
         foreach ($items as $id => $row) {
             $source = $comments[$id] ?? ['available' => false, 'comments' => []];
-            if (! $source['available']) {
+            if (! $source['available'] || $this->hasMondayDescription($row)) {
                 continue;
             }
             $hash = $this->summaries->sourceHash((string) $row['Nome'], $source['comments']);
@@ -83,10 +84,17 @@ class SprintReleaseService
     }
 
     /**
-     * @return array{0: ?string, 1: ?string, 2: bool} descrição, origem (ficha|resumo|comentario) e se o resumo está desatualizado
+     * @param  array<string, mixed>  $row
+     * @return array{0: ?string, 1: ?string, 2: bool} descrição, origem (monday|ficha|resumo|comentario) e se o resumo está desatualizado
      */
-    private function describe(string $id, string $title, array $source, ?ReleaseSummary $stored, string $owner): array
+    private function describe(array $row, array $source, ?ReleaseSummary $stored): array
     {
+        if ($this->hasMondayDescription($row)) {
+            return [trim((string) $row['Descricao']), 'monday', false];
+        }
+        $id = (string) $row['Id'];
+        $title = (string) $row['Nome'];
+        $owner = (string) ($row['Responsavel'] ?? '');
         if ($source['available'] && ($objective = $this->summaries->objective($source['comments'])) !== null) {
             return [$objective, 'ficha', false];
         }
@@ -133,7 +141,10 @@ class SprintReleaseService
         $scope = hash('sha256', $boardId.'|'.$token.'|'.$snapshot['syncedAt']);
         $comments = [];
         $missing = [];
-        foreach (array_keys($items) as $id) {
+        foreach ($items as $id => $row) {
+            if ($this->hasMondayDescription($row)) {
+                continue;
+            }
             $cached = Cache::get('release-comments-'.$scope.'-'.$id);
             if ($cached === null) {
                 $missing[] = (string) $id;
@@ -152,6 +163,16 @@ class SprintReleaseService
         }
 
         return ['sprint' => $sprint, 'sprints' => $sprints, 'items' => $items, 'comments' => $comments];
+    }
+
+    /**
+     * Card com a coluna Descrição preenchida no Monday: dispensa ficha, resumo e leitura de comentários.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function hasMondayDescription(array $row): bool
+    {
+        return trim((string) ($row['Descricao'] ?? '')) !== '';
     }
 
     private function safeUrl(string $value): ?string

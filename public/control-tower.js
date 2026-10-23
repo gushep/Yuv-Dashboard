@@ -38,6 +38,7 @@ window.ControlTower = (() => {
   }
   function originBadge(item) {
     const title = item.category === 'planned' ? 'Compromisso da sprint' : item.category === 'support' ? `Tipo Suporte · Planejada: ${item.planned || 'vazio'}` : `Planejada: ${item.planned || 'vazio'}`;
+    if (!ORIGIN[item.category]) return '<span class="tower-muted">—</span>';
     return `<span class="tower-origin tower-origin-${item.category}" title="${escape(title)}">${ORIGIN[item.category].label}</span>`;
   }
   function avatar(name) {
@@ -51,7 +52,7 @@ window.ControlTower = (() => {
     return `<span class="tower-owner">${names.map(avatar).join('')}<span>${escape(names.join(', '))}</span></span>`;
   }
   const SORTS = {
-    committed: (a, b) => ORIGIN[a.category].rank - ORIGIN[b.category].rank,
+    committed: (a, b) => (ORIGIN[a.category]?.rank ?? ORIGINS.length) - (ORIGIN[b.category]?.rank ?? ORIGINS.length),
     name: (a, b) => a.name.localeCompare(b.name, 'pt-BR'),
     status: (a, b) => SITUATION[situation(a)][1] - SITUATION[situation(b)][1] || a.status.localeCompare(b.status, 'pt-BR'),
     owner: (a, b) => (owners(a)[0] ? 0 : 1) - (owners(b)[0] ? 0 : 1) || (owners(a)[0] || '').localeCompare(owners(b)[0] || '', 'pt-BR'),
@@ -92,12 +93,116 @@ window.ControlTower = (() => {
       const sortKey = th.querySelector('button').dataset.sort;
       th.setAttribute('aria-sort', sortKey === key ? (dir === 1 ? 'ascending' : 'descending') : 'none');
     });
-    el('tower-items').innerHTML = shown.length ? shown.map(item => `<tr class="${item.done ? 'tower-done' : ''}">
+    el('tower-items').innerHTML = shown.length ? shown.map(item => itemRow(item)).join('')
+      : '<tr><td colspan="6" class="tower-muted">Nenhum card com os filtros selecionados.</td></tr>';  }
+  /** Linha da tabela de compromisso. */
+  function itemRow(item) {
+    return `<tr class="${item.done ? 'tower-done' : ''}">
       <td>${originBadge(item)}</td>
       <td>${link(item)}${item.type ? `<small>${escape(item.type)}</small>` : ''}</td>
       <td>${statusBadge(item)}</td><td>${ownerCell(item)}</td><td>${priorityBadge(item)}</td>
-      <td>${item.estimate === null ? '<span class="tower-muted">Sem estimativa</span>' : `${String(item.estimate).replace('.', ',')}h`}</td></tr>`).join('')
-      : '<tr><td colspan="6" class="tower-muted">Nenhum card com os filtros selecionados.</td></tr>';  }
+      <td>${estimateCell(item)}</td></tr>`;
+  }
+  const estimateCell = item => item.estimate === null || item.estimate === undefined ? '<span class="tower-muted">Sem estimativa</span>' : `${String(item.estimate).replace('.', ',')}h`;
+
+  /**
+   * O que cada indicador da torre apresenta, como é calculado e quais tasks lista ao clicar.
+   * Indicadores sem "list" mostram apenas a explicação. Cancelado, Descontinuado e Despriorizado ficam fora de todos.
+   */
+  const AGE_COLUMN = {label:'No status atual', value:item => item.knownSince ? `${item.workingDays} dia(s) útil(eis)` : 'Antes do início do histórico',
+    sort:item => item.knownSince ? item.workingDays : Number.MAX_SAFE_INTEGER};
+  const isSupport = item => window.SprintRules.normalize(item.type) === 'suporte';
+  function indicatorInfo(key, data) {
+    const t = data.thresholds;
+    const items = data.items;
+    /** Os sinais trazem só o resumo do card; a origem e a situação vêm da lista completa da sprint. */
+    const full = list => { const byId = new Map(items.map(item => [item.id, item])); return list.map(entry => ({...entry, ...byId.get(entry.id)})); };
+    return {
+      days: {text:'Quanto tempo ainda resta para manobrar antes do fim da sprint.',
+        criteria:'Dias úteis (segunda a sexta) de hoje até o fim da sprint, contando hoje, sobre o total de dias úteis da sprint. Sem feriados configurados.'},
+      commitment: {text:'Quanto do compromisso assumido no planejamento já foi implementado.',
+        criteria:'Cards com Planejada = "Planejada" e status Implementado, sobre todos os cards com Planejada = "Planejada". Aguardando Deploy e QA - Aprovado ainda não contam.',
+        title:'Compromisso da sprint', list:() => items.filter(item => item.committed)},
+      implemented: {text:'Entregas da sprint inteira, de qualquer origem (planejado, não planejado e suporte).',
+        criteria:'Cards com status Implementado sobre todos os cards da sprint. "Aguardando entrega" são os cards em Aguardando Deploy ou QA - Aprovado.',
+        title:'Tasks implementadas', list:() => items.filter(item => item.done)},
+      notStarted: {text:'Cards da sprint que ainda não começaram.',
+        criteria:'Status Backlog, Pronto para começar/iniciar ou sem status, de qualquer origem, sobre o total de cards da sprint.',
+        title:'Cards não iniciados', list:() => items.filter(item => !item.done && item.notStarted)},
+      inProgress: {text:'Cards que já saíram do Backlog e ainda não foram implementados.',
+        criteria:'Cards não Implementados fora de Backlog, Pronto para começar e sem status, de qualquer origem (inclui impedidos, Aguardando Deploy e QA - Aprovado), sobre o total que ainda falta implementar.',
+        title:'Cards em andamento', list:() => items.filter(item => !item.done && !item.notStarted)},
+      delivery: {text:'Chance de o time concluir o que falta do compromisso até o fim da sprint.',
+        criteria:`Simulação Monte Carlo com o ritmo diário de entregas dos últimos 60 dias úteis. Verde a partir de ${t.probabilityGreen}% de chance, vermelho abaixo de ${t.probabilityRed}%. Sprint no fim com compromisso em aberto fica vermelho.`,
+        title:'Compromisso em aberto', list:() => items.filter(item => item.committed && !item.done)},
+      scope: {text:'Quanto trabalho entrou na sprint depois do planejamento.',
+        criteria:`Cards que entraram depois da linha de base (fim do planejamento), sem contar suporte, sobre os cards da linha de base. Amarelo acima de ${t.scopeYellow}%, vermelho acima de ${t.scopeRed}%. A lista inclui os de suporte.`,
+        title:'Cards adicionados depois do planejamento', list:() => full(data.scopeChanges.added)},
+      stalled: {text:'Cards em andamento que não mudam de status há dias.',
+        criteria:`Cards abertos, fora de Backlog e não impedidos, no mesmo status há ${t.stalledDays} dias úteis ou mais. Amarelo com 1 ou 2 cards, vermelho a partir de 3.`,
+        title:'Cards parados', list:() => full(data.stalled), extra:AGE_COLUMN},
+      blocked: {text:'Cards travados por impedimento.',
+        criteria:`Status Parado, Bloqueado, Impedido ou Limitação externa. Amarelo com algum card impedido; vermelho se algum está impedido há ${t.blockedRedDays} dias úteis ou mais.`,
+        title:'Cards impedidos', list:() => full(data.blocked), extra:AGE_COLUMN},
+      support: {text:'Se as horas de suporte cabem na reserva da sprint.',
+        criteria:'Tempo Real dos cards de Tipo Suporte da sprint, projetado pelo ritmo por dia útil até o fim, contra a reserva configurada (padrão 40h). Vermelho se a reserva acaba antes do fim; amarelo acima de 90% da reserva projetada.',
+        title:'Cards de suporte', list:() => items.filter(isSupport)},
+      capacity: {text:'Se o esforço que falta cabe na capacidade que resta ao time.',
+        criteria:'Esforço restante dos cards em aberto (Restante revisado; sem ele, Estimado − Real, ou Estimado se não iniciado) sobre a capacidade das pessoas da sprint nos dias úteis futuros. Amarelo a partir de 90%, vermelho acima de 100%.',
+        title:'Cards em aberto', list:() => items.filter(item => window.SprintRules.isOpen(item.status))},
+    }[key];
+  }
+
+  function showTip(target, info) {
+    const tip = el('tower-tip');
+    tip.innerHTML = `<div>${escape(info.text)}</div><div class="kpi-tip-crit"><b>Critério:</b> ${escape(info.criteria)}</div>${info.list ? '<div class="kpi-tip-hint">Clique para ver as tasks</div>' : ''}`;
+    tip.hidden = false;
+    const rect = target.getBoundingClientRect(), width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.max(8, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 8));
+    const top = rect.bottom + 8 + height > window.innerHeight ? rect.top - height - 8 : rect.bottom + 8;
+    tip.style.left = `${left}px`; tip.style.top = `${Math.max(8, top)}px`;
+  }
+  function hideTip() { const tip = el('tower-tip'); if (tip) tip.hidden = true; }
+
+  /** Colunas do modal: as mesmas da tabela de compromisso, com busca, filtro e ordenação. */
+  const MODAL_COLUMNS = [
+    {label:'Origem', html:originBadge, value:item => ORIGIN[item.category]?.label || '', sort:item => ORIGIN[item.category]?.rank ?? ORIGINS.length, filter:true, empty:'Sem origem'},
+    {label:'Card', html:item => `${link(item)}${item.type ? `<small>${escape(item.type)}</small>` : ''}`, value:item => `${item.name || ''} ${item.type || ''}`, sort:item => item.name || ''},
+    {label:'Status', html:statusBadge, value:item => item.status || '', sort:item => `${SITUATION[situation(item)][1]} ${item.status || ''}`, filter:item => item.status, empty:'Sem status'},
+    {label:'Responsável', html:ownerCell, value:item => owners(item).join(', '), filter:owners, empty:'Sem responsável'},
+    {label:'Prioridade', html:priorityBadge, value:item => item.priority || '', sort:priorityRank, filter:item => item.priority, empty:'Sem prioridade'},
+    {label:'Estimativa', html:estimateCell, value:item => item.estimate ?? '', sort:item => item.estimate ?? null},
+  ];
+  function openModal(info) {
+    const list = info.list().sort(defaultOrder);
+    const modal = el('tower-modal');
+    modal.innerHTML = `<div class="kpi-modal-head">
+        <div><div class="kpi-modal-title">${escape(info.title)} <span class="tcnt">${list.length}</span></div><div class="kpi-modal-sub">Sprint ${escape(state.data.sprint)} · ${escape(info.criteria)}</div></div>
+        <button type="button" class="kpi-modal-close" aria-label="Fechar">✕</button>
+      </div>
+      <div class="kpi-modal-body"></div>`;
+    const extra = info.extra ? [{label:info.extra.label, html:item => escape(info.extra.value(item)), value:info.extra.value, sort:info.extra.sort}] : [];
+    window.KpiTable.render(modal.querySelector('.kpi-modal-body'), {rows:list, columns:[...MODAL_COLUMNS, ...extra], tableClass:'tower-table'});
+    modal.querySelector('.kpi-modal-close').onclick = () => modal.close();
+    modal.showModal();
+  }
+
+  /** Liga explicação no hover e lista no clique; os elementos são recriados a cada render, então os eventos também. */
+  function bindIndicator(target, key) {
+    const info = indicatorInfo(key, state.data);
+    if (!info) return;
+    target.classList.add('tower-indicator');
+    target.onmouseenter = () => showTip(target, info);
+    target.onmouseleave = hideTip;
+    if (!info.list) return;
+    const open = () => { hideTip(); openModal(info); };
+    target.classList.add('tower-clickable');
+    target.tabIndex = 0;
+    target.setAttribute('role', 'button');
+    target.setAttribute('aria-label', `${target.querySelector('span, h3')?.textContent || info.title}: ${info.text} Clique para ver as tasks.`);
+    target.onclick = open;
+    target.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } };
+  }
 
   const day = value => value ? value.split('-').reverse().slice(0, 2).join('/') : '—';
   const link = item => {
@@ -155,7 +260,8 @@ window.ControlTower = (() => {
     el('tower-decision').textContent = data.decision.text;
     el('tower-decision').classList.toggle('tower-late', data.decision.late);
 
-    el('tower-signals').innerHTML = data.signals.map(signal => `<article class="tower-signal tower-${signal.level}"><span class="tower-dot" aria-hidden="true"></span><div><h3>${escape(signal.label)} <small>${LEVEL[signal.level]}</small></h3><p>${escape(signal.detail)}</p></div></article>`).join('');
+    el('tower-signals').innerHTML = data.signals.map(signal => `<article class="tower-signal tower-${signal.level}" data-indicator="${escape(signal.key)}"><span class="tower-dot" aria-hidden="true"></span><div><h3>${escape(signal.label)} <small>${LEVEL[signal.level]}</small></h3><p>${escape(signal.detail)}</p></div></article>`).join('');
+    document.querySelectorAll('#page-control-tower [data-indicator]').forEach(target => bindIndicator(target, target.dataset.indicator));
 
     const forecast = data.forecast;
     el('tower-forecast').textContent = forecast.available
@@ -210,16 +316,22 @@ window.ControlTower = (() => {
     document.querySelectorAll('#page-control-tower .tower-origin-filter .tower-chip').forEach(chip => chip.setAttribute('aria-pressed', String(chip.dataset.origin === origin)));
   }
 
-  /** Uma barra por origem: quanto do escopo atual já foi entregue e quanto falta. */
+  /**
+   * Uma barra por origem e, no fim da linha, a grade com entregues, em andamento, em homologação, não iniciados e pendentes.
+   * Homologação = status de QA ainda não aprovado; pendentes = tudo o que ainda não foi implementado.
+   */
   function renderOrigins(data) {
     el('tower-origins').innerHTML = ORIGINS.map(origin => {
       const t = data.totals.categories[origin];
       const percent = t.scope ? Math.round(t.done / t.scope * 100) : 0;
-      const waiting = t.doneNotDelivered ? ` (${t.doneNotDelivered} aguardando entrega)` : '';
+      const working = data.items.filter(item => item.category === origin && situation(item) === 'progress');
+      const testing = working.filter(item => window.SprintRules.isInTest(item.status)).length;
+      const notStarted = data.items.filter(item => item.category === origin && situation(item) === 'notStarted').length;
+      const stat = (label, value) => `<div class="tower-origin-stat"><span>${label}</span><b>${value}</b></div>`;
       return `<div class="tower-origin-row">
         <strong>${ORIGIN[origin].label}</strong>
         <div class="tower-origin-track" role="progressbar" aria-label="${ORIGIN[origin].label}: entregues" aria-valuemin="0" aria-valuemax="${t.scope}" aria-valuenow="${t.done}"><div class="tower-origin-fill" style="width:${percent}%;background:${ORIGIN[origin].color}"></div></div>
-        <span class="tower-origin-count">${t.scope ? `<b>${t.done} de ${t.scope}</b> entregues · ${t.remaining} pendente(s)${waiting}` : 'Nenhum card'}</span>
+        <div class="tower-origin-stats">${stat('Entregues', `${t.done}/${t.scope}`)}${stat('Em andamento', working.length - testing)}${stat('Em homologação', testing)}${stat('Não iniciados', notStarted)}${stat('Pendentes', t.remaining)}</div>
       </div>`;
     }).join('');
   }
@@ -257,10 +369,11 @@ window.ControlTower = (() => {
     if (Number.isInteger(hint)) state.sprint = hint;
     render(); load();
   }
-  function leave() { state.active = false; state.chart?.destroy(); state.chart = null; }
+  function leave() { state.active = false; state.chart?.destroy(); state.chart = null; hideTip(); el('tower-modal')?.close(); }
 
   document.addEventListener('DOMContentLoaded', () => {
     if (!el('page-control-tower')) return;
+    window.addEventListener('scroll', hideTip, true);
     el('tower-sprint').onchange = event => { state.sprint = Number(event.target.value); load(); };
     el('tower-refresh').onclick = () => syncMonday(true);
     document.querySelectorAll('#page-control-tower .tower-origin-filter .tower-chip').forEach(chip => {

@@ -19,8 +19,8 @@
 .cap-table th,.cap-table td{padding:10px 9px;border-right:1px solid #e5ebf3;border-bottom:1px solid #e5ebf3;text-align:center;vertical-align:middle}
 .cap-table tr>*:last-child{border-right:0}
 .cap-table thead th{background:#f4f7fb;color:#14264a;font-weight:800;line-height:1.25;position:sticky;top:0;z-index:2}
-.cap-table thead th:first-child,.cap-table tbody td:first-child{position:sticky;left:0;z-index:1;background:#fff;text-align:left;min-width:175px}
-.cap-table thead th:first-child{z-index:3;background:#f4f7fb}
+.cap-table thead tr:first-child th:first-child,.cap-table tbody td:first-child{position:sticky;left:0;z-index:1;background:#fff;text-align:left;min-width:175px}
+.cap-table thead tr:first-child th:first-child{z-index:3;background:#f4f7fb}
 .cap-table tbody tr:last-child>td{border-bottom:0}
 .cap-table tbody tr:hover>td{background:#f9fbff}
 .cap-table tbody tr:hover>td:first-child{background:#f9fbff}
@@ -54,7 +54,7 @@
 .cap-extra{margin-top:12px;padding:12px 14px;border:1px solid #dce5f1;border-radius:10px;background:#fff;color:#344767;font-size:12px}
 .cap-extra h2{font-size:14px;margin-bottom:7px;color:#13264d}
 .cap-extra ul{padding-left:20px;max-height:170px;overflow:auto}.cap-extra li{margin:4px 0}
-.cap-formulas{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin-top:15px}
+.cap-formulas{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:11px;margin-top:15px}
 .cap-formulas>div{display:flex;flex-direction:column;gap:5px;padding:12px 14px;border:1px solid #e0e7f0;border-radius:9px;background:#f8faff;color:#455777;font-size:11px}
 .cap-formulas strong{color:#10264f;font-size:12px}
 .cap-note{font-size:11px;color:#5d6f8e;margin-top:8px}
@@ -90,10 +90,22 @@ body.capacity-view .topbar-right{display:none}
 .cap-warning{margin:5px 0 0;padding:9px 13px;border-color:#f1dfbc;background:#fff9ed;color:#624c25}
 .cap-table-scroll{border-radius:11px;box-shadow:none}
 .cap-table{min-width:1240px;font-size:14px}
+#page-capacity .cap-table{min-width:1440px}
 .cap-table th,.cap-table td{padding:13px 9px}
 .cap-table tbody>tr>td{font-size:14px}
 .cap-table thead th{padding-top:15px;padding-bottom:15px;background:#f5f8fc;font-size:13px;line-height:1.25;text-transform:none;letter-spacing:0;white-space:normal;cursor:default}
-.cap-table thead th:first-child,.cap-table tbody td:first-child{min-width:190px}
+.cap-table thead tr:first-child th:first-child,.cap-table tbody td:first-child{min-width:190px}
+/* Grupos da tabela de capacidade: previstas, registradas, saldo e indicadores separados por cor e borda. */
+#page-capacity .cap-table .cap-group-start{border-left:2px solid #c3d0e3}
+#page-capacity .cap-groups th{padding-top:9px;padding-bottom:9px;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+#page-capacity .cap-groups th small{display:block;margin-top:2px;font-size:10px;font-weight:600;letter-spacing:0;text-transform:none;color:#5d6f8e}
+#page-capacity .cap-group-estimate{background:#e8f1ff;color:#145db8}
+#page-capacity .cap-group-real{background:#fff1e6;color:#b4520c}
+#page-capacity .cap-table .cap-balance{font-weight:800;background:#f0faf3}
+#page-capacity .cap-table thead .cap-balance{background:#e6f8ec;color:#147a3a}
+#page-capacity .cap-group-kpi{background:#f1ecff;color:#6041a8}
+#page-capacity .cap-table .cap-total{font-weight:800;background:#f8fafd}
+#page-capacity .cap-table thead .cap-total{background:#edf2f8}
 .cap-table tbody tr:not(.cap-detail-row)>td{height:55px}
 .cap-dev-button{width:100%;gap:10px;font-size:14px}
 .cap-dev-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:145px}
@@ -120,7 +132,7 @@ body.capacity-view .topbar-right{display:none}
 .cap-formulas{gap:16px;margin-top:16px}
 .cap-formulas>div{display:flex;flex-direction:row;align-items:center;gap:17px;min-height:80px;padding:15px 18px;background:#f8fafd;font-size:12px}
 .cap-formula-icon{font-size:30px;line-height:1;font-weight:800}
-.cap-orange{color:#ff781e}.cap-blue{color:#1375e9}.cap-purple{color:#8543dc}
+.cap-green{color:#16a34a}.cap-orange{color:#ff781e}.cap-blue{color:#1375e9}.cap-purple{color:#8543dc}
 .cap-formulas strong,.cap-formulas small{display:block}
 .cap-formulas strong{font-size:14px;margin-bottom:4px}
 .cap-formulas small{font-size:12px;color:#4b5e80}

@@ -98,10 +98,11 @@ GRAPHQL;
             $cursor = $page['cursor'] ?? null;
             $page = $cursor ? ($this->query($token, $next, ['cursor' => $cursor])['next_items_page'] ?? null) : null;
         }
+        $fieldByTitle = ['módulo' => 'Modulo', 'modulo' => 'Modulo', 'descrição' => 'Descricao', 'descricao' => 'Descricao'];
         foreach ($board['columns'] ?? [] as $column) {
-            if (in_array(mb_strtolower(trim($column['title'] ?? '')), ['módulo', 'modulo'], true)) {
-                $map['Modulo'] = $column['id'];
-                break;
+            $field = $fieldByTitle[mb_strtolower(trim($column['title'] ?? ''))] ?? null;
+            if ($field !== null) {
+                $map[$field] ??= $column['id'];
             }
         }
         $converted = $this->convertItems($items, $map);
@@ -195,6 +196,7 @@ GRAPHQL;
                     'RemainingH' => $this->hours($item, $map['RemainingH'] ?? null),
                     'Impedimento' => $this->text($item, $map['Impedimento'] ?? null),
                     'Modulo' => $this->text($item, $map['Modulo'] ?? null),
+                    'Descricao' => trim($this->text($item, $map['Descricao'] ?? null)),
                 ];
             }
         }

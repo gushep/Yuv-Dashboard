@@ -49,6 +49,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/support-reserves', [MondayController::class, 'saveSupportReserve'])->middleware('screen:consumption')->name('support-reserves.store');
     Route::post('/api/release', [MondayController::class, 'release'])->middleware('screen:release')->name('release.data');
     Route::get('/api/control-tower', [MondayController::class, 'controlTower'])->middleware('screen:control-tower')->name('control-tower.show');
+    Route::get('/api/burndown', [MondayController::class, 'burndown'])->middleware('screen:burndown')->name('burndown.show');
 
     Route::apiResource('/api/users', UserController::class)->except('show')->middleware('screen:users');
 });
