@@ -120,6 +120,17 @@ O `.env` contém a configuração do ambiente e não deve ser versionado. No ser
 
 Atualmente, a configuração do quadro é compartilhada entre os usuários. O projeto não implementa organizações independentes, gestão de papéis ou OAuth da Monday.
 
+## Publicação (deploy)
+
+A produção (`https://yuvmetrics.novaconquista.org`, hospedagem Hostinger) acompanha a `main`. O workflow `.github/workflows/deploy.yml` roda os testes em todo PR e, a cada push na `main` com testes passando, entra no servidor por SSH e executa o `deploy.sh` da própria `main`:
+
+1. Coloca o site em manutenção e atualiza o código para a `main` (`git reset --hard`; `.env`, `storage/` e `vendor/` não são versionados e ficam intactos).
+2. Roda `composer install --no-dev` somente quando o `composer.lock` mudou.
+3. Havendo migration pendente, faz backup do banco (`~/backups/yuv-metrics`, fora da pasta pública, mantendo os 15 mais recentes) e roda `php artisan migrate --force`.
+4. Limpa os caches do Laravel e tira o site da manutenção, mesmo se algum passo falhar.
+
+O servidor usa o PHP 8.4 em `/opt/alt/php84/usr/bin/php` (o `php` padrão do terminal é mais antigo). A chave SSH do deploy fica no secret `SSH_PRIVATE_KEY` do ambiente `producao` no GitHub; host, porta, usuário, pasta e a identidade verificada do servidor (`SSH_KNOWN_HOSTS`) ficam nas variáveis do mesmo ambiente. Para publicar de novo sem um push, use **Run workflow** na aba Actions.
+
 ## Verificação
 
 ```bash

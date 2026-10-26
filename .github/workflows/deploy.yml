@@ -1,0 +1,59 @@
+# Testes em todo PR e push; a cada push na main, se os testes passarem, publica em produção (Hostinger) via deploy.sh.
+name: Testes e deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Dependências
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Ambiente de teste
+        run: cp .env.example .env && php artisan key:generate
+
+      - name: Testes
+        run: php artisan test --compact
+
+  deploy:
+    needs: testes
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: producao
+    # Um deploy por vez; um push novo espera o anterior terminar.
+    concurrency:
+      group: deploy-producao
+      cancel-in-progress: false
+    steps:
+      - name: Chave SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ vars.SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Publicar a main
+        env:
+          SSH_TARGET: ${{ vars.SSH_USER }}@${{ vars.SSH_HOST }}
+          SSH_PORT: ${{ vars.SSH_PORT }}
+          APP_DIR: ${{ vars.APP_DIR }}
+        run: |
+          ssh -i ~/.ssh/deploy -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
+            "cd '$APP_DIR' && git fetch --quiet origin main && git show origin/main:deploy.sh | APP_DIR='$APP_DIR' bash"
