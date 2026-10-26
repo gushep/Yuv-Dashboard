@@ -234,6 +234,8 @@ async function syncMonday(force = true) {
   mondayMessage('monday-sync-status', 'Buscando tarefas no Monday...');
   try {
     const result = await mondayRequest('/api/sync', { force });
+    // Ordem e cores dos status do quadro: colunas do Kanban da tela Tarefas.
+    if (result.statusOptions?.length) window.MONDAY_STATUS_OPTIONS = result.statusOptions;
     if (result.rows.length || !['consumption','release'].includes(currentPage)) useMondayRows(result.rows);
     window.Capacity?.onDataUpdated(result);
     // As datas das sprints chegam com o Capacity; com elas a tela Tarefas descobre a sprint ativa.

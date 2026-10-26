@@ -149,6 +149,24 @@ class SprintReleaseTest extends TestCase
         $this->assertSame('Novo filtro de alarmes por filial.', $snapshot['rows'][0]['Descricao']);
     }
 
+    public function test_sync_reads_the_client_column_and_the_status_labels_in_monday_order(): void
+    {
+        Http::fake(['api.monday.com/v2' => Http::response(['data' => ['boards' => [[
+            'name' => 'Tarefas', 'columns' => [
+                ['id' => 'client', 'title' => 'Cliente'],
+                ['id' => 'status', 'title' => 'Status', 'settings_str' => '{"labels":{"0":"Em progresso","5":"Backlog"},"labels_colors":{"0":{"color":"#fdab3d"},"5":{"color":"#c4c4c4"}},"labels_positions_v2":{"0":1,"5":0}}'],
+            ],
+            'items_page' => ['cursor' => null, 'items' => [['id' => '1', 'name' => 'Filtro', 'column_values' => [
+                ['id' => 'sprint', 'text' => 'Sprint 17'], ['id' => 'client', 'text' => ' Transportadora Alfa '],
+            ]]]],
+        ]]]])]);
+
+        $snapshot = app(MondayService::class)->sync('token', '123', ['Sprint' => 'sprint', 'Status' => 'status']);
+
+        $this->assertSame('Transportadora Alfa', $snapshot['rows'][0]['Cliente']);
+        $this->assertSame([['label' => 'Backlog', 'color' => '#c4c4c4'], ['label' => 'Em progresso', 'color' => '#fdab3d']], $snapshot['statusOptions']);
+    }
+
     public function test_monday_description_takes_priority_and_skips_comments_while_empty_ones_fall_back(): void
     {
         $this->prepareSnapshot();
@@ -181,7 +199,8 @@ class SprintReleaseTest extends TestCase
         $this->postJson('/api/release', ['sprint' => 17])->assertOk();
         Http::assertSentCount(1);
         $snapshot = Cache::get('monday-sync-1');
-        $snapshot['syncedAt'] = now()->subSecond()->toIso8601String();
+        // Horário bem diferente do snapshot original: com 1 segundo, um teste lento caía no mesmo horário e não via sync nova.
+        $snapshot['syncedAt'] = now()->subSeconds(30)->toIso8601String();
         Cache::put('monday-sync-1', $snapshot, 3600);
         $this->postJson('/api/release', ['sprint' => 17])->assertOk();
         Http::assertSentCount(2);

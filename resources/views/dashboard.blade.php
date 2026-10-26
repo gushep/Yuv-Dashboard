@@ -249,6 +249,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="{{ URL::versioned('users.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('item-detail.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('new-ticket.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('task-views.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('responsive.css') }}">
 </head>
 <body>
@@ -516,19 +517,40 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           <button type="button" class="ticket-btn" onclick="NewTicket.open()">+ Novo Ticket</button>
           @endcan
         </div>
+        <div class="tbar raw-viewbar">
+          <div class="raw-views" id="raw-views" role="group" aria-label="Visualização">
+            <button type="button" data-view="table" aria-pressed="true" onclick="chooseRawView('table')">☰ Tabela</button>
+            <button type="button" data-view="board" aria-pressed="false" onclick="chooseRawView('board')">▦ Kanban</button>
+            <button type="button" data-view="list" aria-pressed="false" onclick="chooseRawView('list')">≡ Lista agrupada</button>
+          </div>
+          <label class="raw-group" hidden>Agrupar por
+            <select id="rawGroupSel" onchange="chooseRawGroup(this.value)">
+              <option value="status">Etapa (Backlog → Concluído)</option>
+              <option value="responsavel">Responsável</option>
+              <option value="cliente">Cliente</option>
+              <option value="prioridade">Prioridade</option>
+              <option value="tipo">Tipo</option>
+              <option value="epico">Épico</option>
+              <option value="sprint">Sprint</option>
+            </select>
+          </label>
+        </div>
         <div class="tbar" style="border-top:none;padding-top:0;gap:8px;flex-wrap:wrap">
           <select id="rawSpSel" onchange="chooseRawSprint(this.value)" style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;cursor:pointer"><option value="all">Todas as sprints</option></select>
           <details class="msel" id="rawDevMs"></details>
           <details class="msel" id="rawStatusMs"></details>
+          <details class="msel" id="rawClientMs"></details>
           <select id="rawTipoSel" onchange="renderRaw()" style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;cursor:pointer"><option value="all">Todos os tipos</option></select>
           <input class="tsrch" type="text" id="rawSearch" placeholder="Buscar..." oninput="renderRaw()">
           <button type="button" class="raw-clear" id="rawClear" onclick="clearRawFilters()" hidden>Limpar filtros</button>
         </div>
+        <div id="raw-table-view">
         <div class="tscroll">
           <table>
             <thead><tr>
               <th onclick="sortRaw('Nome')">Item</th>
               <th onclick="sortRaw('Responsavel')">Responsável</th>
+              <th onclick="sortRaw('Cliente')">Cliente</th>
               <th onclick="sortRaw('Sprint')">Sprint</th>
               <th onclick="sortRaw('Status')">Status</th>
               <th onclick="sortRaw('Prioridade')">Prioridade</th>
@@ -551,6 +573,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
             <button class="pbtn" id="rawNext" onclick="rawPg(1)">Próximo →</button>
           </div>
         </div>
+        </div>
+        <div id="raw-board-view" class="raw-board-view" hidden></div>
       </div>
       <dialog class="kpi-modal task-modal" id="item-modal" aria-label="Detalhe do card"></dialog>
     </div>
@@ -1005,6 +1029,9 @@ function initSprintNav(){
   renderMultiSelect('rawDevMs',{label:'Responsáveis',all:'Todos os responsáveis',search:true,selected:rawDevs,options:people.map(d=>({value:d,label:d}))});
   const statuses=[...new Set(DATA.map(x=>x.Status).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   renderMultiSelect('rawStatusMs',{label:'Status',all:'Todos os status',selected:rawStatuses,options:statuses.map(s=>({value:s,label:s}))});
+  const clients=[...new Set(DATA.filter(x=>x.Sprint).map(x=>clean(x.Cliente)).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  renderMultiSelect('rawClientMs',{label:'Clientes',all:'Todos os clientes',search:true,selected:rawClients,
+    options:[...clients.map(c=>({value:c,label:c})),{value:RAW_NO_CLIENT,label:'Sem cliente'}]});
   const rtipo=document.getElementById('rawTipoSel'),tipo=rtipo.value;
   rtipo.length=1;
   [...new Set(DATA.map(x=>x.Tipo))].filter(Boolean).forEach(t=>rtipo.appendChild(new Option(t,t)));
@@ -1561,8 +1588,23 @@ function renderTimeIndividual(dev,rows,spFilter){
 let rawPage=0,rawSort={col:'Sprint',asc:true},rawActiveFilters=new Set();
 // Sem escolha (null), a tela segue a sprint ativa; os filtros de responsáveis e status aceitam várias opções.
 let rawSprintChoice=null;
-const rawDevs=new Set(),rawStatuses=new Set();
+const rawDevs=new Set(),rawStatuses=new Set(),rawClients=new Set();
+/** Opção do filtro de clientes para tarefas com a coluna Cliente vazia. */
+const RAW_NO_CLIENT='__sem_cliente__';
 const RAW_PER=30;
+const CAN_UPDATE_ITEMS=@json(auth()->user()->can('update-items'));
+// A mesma lista filtrada em tabela, quadro Kanban ou lista agrupada; a escolha fica guardada no navegador.
+const RAW_VIEWS=['table','board','list'];
+const rawPref=key=>{try{return localStorage.getItem('yuv.tarefas.'+key);}catch{return null;}};
+const rawSavePref=(key,value)=>{try{localStorage.setItem('yuv.tarefas.'+key,value);}catch{}};
+let rawView=RAW_VIEWS.includes(rawPref('view'))?rawPref('view'):'table';
+let rawGroup=rawPref('group')||'status';
+function chooseRawView(view){
+  rawView=view; rawSavePref('view',view);
+  document.querySelectorAll('#raw-views [data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
+  renderRaw();
+}
+function chooseRawGroup(group){rawGroup=group;rawSavePref('group',group);renderRaw();}
 function chooseRawSprint(value){
   rawSprintChoice=value;
   currentSprint=value==='all'?null:Number(value);
@@ -1570,7 +1612,7 @@ function chooseRawSprint(value){
   rawPage=0; renderRaw();
 }
 function clearRawFilters(){
-  rawDevs.clear(); rawStatuses.clear(); rawActiveFilters.clear();
+  rawDevs.clear(); rawStatuses.clear(); rawClients.clear(); rawActiveFilters.clear();
   document.querySelectorAll('#raw-filters .tfbtn').forEach(b=>b.classList.remove('active'));
   document.getElementById('rawTipoSel').value='all';
   document.getElementById('rawSearch').value='';
@@ -1597,25 +1639,37 @@ function renderRaw(){
   if(sp!=='all') rows=rows.filter(x=>x.Sprint===parseInt(sp));
   if(rawDevs.size) rows=rows.filter(x=>devPeople(x).some(p=>rawDevs.has(p)));
   if(rawStatuses.size) rows=rows.filter(x=>rawStatuses.has(x.Status));
+  if(rawClients.size) rows=rows.filter(x=>rawClients.has(clean(x.Cliente)||RAW_NO_CLIENT));
   if(tipo!=='all') rows=rows.filter(x=>x.Tipo===tipo);
-  document.getElementById('rawClear').hidden=!(rawDevs.size||rawStatuses.size||rawActiveFilters.size||tipo!=='all'||q);
+  document.getElementById('rawClear').hidden=!(rawDevs.size||rawStatuses.size||rawClients.size||rawActiveFilters.size||tipo!=='all'||q);
   if(rawActiveFilters.has('bug')) rows=rows.filter(x=>x.BugProducao);
   if(rawActiveFilters.has('val')) rows=rows.filter(x=>x.ValorAgregado);
   if(rawActiveFilters.has('rework')) rows=rows.filter(x=>x.Retrabalho);
   if(rawActiveFilters.has('epic')) rows=rows.filter(x=>x.Epico);
-  if(q) rows=rows.filter(x=>x.Nome.toLowerCase().includes(q)||x.Responsavel.toLowerCase().includes(q)||x.Status.toLowerCase().includes(q));
+  if(q) rows=rows.filter(x=>[x.Nome,x.Responsavel,x.Status,x.Cliente].some(v=>clean(v).toLowerCase().includes(q)));
   rows=[...rows].sort((a,b)=>{
     const av=a[rawSort.col]??'',bv=b[rawSort.col]??'';
     if(typeof av==='number') return rawSort.asc?av-bv:bv-av;
     return rawSort.asc?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
   });
+  document.getElementById('raw-cnt').textContent=`${rows.length} itens`;
+  document.querySelectorAll('#raw-views [data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===rawView)));
+  const groupSel=document.getElementById('rawGroupSel');
+  groupSel.value=rawGroup; if(!groupSel.value){rawGroup='status';groupSel.value='status';}
+  groupSel.closest('label').hidden=rawView==='table';
+  document.getElementById('raw-table-view').hidden=rawView!=='table';
+  document.getElementById('raw-board-view').hidden=rawView==='table';
+  if(rawView!=='table'){
+    TaskViews.render(document.getElementById('raw-board-view'),rows,{view:rawView,groupBy:rawGroup,showSprint:sp==='all',canMove:CAN_UPDATE_ITEMS});
+    return;
+  }
   const total=rows.length,pages=Math.ceil(total/RAW_PER)||1;
   rawPage=Math.max(0,Math.min(rawPage,pages-1));
   const slice=rows.slice(rawPage*RAW_PER,(rawPage+1)*RAW_PER);
-  document.getElementById('raw-cnt').textContent=`${total} itens`;
   document.getElementById('raw-body').innerHTML=slice.map(x=>`<tr>
     <td title="${esc(x.Nome)}">${x.Id?`<button type="button" class="raw-link" onclick="ItemDetail.open('${esc(x.Id)}')">${esc(x.Nome)}</button>`:esc(x.Nome)}</td>
     <td class="cm">${esc(devPeople(x).filter(p=>!SprintRules.isExcludedPerson(p))[0]?.split(' ')[0]||'—')}</td>
+    <td title="${esc(x.Cliente)}">${esc(x.Cliente)||'—'}</td>
     <td class="cm">Sprint ${x.Sprint}</td>
     <td>${stBadge(x.Status)}</td>
     <td>${prioBadge(x.Prioridade)}</td>
@@ -1657,6 +1711,7 @@ window.addEventListener('popstate',()=>{
 <script src="{{ URL::versioned('users.js') }}"></script>
 <script src="{{ URL::versioned('attachments.js') }}"></script>
 <script src="{{ URL::versioned('item-detail.js') }}"></script>
+<script src="{{ URL::versioned('task-views.js') }}"></script>
 @can('create-tickets')
 <script src="{{ URL::versioned('new-ticket.js') }}"></script>
 @endcan
