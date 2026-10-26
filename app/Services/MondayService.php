@@ -112,7 +112,7 @@ GRAPHQL;
             $cursor = $page['cursor'] ?? null;
             $page = $cursor ? ($this->query($token, $next, ['cursor' => $cursor])['next_items_page'] ?? null) : null;
         }
-        $fieldByTitle = ['módulo' => 'Modulo', 'modulo' => 'Modulo', 'descrição' => 'Descricao', 'descricao' => 'Descricao'];
+        $fieldByTitle = ['módulo' => 'Modulo', 'modulo' => 'Modulo', 'descrição' => 'Descricao', 'descricao' => 'Descricao', 'cliente' => 'Cliente'];
         foreach ($board['columns'] ?? [] as $column) {
             $field = $fieldByTitle[mb_strtolower(trim($column['title'] ?? ''))] ?? null;
             if ($field !== null) {
@@ -133,6 +133,8 @@ GRAPHQL;
             'sprints' => $sprintBoard['dates'],
             'sprintItems' => $sprintBoard['items'],
             'labels' => $this->statusLabels($board['columns'] ?? []),
+            // Rótulos da coluna Status na ordem e cor do Monday: colunas do Kanban da tela Tarefas.
+            'statusOptions' => $this->statusOptions(collect($board['columns'] ?? [])->firstWhere('id', $map['Status'] ?? null) ?? []),
             'syncedAt' => now()->toIso8601String(),
         ];
     }
@@ -186,6 +188,7 @@ GRAPHQL;
                         'Status' => $this->text($item, $map['Status'] ?? null),
                         'Prioridade' => $this->text($item, $map['Prioridade'] ?? null),
                         'Tipo' => $type, 'Sprint' => null,
+                        'Cliente' => trim($this->text($item, $map['Cliente'] ?? null)),
                     ];
                 }
 
@@ -211,6 +214,7 @@ GRAPHQL;
                     'Impedimento' => $this->text($item, $map['Impedimento'] ?? null),
                     'Modulo' => $this->text($item, $map['Modulo'] ?? null),
                     'Descricao' => trim($this->text($item, $map['Descricao'] ?? null)),
+                    'Cliente' => trim($this->text($item, $map['Cliente'] ?? null)),
                 ];
             }
         }
