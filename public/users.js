@@ -46,8 +46,8 @@ window.Users = (() => {
       const screens = user.screens.length
         ? `<div class="users-screen-list">${user.screens.map(value => `<span class="b">${escape(screenLabel(value))}</span>`).join('')}</div>`
         : '<span class="users-none">Sem acesso a nenhuma tela</span>';
-      const permissions = [user.canUpdateItems && 'Atualiza cards (status, comentários e anexos)', user.canCreateTickets && 'Abre tickets'].filter(Boolean);
-      const statusPermission = permissions.length ? `<div class="users-screen-list">${permissions.map(label => `<span class="b users-perm">${label}</span>`).join('')}</div>` : '';
+      const permissions = [user.canUpdateItems && 'Atualiza cards', user.canCreateTickets && 'Abre tickets'].filter(Boolean);
+      const statusPermission = permissions.length ? `<div class="users-screen-list users-perm-list">${permissions.map(label => `<span class="b users-perm">${label}</span>`).join('')}</div>` : '';
       const isMe = user.id === currentUserId();
       return `<tr>
         <td>${escape(user.name)}${isMe ? ' <span class="users-none">(você)</span>' : ''}</td>
