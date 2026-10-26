@@ -275,9 +275,10 @@ GRAPHQL;
      * @return array{id: string, name: string, url: string, createdAt: ?string, updatedAt: ?string, creator: ?string,
      *     board: ?string, group: ?array{title: string, color: ?string}, statusColumnId: ?string,
      *     statusOptions: list<array{label: string, color: ?string}>,
-     *     columns: list<array{id: string, title: string, type: string, text: string, color: ?string}>,
+     *     columns: list<array{id: string, title: string, type: string, text: string, color: ?string, files?: list<array<string, mixed>>}>,
      *     subitems: list<array{id: string, name: string, status: string, color: ?string, people: string}>,
-     *     updates: list<array{id: string, author: string, createdAt: string, text: string, assets: list<array{name: string, url: string}>, replies: list<array{id: string, author: string, createdAt: string, text: string}>}>}
+     *     attachments: list<array{id: string, name: string, url: string, extension: string, size: int, image: bool}>,
+     *     updates: list<array{id: string, author: string, createdAt: string, text: string, images: list<array<string, mixed>>, assets: list<array<string, mixed>>, replies: list<array<string, mixed>>}>}
      */
     public function itemDetails(string $token, string $boardId, string $itemId, ?string $statusColumnId): array
     {
@@ -288,6 +289,7 @@ query ($ids: [ID!]!, $columns: [String!]) {
     creator { name }
     group { title color }
     board { id name columns(ids: $columns) { id settings_str } }
+    assets { id name file_extension file_size public_url url }
     column_values {
       id text type column { title }
       ... on StatusValue { label_style { color } }
@@ -295,23 +297,30 @@ query ($ids: [ID!]!, $columns: [String!]) {
       ... on MirrorValue { display_value }
     }
     subitems { id name column_values { text type ... on StatusValue { label_style { color } } } }
-    updates(limit: 100) { id body created_at creator { name } assets { name url } replies { id body created_at creator { name } } }
+    updates(limit: 100) {
+      id body created_at creator { name }
+      assets { id name file_extension file_size public_url url }
+      replies { id body created_at creator { name } }
+    }
   }
 }
 GRAPHQL;
         $item = $this->boardItem($token, $boardId, $query, ['ids' => [$itemId], 'columns' => $statusColumnId ? [$statusColumnId] : null]);
+        $assets = $this->itemAssets($token, $item);
 
         $columns = [];
         foreach ($item['column_values'] ?? [] as $value) {
             if (in_array($value['type'] ?? '', ['name', 'subtasks'], true)) {
                 continue;
             }
+            $text = trim((string) (! empty($value['display_value']) ? $value['display_value'] : ($value['text'] ?? '')));
             $columns[] = [
                 'id' => (string) $value['id'],
                 'title' => (string) ($value['column']['title'] ?? $value['id']),
                 'type' => (string) ($value['type'] ?? ''),
-                'text' => trim((string) (! empty($value['display_value']) ? $value['display_value'] : ($value['text'] ?? ''))),
+                'text' => $text,
                 'color' => $value['label_style']['color'] ?? null,
+                ...(($value['type'] ?? '') === 'file' ? ['files' => $this->assetsIn($text, $assets)] : []),
             ];
         }
         $comment = fn (array $entry): array => [
@@ -319,6 +328,8 @@ GRAPHQL;
             'author' => (string) ($entry['creator']['name'] ?? 'Automação'),
             'createdAt' => (string) $entry['created_at'],
             'text' => $this->plainText((string) ($entry['body'] ?? '')),
+            // Imagens coladas no corpo do comentário: o Monday as guarda como <img> no HTML.
+            'images' => $this->assetsIn(implode(' ', $this->imageSources((string) ($entry['body'] ?? ''))), $assets),
         ];
         $hasStatusColumn = $statusColumnId && collect($columns)->contains('id', $statusColumnId);
 
@@ -346,12 +357,86 @@ GRAPHQL;
                     'people' => (string) ($values->firstWhere('type', 'people')['text'] ?? ''),
                 ];
             }, $item['subitems'] ?? []),
+            'attachments' => array_values($assets),
             'updates' => array_map(fn (array $update): array => [
                 ...$comment($update),
-                'assets' => array_map(fn (array $asset): array => ['name' => (string) $asset['name'], 'url' => (string) $asset['url']], $update['assets'] ?? []),
+                'assets' => array_values(array_filter(array_map(fn (array $asset): ?array => $assets[(string) $asset['id']] ?? null, $update['assets'] ?? []))),
                 'replies' => array_map($comment, $update['replies'] ?? []),
             ], $item['updates'] ?? []),
         ];
+    }
+
+    /**
+     * Todos os arquivos do card (colunas de arquivo, anexos e imagens coladas nos comentários), por id.
+     * O link é o público temporário do Monday (vale cerca de 1 hora), para abrir e exibir sem login no Monday.
+     *
+     * @param  array<string, mixed>  $item
+     * @return array<string, array{id: string, name: string, url: string, extension: string, size: int, image: bool}>
+     */
+    private function itemAssets(string $token, array $item): array
+    {
+        $raw = [...($item['assets'] ?? []), ...array_merge([], ...array_map(fn (array $update): array => $update['assets'] ?? [], $item['updates'] ?? []))];
+        $bodies = collect($item['updates'] ?? [])->flatMap(fn (array $update): array => [$update['body'] ?? '', ...array_column($update['replies'] ?? [], 'body')]);
+        $known = array_map(fn (array $asset): string => (string) $asset['id'], $raw);
+        $missing = array_values(array_diff($this->assetIds($bodies->flatMap(fn (?string $body): array => $this->imageSources((string) $body))->implode(' ')), $known));
+        if ($missing !== []) {
+            try {
+                $query = 'query ($ids: [ID!]!) { assets(ids: $ids) { id name file_extension file_size public_url url } }';
+                array_push($raw, ...($this->query($token, $query, ['ids' => $missing])['assets'] ?? []));
+            } catch (RuntimeException) {
+                // Sem o link público, as imagens do corpo apenas não aparecem; o restante do card continua.
+            }
+        }
+
+        $assets = [];
+        foreach ($raw as $asset) {
+            $extension = strtolower(ltrim((string) ($asset['file_extension'] ?? ''), '.'));
+            $assets[(string) $asset['id']] = [
+                'id' => (string) $asset['id'],
+                'name' => (string) ($asset['name'] ?? 'arquivo'),
+                'url' => (string) (($asset['public_url'] ?? '') ?: ($asset['url'] ?? '')),
+                'extension' => $extension,
+                'size' => (int) ($asset['file_size'] ?? 0),
+                'image' => in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'], true),
+            ];
+        }
+
+        return $assets;
+    }
+
+    /**
+     * Endereços das imagens embutidas num comentário em HTML.
+     *
+     * @return list<string>
+     */
+    private function imageSources(string $html): array
+    {
+        preg_match_all('/<img\b[^>]*\bsrc\s*=\s*["\']([^"\']+)["\']/i', $html, $matches);
+
+        return $matches[1];
+    }
+
+    /**
+     * Ids de arquivos do Monday citados em links (`.../resources/{id}/arquivo`).
+     *
+     * @return list<string>
+     */
+    private function assetIds(string $text): array
+    {
+        preg_match_all('#/resources/(\d+)/#', $text, $matches);
+
+        return array_values(array_unique($matches[1]));
+    }
+
+    /**
+     * Arquivos conhecidos citados num texto (links de coluna de arquivo ou imagens de comentário).
+     *
+     * @param  array<string, array<string, mixed>>  $assets
+     * @return list<array<string, mixed>>
+     */
+    private function assetsIn(string $text, array $assets): array
+    {
+        return array_values(array_filter(array_map(fn (string $id): ?array => $assets[$id] ?? null, $this->assetIds($text))));
     }
 
     /**
