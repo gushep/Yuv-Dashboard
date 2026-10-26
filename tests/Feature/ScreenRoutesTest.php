@@ -22,6 +22,17 @@ class ScreenRoutesTest extends TestCase
         $this->get('/torre-de-controle?sprint=18')->assertOk();
     }
 
+    public function test_scripts_and_styles_carry_their_version_so_the_cdn_serves_the_new_files_after_a_deploy(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $this->assertStringContainsString(asset('users.js').'?v='.filemtime(public_path('users.js')), $html);
+        $this->assertStringContainsString(asset('item-detail.css').'?v='.filemtime(public_path('item-detail.css')), $html);
+        $this->assertDoesNotMatchRegularExpression('#(src|href)="'.preg_quote(asset(''), '#').'[^"?]+\.(js|css)"#', $html);
+    }
+
     public function test_old_raw_data_address_redirects_to_the_tasks_screen(): void
     {
         $this->actingAs(User::factory()->create());

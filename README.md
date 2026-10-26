@@ -129,6 +129,8 @@ A produção (`https://yuvmetrics.novaconquista.org`, hospedagem Hostinger) acom
 3. Havendo migration pendente, faz backup do banco (`~/backups/yuv-metrics`, fora da pasta pública, mantendo os 15 mais recentes) e roda `php artisan migrate --force`.
 4. Limpa os caches do Laravel e tira o site da manutenção, mesmo se algum passo falhar.
 
+A Hostinger entrega `.js` e `.css` por um CDN com cache de 7 dias. Por isso as páginas referenciam esses arquivos com `URL::versioned('arquivo.js')` (macro em `AppServiceProvider`), que acrescenta `?v=` com a data de modificação: a cada deploy, arquivos alterados ganham endereço novo e o navegador não fica com a versão antiga. Novos `.js`/`.css` devem ser incluídos da mesma forma.
+
 O servidor usa o PHP 8.4 em `/opt/alt/php84/usr/bin/php` (o `php` padrão do terminal é mais antigo). A chave SSH do deploy fica no secret `SSH_PRIVATE_KEY` do ambiente `producao` no GitHub; host, porta, usuário, pasta e a identidade verificada do servidor (`SSH_KNOWN_HOSTS`) ficam nas variáveis do mesmo ambiente. Para publicar de novo sem um push, use **Run workflow** na aba Actions.
 
 ## Verificação

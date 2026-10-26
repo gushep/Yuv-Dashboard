@@ -236,20 +236,20 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 .settings-message.error{color:var(--red)}
 .settings-message.success{color:var(--green)}
  </style>
-<link rel="stylesheet" href="{{ asset('bombeiro.css') }}">
-<link rel="stylesheet" href="{{ asset('sprint-panel.css') }}">
-<link rel="stylesheet" href="{{ asset('panel-carousel.css') }}">
-<link rel="stylesheet" href="{{ asset('capacity.css') }}">
-<link rel="stylesheet" href="{{ asset('forecast.css') }}">
-<link rel="stylesheet" href="{{ asset('consumption.css') }}">
-<link rel="stylesheet" href="{{ asset('release.css') }}">
-<link rel="stylesheet" href="{{ asset('control-tower.css') }}">
-<link rel="stylesheet" href="{{ asset('kpi-table.css') }}">
-<link rel="stylesheet" href="{{ asset('burndown.css') }}">
-<link rel="stylesheet" href="{{ asset('users.css') }}">
-<link rel="stylesheet" href="{{ asset('item-detail.css') }}">
-<link rel="stylesheet" href="{{ asset('new-ticket.css') }}">
-<link rel="stylesheet" href="{{ asset('responsive.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('bombeiro.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('sprint-panel.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('panel-carousel.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('capacity.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('forecast.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('consumption.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('release.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('control-tower.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('kpi-table.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('burndown.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('users.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('item-detail.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('new-ticket.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('responsive.css') }}">
 </head>
 <body>
 <aside class="sidebar" id="sidebar" onmouseleave="this.classList.remove('suppressed')" onkeydown="this.classList.remove('suppressed')">
@@ -718,9 +718,9 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
   <button type="button" id="carousel-exit">Sair</button>
   <span id="carousel-status" role="status">Troca automática a cada 30 segundos</span>
 </div>
-<script src="{{ asset('sprint-rules.js') }}"></script>
-<script src="{{ asset('kpi-table.js') }}"></script>
-<script src="{{ asset('responsive.js') }}"></script>
+<script src="{{ URL::versioned('sprint-rules.js') }}"></script>
+<script src="{{ URL::versioned('kpi-table.js') }}"></script>
+<script src="{{ URL::versioned('responsive.js') }}"></script>
 <script>
 const DATA=[];
 
@@ -1644,21 +1644,21 @@ window.addEventListener('popstate',()=>{
   navigate(page||'control-tower',sprint,{history:'none'});
 });
 </script>
-<script src="{{ asset('monday-client.js') }}"></script>
-<script src="{{ asset('bombeiro.js') }}"></script>
-<script src="{{ asset('sprint-panel.js') }}"></script>
-<script src="{{ asset('panel-carousel.js') }}"></script>
-<script src="{{ asset('capacity.js') }}"></script>
-<script src="{{ asset('forecast.js') }}"></script>
-<script src="{{ asset('consumption.js') }}"></script>
-<script src="{{ asset('release.js') }}"></script>
-<script src="{{ asset('control-tower.js') }}"></script>
-<script src="{{ asset('burndown.js') }}"></script>
-<script src="{{ asset('users.js') }}"></script>
-<script src="{{ asset('attachments.js') }}"></script>
-<script src="{{ asset('item-detail.js') }}"></script>
+<script src="{{ URL::versioned('monday-client.js') }}"></script>
+<script src="{{ URL::versioned('bombeiro.js') }}"></script>
+<script src="{{ URL::versioned('sprint-panel.js') }}"></script>
+<script src="{{ URL::versioned('panel-carousel.js') }}"></script>
+<script src="{{ URL::versioned('capacity.js') }}"></script>
+<script src="{{ URL::versioned('forecast.js') }}"></script>
+<script src="{{ URL::versioned('consumption.js') }}"></script>
+<script src="{{ URL::versioned('release.js') }}"></script>
+<script src="{{ URL::versioned('control-tower.js') }}"></script>
+<script src="{{ URL::versioned('burndown.js') }}"></script>
+<script src="{{ URL::versioned('users.js') }}"></script>
+<script src="{{ URL::versioned('attachments.js') }}"></script>
+<script src="{{ URL::versioned('item-detail.js') }}"></script>
 @can('create-tickets')
-<script src="{{ asset('new-ticket.js') }}"></script>
+<script src="{{ URL::versioned('new-ticket.js') }}"></script>
 @endcan
 </body></html>
 
