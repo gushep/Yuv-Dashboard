@@ -37,6 +37,10 @@ Cada tela tem seu próprio endereço (`/torre-de-controle`, `/burndown`, `/sprin
 
 No celular (até 640px), `public/responsive.css` e `public/responsive.js` transformam as tabelas de lista em cartões (com o cabeçalho como botões de ordenação e sem os campos vazios), abrem os modais em tela cheia e compactam os cabeçalhos das telas. As tabelas comparativas de Capacity, Previsibilidade e Consumo mantêm rolagem lateral com a primeira coluna fixa.
 
+### App Android
+
+O app (`br.com.yuv.metrics`) é um pacote TWA gerado pelo PWABuilder: abre o próprio site em tela cheia, então sempre mostra a versão publicada e não precisa ser gerado de novo a cada deploy. O `public/.well-known/assetlinks.json` liga o app ao domínio (sem ele, o app abre com a barra do Chrome). O instalador fica em `public/downloads/yuv-metrics.apk` no servidor, fora do Git (`*.apk` é ignorado); quando o arquivo existe, o menu lateral mostra "Baixar app Android". Para publicar uma versão nova, gere o pacote com a **mesma chave de assinatura** (guardada fora do repositório) e substitua o arquivo no servidor.
+
 ## Integração com a Monday
 
 A aplicação consulta a API GraphQL da Monday pelo backend, com paginação, mapeamento de colunas e cache. Na tela **Configurações**, informe o token, selecione o quadro e confira o mapeamento das colunas.

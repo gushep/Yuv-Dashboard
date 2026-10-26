@@ -360,7 +360,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
   </nav>
   <div class="sidebar-footer">
     @if (file_exists(public_path('downloads/yuv-metrics.apk')))
-    <a class="sidebar-action apk-download" href="{{ asset('downloads/yuv-metrics.apk') }}" download="yuv-metrics.apk">
+    <a class="sidebar-action apk-download" href="{{ URL::versioned('downloads/yuv-metrics.apk') }}" download="yuv-metrics.apk">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M12 7v7m-3-3 3 3 3-3M10 18h4"/></svg>
       <span class="nav-label">Baixar app Android</span>
     </a>
