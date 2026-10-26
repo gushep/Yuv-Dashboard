@@ -88,6 +88,25 @@ class UserManagementTest extends TestCase
         $this->assertFalse($user->canAccessScreen(Screen::Dashboard));
     }
 
+    public function test_admin_grants_and_revokes_permission_to_change_card_status(): void
+    {
+        $this->actingAs(User::factory()->create());
+        $user = User::factory()->withScreens(Screen::RawData)->create();
+        $payload = ['name' => $user->name, 'email' => $user->email, 'screens' => ['raw']];
+
+        $this->putJson("/api/users/{$user->id}", [...$payload, 'can_update_items' => true])
+            ->assertOk()->assertJsonPath('user.canUpdateItems', true);
+        $this->assertTrue($user->refresh()->canUpdateItems());
+
+        $this->putJson("/api/users/{$user->id}", [...$payload, 'can_update_items' => false])
+            ->assertOk()->assertJsonPath('user.canUpdateItems', false);
+        $this->assertFalse($user->refresh()->canUpdateItems());
+
+        $this->putJson("/api/users/{$user->id}", [...$payload, 'can_create_tickets' => true])
+            ->assertOk()->assertJsonPath('user.canCreateTickets', true)->assertJsonPath('user.canUpdateItems', false);
+        $this->assertTrue($user->refresh()->canCreateTickets());
+    }
+
     public function test_updating_with_password_replaces_it(): void
     {
         $this->actingAs(User::factory()->create());

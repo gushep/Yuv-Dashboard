@@ -22,10 +22,10 @@ window.KpiTable = (() => {
 
   /**
    * Monta a tabela no container. Cada coluna: label, html(row) para a célula, value(row) para busca e ordenação,
-   * sort(row) opcional quando a ordem difere do texto, filter (true ou função com os valores) para ter filtro
-   * e className opcional para a célula.
+   * sort(row) opcional quando a ordem difere do texto, filter (true ou função com os valores) para ter filtro,
+   * className opcional para a célula e primary na coluna que vira o título do cartão no celular.
    * @param {HTMLElement} container
-   * @param {{columns: Array<{label: string, html: Function, value: Function, sort?: Function, filter?: boolean|Function, empty?: string, className?: string}>,rows: Array<object>, empty?: string, tableClass?: string}} options
+   * @param {{columns: Array<{label: string, html: Function, value: Function, sort?: Function, filter?: boolean|Function, empty?: string, className?: string, primary?: boolean}>,rows: Array<object>, empty?: string, tableClass?: string}} options
    */
   function render(container, {columns, rows, empty = 'Nenhuma task neste indicador.', tableClass = ''}) {
     const state = {q:'', filters:columns.map(() => ''), sort:{index:null, dir:1}};
@@ -41,7 +41,7 @@ window.KpiTable = (() => {
         <button type="button" class="kpi-table-clear" data-clear>Limpar</button>
         <span class="kpi-table-count" aria-live="polite"></span>
       </div>
-      <div class="kpi-table-scroll"><table class="kpi-table ${tableClass}"><thead><tr>${columns.map((column, index) => `<th aria-sort="none"><button type="button" data-sort="${index}">${escape(column.label)}</button></th>`).join('')}</tr></thead><tbody></tbody></table></div>`;
+      <div class="kpi-table-scroll"><table class="kpi-table stack-mobile ${tableClass}"><thead><tr>${columns.map((column, index) => `<th aria-sort="none"${column.primary ? ' data-primary' : ''}><button type="button" data-sort="${index}">${escape(column.label)}</button></th>`).join('')}</tr></thead><tbody></tbody></table></div>`;
 
     const body = container.querySelector('tbody');
     const update = () => {

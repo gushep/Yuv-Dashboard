@@ -46,6 +46,26 @@ class UserFactory extends Factory
     }
 
     /**
+     * Allow the user to update cards (status, comments and attachments) from the raw data screen.
+     */
+    public function canUpdateItems(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'can_update_items' => true,
+        ]);
+    }
+
+    /**
+     * Allow the user to open support tickets with the Novo Ticket button.
+     */
+    public function canCreateTickets(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'can_create_tickets' => true,
+        ]);
+    }
+
+    /**
      * Indicate that the model's email address should be unverified.
      */
     public function unverified(): static

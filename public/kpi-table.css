@@ -15,4 +15,4 @@
 .kpi-table th[aria-sort=descending] button::after{content:'↓';color:var(--blue)}
 .kpi-table thead button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .kpi-table-empty{color:var(--muted);text-align:center}
-@media(max-width:600px){.kpi-table-tools input,.kpi-table-tools select{min-width:0;max-width:none;width:100%}.kpi-table-tools label{flex:1 1 100%}}
+@media(max-width:600px){.kpi-table-tools input,.kpi-table-tools select{min-width:0;max-width:none;width:100%}.kpi-table-tools label{flex:1 1 calc(50% - 4px);min-width:0}.kpi-table-tools .kpi-table-search{flex-basis:100%}}

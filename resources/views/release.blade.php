@@ -2,7 +2,7 @@
   {{-- A moldura em tabela repete o respiro de topo e de rodapé em cada página do PDF; na tela ela se comporta como blocos comuns. --}}
   <table class="release-print-frame" role="presentation"><thead><tr><td class="release-print-space"></td></tr></thead><tbody><tr><td>
   <header class="release-header">
-    <div class="cap-heading"><img src="yuv-logo.png" alt="YUV"><div><h1>Release da sprint</h1><p><span class="release-screen-only">Itens implementados, organizados automaticamente por Tipo</span><span class="release-print-only">Entregas implementadas na sprint</span></p></div></div>
+    <div class="cap-heading"><img src="{{ asset('yuv-logo.png') }}" alt="YUV"><div><h1>Release da sprint</h1><p><span class="release-screen-only">Itens implementados, organizados automaticamente por Tipo</span><span class="release-print-only">Entregas implementadas na sprint</span></p></div></div>
     <div class="release-actions"><label><span class="release-sprint-label">Sprint</span><select id="release-sprint" aria-label="Selecionar sprint da release"></select></label><span id="release-dates"></span><button id="release-export" type="button" disabled title="Abrir impressão para salvar a release como PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6"/></svg>Exportar PDF</button></div>
   </header>
   <div class="release-info"><strong id="release-count">Aguardando dados</strong><span>Descrições: objetivo da ficha do card ou resumo revisado do que foi implementado.</span></div>

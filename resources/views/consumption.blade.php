@@ -1,6 +1,6 @@
 <div class="page" id="page-consumption">
   <header class="cap-hero">
-    <div class="cap-heading"><img src="yuv-logo.png" alt="YUV"><span class="cap-divider"></span><div><h1>Consumo de horas | Sprint e Suporte</h1><p>Onde o esforço do time está sendo consumido</p></div></div>
+    <div class="cap-heading"><img src="{{ asset('yuv-logo.png') }}" alt="YUV"><span class="cap-divider"></span><div><h1>Consumo de horas | Sprint e Suporte</h1><p>Onde o esforço do time está sendo consumido</p></div></div>
     <div class="cap-filters"><label>Sprint <select id="cons-sprint" aria-label="Selecionar sprint do consumo"></select></label><span id="cons-dates"></span></div>
   </header>
   <div class="cons-toolbar cap-info"><span class="cap-info-icon" aria-hidden="true">i</span><strong>Horas executadas · time completo</strong><button type="button" id="cons-refresh">Atualizar dados</button><span id="cons-updated" role="status"></span></div>

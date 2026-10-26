@@ -33,6 +33,8 @@ class UserRequest extends FormRequest
             'password' => [$user ? 'nullable' : 'required', 'string', Password::min(8), 'max:255'],
             'screens' => ['present', 'array'],
             'screens.*' => ['distinct', Rule::enum(Screen::class)],
+            'can_update_items' => ['sometimes', 'boolean'],
+            'can_create_tickets' => ['sometimes', 'boolean'],
         ];
     }
 

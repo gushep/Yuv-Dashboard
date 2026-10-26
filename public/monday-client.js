@@ -218,13 +218,9 @@ function useMondayRows(rows) {
   sprintSelect.length = 1;
   timeInited = false;
   rawPage = 0;
-  if (currentPage !== 'settings' && currentPage !== 'bombeiro' && currentPage !== 'sprint-panel' && currentPage !== 'carousel' && currentPage !== 'capacity' && currentPage !== 'forecast' && currentPage !== 'consumption' && currentPage !== 'release' && currentPage !== 'control-tower' && currentPage !== 'users' && currentPage !== 'no-access') {
-    if (canAccessScreen('dashboard')) navigate('dashboard');
-    else navigate(currentPage, currentSprint);
-  }
-  else {
-    document.getElementById('tb-right').textContent = sprintRangeLabel();
-  }
+  // Telas montadas com estes dados são redesenhadas onde estão; as demais buscam os próprios dados.
+  if (['dashboard', 'sprint', 'epicos', 'time', 'raw'].includes(currentPage)) navigate(currentPage, currentSprint, { history: 'replace' });
+  else document.getElementById('tb-right').textContent = sprintRangeLabel();
 }
 
 async function syncMonday(force = true) {
@@ -240,6 +236,8 @@ async function syncMonday(force = true) {
     const result = await mondayRequest('/api/sync', { force });
     if (result.rows.length || !['consumption','release'].includes(currentPage)) useMondayRows(result.rows);
     window.Capacity?.onDataUpdated(result);
+    // As datas das sprints chegam com o Capacity; com elas a tela Tarefas descobre a sprint ativa.
+    if (currentPage === 'raw') renderRaw();
     window.Forecast?.onDataUpdated(result);
     window.Consumption?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);

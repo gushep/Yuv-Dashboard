@@ -21,8 +21,9 @@ Os indicadores contextualizam o trabalho do time. Horas sem apontamento não rep
 | Torre de controle | Tela inicial. Farol da sprint, trajetória dia a dia (burnup), previsão probabilística, ponto de decisão, manobras sugeridas, alertas e compromisso da sprint. Ao passar o mouse nos números do farol e nos sinais, explica o cálculo; ao clicar, lista as tasks do indicador. |
 | Burndown | Três painéis (Geral, Suporte e Planejado e não planejado) com restante, concluído e escopo da sprint no fim de cada dia útil, em cards ou horas estimadas, contra a linha ideal (do escopo do primeiro dia útil até zero no último). Mostra ritmo médio, ritmo necessário e o SLA do suporte (tempo corrido da abertura do card até Implementado: média, mediana, maior tempo e lista dos cards), e explica o cálculo na própria tela. |
 | Dashboard e sprints | Visão dos indicadores e detalhamento por sprint. O item Sprints do menu abre a sprint ativa mais recente (a que contém o dia de hoje; sem ela, a última já iniciada), e o filtro no topo da tela troca para as demais. Nos indicadores da sprint, passar o mouse sobre um card mostra o que ele apresenta e o critério de cálculo; clicar abre a lista das tasks daquele indicador, com link para o card na Monday. |
-| Épicos, time e dados | Consulta das informações do quadro por diferentes perspectivas. |
-| Sustentação — Painel do Bombeiro | Demandas de Suporte por status e prioridade, com avisos visuais e toque Den Den Mushi para novas demandas. Colunas: Backlog, Em andamento, Em teste (status de QA: Testes, Reprovado e Aprovado) e Concluído. |
+| Épicos e time | Consulta das informações do quadro por diferentes perspectivas. |
+| Tarefas (antiga Dado Bruto) | Lista das tarefas, aberta na sprint ativa, com filtros de sprint, vários responsáveis, vários status, tipo e busca. Clicar no nome abre o detalhe do card no estilo ClickUp: todos os campos, descrição, subitens, anexos e comentários; ao lado, novo comentário com anexos e o histórico de alterações lido do log da Monday. Usada pelo time para validações de QA. Tem o botão **Novo Ticket**. |
+| Sustentação — Painel do Bombeiro | Demandas de Suporte por status e prioridade, com avisos visuais e toque Den Den Mushi para novas demandas. Colunas: Backlog, Em andamento, Em teste (status de QA: Testes, Reprovado e Aprovado) e Concluído. Tem o botão **Novo Ticket**. |
 | Painel da Sprint | Acompanhamento do trabalho vinculado à sprint selecionada, nas mesmas quatro colunas do Painel do Bombeiro (Backlog, Em andamento, Em teste e Concluído). |
 | Apresentação dos painéis | Exibição dos painéis em carrossel. |
 | Capacidade e execução da sprint | Comparação de disponibilidade, planejamento e execução por desenvolvedor: horas previstas e registradas separadas em planejadas, não planejadas e total, saldo final (disponíveis − previstas totais) e saldo atual (disponíveis − registradas). |
@@ -30,11 +31,26 @@ Os indicadores contextualizam o trabalho do time. Horas sem apontamento não rep
 | Consumo de horas | Distribuição entre Sprint e Suporte, detalhamento individual e comparação com a reserva coletiva de suporte. |
 | Release da sprint | Itens implementados agrupados por Tipo, com categorias expansíveis, links dos cards e exportação via impressão para PDF. |
 
+### Endereços e uso no celular
+
+Cada tela tem seu próprio endereço (`/torre-de-controle`, `/burndown`, `/sprints/18`, `/capacity?sprint=18`...), definido em `App\Screen::slug()`. Recarregar a página, usar o voltar do navegador ou compartilhar o link mantém a tela e a sprint escolhida; os links antigos com `#tela` continuam funcionando, e `/dados` redireciona para `/tarefas`. Todas as telas são servidas pela mesma página, e o acesso continua controlado pelas telas liberadas para cada usuário.
+
+No celular (até 640px), `public/responsive.css` e `public/responsive.js` transformam as tabelas de lista em cartões (com o cabeçalho como botões de ordenação e sem os campos vazios), abrem os modais em tela cheia e compactam os cabeçalhos das telas. As tabelas comparativas de Capacity, Previsibilidade e Consumo mantêm rolagem lateral com a primeira coluna fixa.
+
 ## Integração com a Monday
 
 A aplicação consulta a API GraphQL da Monday pelo backend, com paginação, mapeamento de colunas e cache. Na tela **Configurações**, informe o token, selecione o quadro e confira o mapeamento das colunas.
 
 Os principais campos são Sprint, Tipo, Status, Responsável, Tempo Estimado e Tempo Real. Prioridade, épico, esforço restante e Melhorias (antigas Novas Funcionalidades e Valor Agregado; o mapeamento reconhece os três nomes de coluna) apoiam os painéis que os utilizam. As colunas Módulo e Descrição são localizadas pelo título e usadas na release quando existem no quadro; os comentários dos cards são consultados para a release apenas quando a Descrição está vazia.
+
+### Alterações enviadas à Monday
+
+O dashboard é de acompanhamento: classificações da sprint continuam sendo feitas na Monday. As únicas escritas, todas gravadas direto na Monday e liberadas por permissão no cadastro de usuários (ninguém começa com elas), são:
+
+- **Atualizar cards** (tela Tarefas): trocar o status pelas opções da coluna Status do quadro e comentar com anexos (evidências de QA). Prints colados ou arrastados viram anexos; imagens acima de 1,5 MB são reduzidas no navegador e cada anexo é enviado numa requisição própria (`public/attachments.js`).
+- **Abrir tickets** (botão Novo Ticket nas telas Tarefas e Painel do Bombeiro): Título, Cliente, Descrição e Prioridade são obrigatórios; a descrição vem com o modelo de abertura de chamado do time (`DESCRIPTION_TEMPLATE` em `public/new-ticket.js`) e aceita prints colados. O card é criado com Tipo Suporte, Status Backlog e na sprint atual (a que contém o dia de hoje; entre sprints, a próxima a começar). As regras ficam em `App\Services\SupportTicketService`.
+
+Como a Monday registra o dono do token como autor, os comentários e o comentário inicial dos tickets terminam com "Enviado por {usuário} pelo Dashboard YUV", e cada ação é registrada no log do Laravel. O token precisa ter permissão de escrita no quadro. O tamanho de cada anexo também é limitado pelo PHP (`upload_max_filesize` e `post_max_size`): para aceitar vídeos, use ao menos `upload_max_filesize = 50M` e `post_max_size = 55M`.
 
 ### Regras dos indicadores
 

@@ -23,5 +23,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::define('access-screen', fn (User $user, string $screen): bool => $user->canAccessScreen(Screen::from($screen)));
+        Gate::define('update-items', fn (User $user): bool => $user->canUpdateItems());
+        Gate::define('create-tickets', fn (User $user): bool => $user->canCreateTickets());
     }
 }

@@ -1,6 +1,6 @@
 <div class="page" id="page-burndown" data-url="{{ route('burndown.show') }}">
   <header class="cap-hero">
-    <div class="cap-heading"><img src="yuv-logo.png" alt="YUV"><span class="cap-divider"></span><div><h1>Burndown</h1><p>Quanto falta implementar na sprint, dia a dia, contra a linha ideal</p></div></div>
+    <div class="cap-heading"><img src="{{ asset('yuv-logo.png') }}" alt="YUV"><span class="cap-divider"></span><div><h1>Burndown</h1><p>Quanto falta implementar na sprint, dia a dia, contra a linha ideal</p></div></div>
     <div class="cap-filters"><label>Sprint <select id="burndown-sprint" aria-label="Selecionar sprint do burndown"></select></label><span id="burndown-dates"></span></div>
   </header>
   <div class="burndown-toolbar">

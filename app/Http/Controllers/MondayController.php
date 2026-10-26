@@ -12,8 +12,10 @@ use App\Services\SprintReleaseService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use RuntimeException;
 
@@ -245,6 +247,114 @@ class MondayController extends Controller
 
             return $burndown->build($snapshot, $connection, isset($data['sprint']) ? (int) $data['sprint'] : null);
         });
+    }
+
+    /**
+     * Detalhe de um card (colunas, subitens e comentários), lido direto do Monday.
+     */
+    public function item(Request $request, string $item, MondayService $monday): JsonResponse
+    {
+        return $this->attempt(function () use ($request, $monday, $item) {
+            $connection = $this->configuredConnection();
+
+            return [
+                ...$monday->itemDetails($connection->token, (string) $connection->board_id, $item, $connection->column_map['Status'] ?? null),
+                'canUpdateItems' => $request->user()->can('update-items'),
+                // O limite real de cada anexo é o menor entre o do PHP (upload e POST) e os 50 MB aceitos pela rota.
+                'maxUploadBytes' => (int) min(UploadedFile::getMaxFilesize(), 50 * 1024 * 1024),
+            ];
+        });
+    }
+
+    /**
+     * Histórico de alterações do card, lido do log de atividades do Monday.
+     */
+    public function itemActivity(string $item, MondayService $monday): JsonResponse
+    {
+        return $this->attempt(function () use ($monday, $item) {
+            $connection = $this->configuredConnection();
+
+            return ['activity' => $monday->itemActivity($connection->token, (string) $connection->board_id, $item)];
+        });
+    }
+
+    /**
+     * Altera o status do card no Monday. A ação fica registrada no Monday em nome do dono do token e no log da aplicação com o usuário do dashboard.
+     */
+    public function changeItemStatus(Request $request, string $item, MondayService $monday): JsonResponse
+    {
+        $data = $request->validate(['status' => ['required', 'string', 'max:255']]);
+
+        return $this->attempt(function () use ($request, $monday, $item, $data) {
+            $connection = $this->configuredConnection();
+            $columnId = $connection->column_map['Status'] ?? '';
+            if ($columnId === '') {
+                throw new RuntimeException('Mapeie a coluna Status nas Configurações antes de alterar status.');
+            }
+            $monday->changeStatus($connection->token, (string) $connection->board_id, $item, $columnId, $data['status']);
+            Cache::forget(MondaySnapshotService::CACHE_KEY);
+            Log::info('Status de card alterado pelo dashboard.', ['item' => $item, 'status' => $data['status'], 'user' => $request->user()->email]);
+
+            return ['saved' => true, 'status' => $data['status']];
+        });
+    }
+
+    /**
+     * Comenta no card do Monday (ex.: resultado de QA). Sem texto, só é aceito quando há anexos a enviar em seguida.
+     */
+    public function postItemComment(Request $request, string $item, MondayService $monday): JsonResponse
+    {
+        $request->validate([
+            'text' => ['nullable', 'string', 'max:20000', Rule::requiredIf(! $request->boolean('hasAttachments'))],
+            'hasAttachments' => ['nullable', 'boolean'],
+        ], [
+            'text.required' => 'Escreva um comentário ou anexe pelo menos um arquivo.',
+            'text.max' => 'O comentário deve ter no máximo 20.000 caracteres.',
+        ]);
+
+        return $this->attempt(function () use ($request, $monday, $item) {
+            $connection = $this->configuredConnection();
+            $updateId = $monday->postComment($connection->token, (string) $connection->board_id, $item, trim((string) $request->input('text')), $request->user()->name);
+            Log::info('Comentário publicado pelo dashboard.', ['item' => $item, 'update' => $updateId, 'user' => $request->user()->email]);
+
+            return ['saved' => true, 'updateId' => $updateId];
+        });
+    }
+
+    /**
+     * Anexa um arquivo (ex.: evidência de teste) a um comentário do card. Um arquivo por requisição, para caber no limite de upload do servidor.
+     */
+    public function attachItemCommentFile(Request $request, string $item, string $update, MondayService $monday): JsonResponse
+    {
+        $request->validate(['file' => ['required', 'file', 'max:51200']], [
+            'file.required' => 'Selecione um arquivo.',
+            'file.file' => 'O servidor não recebeu o arquivo; ele pode ser maior que o limite de upload configurado no PHP.',
+            'file.uploaded' => 'O servidor não recebeu o arquivo; ele pode ser maior que o limite de upload configurado no PHP.',
+            'file.max' => 'Cada arquivo deve ter no máximo 50 MB.',
+        ]);
+
+        return $this->attempt(function () use ($request, $monday, $item, $update) {
+            $connection = $this->configuredConnection();
+            try {
+                $monday->attachFile($connection->token, (string) $connection->board_id, $item, $update, $request->file('file'));
+            } catch (RuntimeException $exception) {
+                Log::warning('Anexo recusado ao enviar pelo dashboard.', ['item' => $item, 'update' => $update, 'file' => $request->file('file')->getClientOriginalName(), 'error' => $exception->getMessage()]);
+
+                throw $exception;
+            }
+
+            return ['saved' => true];
+        });
+    }
+
+    private function configuredConnection(): MondayConnection
+    {
+        $connection = MondayConnection::current();
+        if (blank($connection->token) || blank($connection->board_id)) {
+            throw new RuntimeException('Integração com o Monday não configurada.');
+        }
+
+        return $connection;
     }
 
     /**

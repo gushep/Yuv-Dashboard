@@ -16,6 +16,8 @@
       <button type="button" id="users-screens-all">Selecionar todas</button>
       <button type="button" id="users-screens-none">Limpar</button>
     </div>
+    <label class="users-permission"><input type="checkbox" id="users-update-items"> Pode atualizar cards no Monday pela tela Tarefas (alterar status, comentar e anexar evidências)</label>
+    <label class="users-permission"><input type="checkbox" id="users-create-tickets"> Pode abrir tickets de suporte no Monday (botão Novo Ticket nas telas Tarefas e Painel do Bombeiro)</label>
     <div class="settings-actions">
       <button type="submit" id="users-save">Cadastrar usuário</button>
       <button type="button" class="secondary" id="users-cancel" hidden>Cancelar edição</button>

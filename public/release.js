@@ -96,7 +96,7 @@ window.SprintRelease = (() => {
     const data = state.data;
     const options = [...new Set([...(data?.sprints || []), ...(state.sprint ? [state.sprint] : [])])].sort((a,b) => b-a);
     el('release-sprint').replaceChildren(...options.map(value => new Option(`Sprint ${value}`,String(value))));
-    if (state.sprint) el('release-sprint').value = String(state.sprint);
+    if (state.sprint) { el('release-sprint').value = String(state.sprint); window.rememberScreenSprint?.('release', state.sprint); }
     el('release-sprint').disabled = !options.length;
     el('release-loading').hidden = !state.loading;
     el('release-error').hidden = !state.error;el('release-error').textContent=state.error;
@@ -176,9 +176,7 @@ window.SprintRelease = (() => {
     el('release-sprint').onchange=event=>{state.expanded.clear();state.sprint=Number(event.target.value);load();};
     el('release-export').onclick=exportPdf;
     el('release-select-all').onclick=()=>setSelected(state.data?.groups.flatMap(group => group.items.map(item => item.id)) || [], true);
-    el('release-select-none').onclick=()=>setSelected(state.data?.groups.flatMap(group => group.items.map(item => item.id)) || [], false);
-    if (location.hash==='#release') navigate('release');
-  });
+    el('release-select-none').onclick=()=>setSelected(state.data?.groups.flatMap(group => group.items.map(item => item.id)) || [], false);  });
   window.addEventListener('beforeprint',preparePrint);
   window.addEventListener('afterprint',restorePrint);
   return {enter,leave,onDataUpdated,typeVisual};

@@ -167,7 +167,7 @@ window.ControlTower = (() => {
   /** Colunas do modal: as mesmas da tabela de compromisso, com busca, filtro e ordenação. */
   const MODAL_COLUMNS = [
     {label:'Origem', html:originBadge, value:item => ORIGIN[item.category]?.label || '', sort:item => ORIGIN[item.category]?.rank ?? ORIGINS.length, filter:true, empty:'Sem origem'},
-    {label:'Card', html:item => `${link(item)}${item.type ? `<small>${escape(item.type)}</small>` : ''}`, value:item => `${item.name || ''} ${item.type || ''}`, sort:item => item.name || ''},
+    {label:'Card', primary:true, html:item => `${link(item)}${item.type ? `<small>${escape(item.type)}</small>` : ''}`, value:item => `${item.name || ''} ${item.type || ''}`, sort:item => item.name || ''},
     {label:'Status', html:statusBadge, value:item => item.status || '', sort:item => `${SITUATION[situation(item)][1]} ${item.status || ''}`, filter:item => item.status, empty:'Sem status'},
     {label:'Responsável', html:ownerCell, value:item => owners(item).join(', '), filter:owners, empty:'Sem responsável'},
     {label:'Prioridade', html:priorityBadge, value:item => item.priority || '', sort:priorityRank, filter:item => item.priority, empty:'Sem prioridade'},
@@ -240,7 +240,7 @@ window.ControlTower = (() => {
     el('tower-error').textContent = state.error; el('tower-error').hidden = !state.error;
     const sprints = data?.sprints || [];
     el('tower-sprint').replaceChildren(...sprints.map(value => new Option(`Sprint ${value}`, String(value))));
-    if (data?.sprint) el('tower-sprint').value = String(data.sprint);
+    if (data?.sprint) { el('tower-sprint').value = String(data.sprint); window.rememberScreenSprint?.('control-tower', data.sprint); }
     const ready = Boolean(data?.available);
     el('tower-content').hidden = !ready;
     el('tower-empty').hidden = ready || !data;

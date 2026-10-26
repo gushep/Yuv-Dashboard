@@ -178,7 +178,7 @@ window.Capacity = (() => {
     const sprintSelect = el('cap-sprint');
     if (!sprints.includes(state.sprint)) state.sprint = sprints[0] ?? null;
     sprintSelect.replaceChildren(...sprints.map(number => new Option(`Sprint ${number}`,String(number))));
-    if (state.sprint !== null) sprintSelect.value = String(state.sprint);
+    if (state.sprint !== null) { sprintSelect.value = String(state.sprint); window.rememberScreenSprint?.('capacity', state.sprint); }
     const dates = window.MONDAY_SPRINT_DATES?.[state.sprint] || null;
     el('cap-dates').textContent = dates ? `${dateLabel(dates.start)} – ${dateLabel(dates.end)}` : 'Datas da sprint não disponíveis';
     const result = state.sprint === null ? {developers:[],pending:[],unassigned:[]} : model(DATA,state.sprint,dates,state.overrides);

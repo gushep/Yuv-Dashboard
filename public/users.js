@@ -46,11 +46,13 @@ window.Users = (() => {
       const screens = user.screens.length
         ? `<div class="users-screen-list">${user.screens.map(value => `<span class="b">${escape(screenLabel(value))}</span>`).join('')}</div>`
         : '<span class="users-none">Sem acesso a nenhuma tela</span>';
+      const permissions = [user.canUpdateItems && 'Atualiza cards (status, comentários e anexos)', user.canCreateTickets && 'Abre tickets'].filter(Boolean);
+      const statusPermission = permissions.length ? `<div class="users-screen-list">${permissions.map(label => `<span class="b users-perm">${label}</span>`).join('')}</div>` : '';
       const isMe = user.id === currentUserId();
       return `<tr>
         <td>${escape(user.name)}${isMe ? ' <span class="users-none">(você)</span>' : ''}</td>
         <td class="cm">${escape(user.email)}</td>
-        <td>${screens}</td>
+        <td>${screens}${statusPermission}</td>
         <td><div class="users-actions">
           <button type="button" data-edit="${user.id}">Editar</button>
           ${isMe ? '' : `<button type="button" class="danger" data-delete="${user.id}">Excluir</button>`}
@@ -80,6 +82,8 @@ window.Users = (() => {
     el('users-password-label').textContent = 'Nova senha';
     el('users-password').placeholder = 'Deixe em branco para manter a atual';
     setSelected(user.screens);
+    el('users-update-items').checked = user.canUpdateItems;
+    el('users-create-tickets').checked = user.canCreateTickets;
     el('users-form-title').textContent = `Editar ${user.name}`;
     el('users-save').textContent = 'Salvar alterações';
     el('users-cancel').hidden = false;
@@ -106,7 +110,7 @@ window.Users = (() => {
     state.saving = true;
     el('users-save').disabled = true;
     const editing = state.editing;
-    const body = {name:el('users-name').value.trim(), email:el('users-email').value.trim(), password:el('users-password').value, screens:selectedScreens()};
+    const body = {name:el('users-name').value.trim(), email:el('users-email').value.trim(), password:el('users-password').value, screens:selectedScreens(), can_update_items:el('users-update-items').checked, can_create_tickets:el('users-create-tickets').checked};
     try {
       await request(editing ? `${baseUrl()}/${editing}` : baseUrl(), editing ? 'PUT' : 'POST', body);
       resetForm();
