@@ -525,7 +525,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           </div>
           <label class="raw-group" hidden>Agrupar por
             <select id="rawGroupSel" onchange="chooseRawGroup(this.value)">
-              <option value="status">Status</option>
+              <option value="status">Etapa (Backlog → Concluído)</option>
               <option value="responsavel">Responsável</option>
               <option value="cliente">Cliente</option>
               <option value="prioridade">Prioridade</option>
