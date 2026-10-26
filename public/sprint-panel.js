@@ -119,6 +119,7 @@ window.SprintPanel = (() => {
     if (!el('page-sprint-panel')) return;
     const rows = selectedRows(state.rows,state.sprint);
     el('sp-title').textContent = state.sprint === null ? 'Painel da Sprint' : `Sprint ${state.sprint}`;
+    window.rememberScreenSprint?.('sprint-panel', state.sprint);
     el('sp-context').textContent = state.lastSuccess
       ? `${state.boardName || 'Quadro de tarefas'} · atualização ${state.lastSuccess.toLocaleString('pt-BR')}`
       : 'Aguardando dados do Monday...';

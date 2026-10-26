@@ -122,6 +122,7 @@ window.Forecast = (() => {
     if (!sprints.includes(state.sprint)) state.sprint = sprints[0] ?? null;
     el('forecast-sprint').replaceChildren(...sprints.map(value => new Option(`Sprint ${value}`,value)));
     el('forecast-sprint').value = state.sprint;
+    window.rememberScreenSprint?.('forecast', state.sprint);
     const dates = window.MONDAY_SPRINT_DATES?.[state.sprint];
     el('forecast-dates').textContent = dates ? `${dates.start.split('-').reverse().join('/')} – ${dates.end.split('-').reverse().join('/')}` : 'Datas da sprint não disponíveis';
     state.reference ||= window.Capacity.todaySaoPaulo(); el('forecast-reference').value = state.reference;

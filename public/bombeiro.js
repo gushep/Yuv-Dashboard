@@ -160,6 +160,7 @@ window.Bombeiro = (() => {
         list.append(...laneRows.map(row => card(row, bucket)));
       }
     }
+    window.rememberScreenSprint?.('bombeiro', state.sprint);
     const sprintLabel = state.sprint === 'all' ? 'Todas as sprints' : state.sprint === 'unassigned' ? 'Sem sprint' : `Sprint ${state.sprint || '—'}`;
     el('fire-context').textContent = `${state.boardName || 'Quadro de tarefas'} · ${sprintLabel} · demandas de Suporte`;
     if (state.active) el('tb-right').textContent = state.sprint === 'all' ? 'Todas' : state.sprint === 'unassigned' ? 'Sem sprint' : `S${state.sprint || '—'}`;

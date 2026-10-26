@@ -5,6 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>yuv · sprint metrics</title>
+@include('pwa-head')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -40,6 +41,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .nav-group-label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;padding:14px 18px 4px}
 .sidebar-footer{padding:6px 0 10px;border-top:1px solid var(--border)}
 .sidebar-footer form{margin:0}
+.apk-download{text-decoration:none}
+/* Dentro do app instalado o link de download não faz sentido. */
+@media(display-mode:standalone){.apk-download{display:none}}
 .sidebar-version{padding:6px 20px 0;font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap}
 
 /* OVERLAY */
@@ -121,6 +125,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .kpi-modal-body a{color:var(--blue);text-decoration:none}
 .kpi-modal-body a:hover{text-decoration:underline}
 .kpi-bd-item{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600}
+.raw-link{border:0;background:none;padding:0;font:inherit;color:var(--text);cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.raw-link:hover{color:var(--blue);text-decoration:underline}
+.msel{position:relative}
+.msel>summary{list-style:none;font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 26px 5px 9px;color:var(--text);cursor:pointer;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis;position:relative}
+.msel>summary::-webkit-details-marker{display:none}
+.msel>summary::after{content:'▾';position:absolute;right:9px;color:var(--text2);font-size:10px}
+.msel.on>summary{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
+.msel-pop{position:absolute;z-index:20;top:calc(100% + 5px);left:0;width:250px;background:var(--card);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow-md);padding:8px}
+.msel-pop input[type=search]{width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);outline:none;margin-bottom:6px}
+.msel-list{max-height:260px;overflow:auto}
+.msel-list label{display:flex;align-items:center;gap:8px;padding:6px 7px;border-radius:6px;font-size:12px;cursor:pointer}
+.msel-list label:hover{background:var(--bg)}
+.msel-list input{accent-color:var(--blue)}
+.msel-foot{display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
+.msel-foot button,.raw-clear{border:0;background:none;font:inherit;font-size:11.5px;font-weight:600;color:var(--blue);cursor:pointer;padding:3px 4px}
 
 /* CHART GRID */
 .g2{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:4px}
@@ -217,22 +236,25 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 .settings-message.error{color:var(--red)}
 .settings-message.success{color:var(--green)}
  </style>
-<link rel="stylesheet" href="bombeiro.css">
-<link rel="stylesheet" href="sprint-panel.css">
-<link rel="stylesheet" href="panel-carousel.css">
-<link rel="stylesheet" href="capacity.css">
-<link rel="stylesheet" href="forecast.css">
-<link rel="stylesheet" href="consumption.css">
-<link rel="stylesheet" href="release.css">
-<link rel="stylesheet" href="control-tower.css">
-<link rel="stylesheet" href="kpi-table.css">
-<link rel="stylesheet" href="burndown.css">
-<link rel="stylesheet" href="users.css">
+<link rel="stylesheet" href="{{ asset('bombeiro.css') }}">
+<link rel="stylesheet" href="{{ asset('sprint-panel.css') }}">
+<link rel="stylesheet" href="{{ asset('panel-carousel.css') }}">
+<link rel="stylesheet" href="{{ asset('capacity.css') }}">
+<link rel="stylesheet" href="{{ asset('forecast.css') }}">
+<link rel="stylesheet" href="{{ asset('consumption.css') }}">
+<link rel="stylesheet" href="{{ asset('release.css') }}">
+<link rel="stylesheet" href="{{ asset('control-tower.css') }}">
+<link rel="stylesheet" href="{{ asset('kpi-table.css') }}">
+<link rel="stylesheet" href="{{ asset('burndown.css') }}">
+<link rel="stylesheet" href="{{ asset('users.css') }}">
+<link rel="stylesheet" href="{{ asset('item-detail.css') }}">
+<link rel="stylesheet" href="{{ asset('new-ticket.css') }}">
+<link rel="stylesheet" href="{{ asset('responsive.css') }}">
 </head>
 <body>
 <aside class="sidebar" id="sidebar" onmouseleave="this.classList.remove('suppressed')" onkeydown="this.classList.remove('suppressed')">
   <div class="sidebar-logo">
-    <div class="logo-text"><img src="yuv-logo.png" alt="YUV" class="sidebar-brand-image"><span>metrics</span></div>
+    <div class="logo-text"><img src="{{ asset('yuv-logo.png') }}" alt="YUV" class="sidebar-brand-image"><span>metrics</span></div>
     <button type="button" class="sidebar-close" onclick="dismissSidebar()" aria-label="Fechar menu lateral">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
@@ -278,7 +300,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     @can('access-screen', 'raw')
     <button type="button" class="nav-item" onclick="navigate('raw')" id="nav-raw">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-      <span class="nav-label">Dado Bruto</span>
+      <span class="nav-label">Tarefas</span>
     </button>
     @endcan
     @can('access-screen', 'bombeiro')
@@ -337,6 +359,12 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     @endcan
   </nav>
   <div class="sidebar-footer">
+    @if (file_exists(public_path('downloads/yuv-metrics.apk')))
+    <a class="sidebar-action apk-download" href="{{ asset('downloads/yuv-metrics.apk') }}" download="yuv-metrics.apk">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M12 7v7m-3-3 3 3 3-3M10 18h4"/></svg>
+      <span class="nav-label">Baixar app Android</span>
+    </a>
+    @endif
     <form method="post" action="/logout">@csrf<button type="submit" class="sidebar-action">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       <span class="nav-label">Sair da conta</span>
@@ -476,7 +504,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <div class="page" id="page-raw">
       <div class="tcard">
         <div class="tbar">
-          <span class="tbar-title">Dado Bruto</span>
+          <span class="tbar-title">Tarefas</span>
           <span class="tcnt" id="raw-cnt"></span>
           <div class="tfilters" id="raw-filters">
             <button class="tfbtn" id="rfbug" onclick="toggleRawFilter('bug')">🐛 Bug prod.</button>
@@ -484,12 +512,17 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
   <button class="tfbtn" id="rfrework" onclick="toggleRawFilter('rework')">↩ Retrabalho</button>
             <button class="tfbtn" id="rfepic" onclick="toggleRawFilter('epic')">◈ Épico</button>
           </div>
+          @can('create-tickets')
+          <button type="button" class="ticket-btn" onclick="NewTicket.open()">+ Novo Ticket</button>
+          @endcan
         </div>
         <div class="tbar" style="border-top:none;padding-top:0;gap:8px;flex-wrap:wrap">
-          <select id="rawSpSel" onchange="renderRaw()" style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;cursor:pointer"><option value="all">Todas as sprints</option></select>
-          <select id="rawDevSel" onchange="renderRaw()" style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;cursor:pointer"><option value="all">Todos os devs</option></select>
+          <select id="rawSpSel" onchange="chooseRawSprint(this.value)" style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;cursor:pointer"><option value="all">Todas as sprints</option></select>
+          <details class="msel" id="rawDevMs"></details>
+          <details class="msel" id="rawStatusMs"></details>
           <select id="rawTipoSel" onchange="renderRaw()" style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;cursor:pointer"><option value="all">Todos os tipos</option></select>
           <input class="tsrch" type="text" id="rawSearch" placeholder="Buscar..." oninput="renderRaw()">
+          <button type="button" class="raw-clear" id="rawClear" onclick="clearRawFilters()" hidden>Limpar filtros</button>
         </div>
         <div class="tscroll">
           <table>
@@ -519,6 +552,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           </div>
         </div>
       </div>
+      <dialog class="kpi-modal task-modal" id="item-modal" aria-label="Detalhe do card"></dialog>
     </div>
 
     @include('forecast')
@@ -535,7 +569,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <!-- CAPACITY -->
     <div class="page" id="page-capacity">
       <header class="cap-hero">
-        <div class="cap-heading"><img src="yuv-logo.png" alt="YUV"><span class="cap-divider"></span><div><h1>Capacidade e execução da sprint</h1><p>Planejado, suporte não planejado e entregas por desenvolvedor</p></div></div>
+        <div class="cap-heading"><img src="{{ asset('yuv-logo.png') }}" alt="YUV"><span class="cap-divider"></span><div><h1>Capacidade e execução da sprint</h1><p>Planejado, suporte não planejado e entregas por desenvolvedor</p></div></div>
         <div class="cap-filters">
           <label>Sprint <select id="cap-sprint" aria-label="Selecionar sprint"></select></label>
           <span id="cap-dates">Datas não disponíveis</span>
@@ -564,7 +598,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <!-- PAINEL DO BOMBEIRO -->
     <div class="page" id="page-bombeiro">
       <div class="fire-hero">
-        <div class="fire-brand"><img src="yuv-logo.png" alt="YUV"></div>
+        <div class="fire-brand"><img src="{{ asset('yuv-logo.png') }}" alt="YUV"></div>
         <div class="fire-hero-copy"><div class="fire-eyebrow">PAINEL DO BOMBEIRO · MONDAY</div><h1>Sustentação</h1><p id="fire-context">Carregando quadro e sprint...</p></div>
         <div class="fire-hero-orb" aria-hidden="true"></div>
       </div>
@@ -572,6 +606,9 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
         <label for="fire-sprint">Sprint <select id="fire-sprint" aria-label="Filtrar sprint do Painel do Bombeiro"></select></label>
         <div class="fire-toolbar-actions">
           <span id="fire-last-sync" role="status">Aguardando primeira consulta</span>
+          @can('create-tickets')
+          <button type="button" class="ticket-btn" onclick="NewTicket.open()">+ Novo Ticket</button>
+          @endcan
           <button type="button" id="fire-refresh">Atualizar agora</button>
           <button type="button" id="fire-audio-toggle" aria-pressed="true">Silenciar alertas</button>
           <button type="button" id="fire-audio-test" aria-label="Testar toque completo" title="Testar toque completo (aprox. 8 s)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 9a5 5 0 0 1 0 6"/><path d="M18 6a9 9 0 0 1 0 12"/></svg></button>
@@ -595,7 +632,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <!-- PAINEL DA SPRINT -->
     <div class="page" id="page-sprint-panel">
       <div class="fire-hero">
-        <div class="fire-brand"><img src="yuv-logo.png" alt="YUV"></div>
+        <div class="fire-brand"><img src="{{ asset('yuv-logo.png') }}" alt="YUV"></div>
         <div class="fire-hero-copy"><div class="fire-eyebrow">ACOMPANHAMENTO DE DEMANDAS · MONDAY</div><h1 id="sp-title">Painel da Sprint</h1><p id="sp-context">Aguardando dados do Monday...</p></div>
         <div class="fire-hero-orb" aria-hidden="true"></div>
       </div>
@@ -681,8 +718,9 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
   <button type="button" id="carousel-exit">Sair</button>
   <span id="carousel-status" role="status">Troca automática a cada 30 segundos</span>
 </div>
-<script src="sprint-rules.js"></script>
-<script src="kpi-table.js"></script>
+<script src="{{ asset('sprint-rules.js') }}"></script>
+<script src="{{ asset('kpi-table.js') }}"></script>
+<script src="{{ asset('responsive.js') }}"></script>
 <script>
 const DATA=[];
 
@@ -827,7 +865,8 @@ function donutLegendLabels(chart){
   return Chart.overrides.doughnut.plugins.legend.labels.generateLabels(chart)
     .map(l=>({...l,text:`${l.text}: ${data[l.index]}${!l.hidden&&total?` (${Math.round(data[l.index]/total*100)}%)`:''}`}));
 }
-function donutOpts(){return{responsive:true,maintainAspectRatio:false,plugins:{valueLabels:{display:true},legend:{position:'right',labels:{color:'#64748b',font:FONT,boxWidth:12,generateLabels:donutLegendLabels}}}};}
+/** No celular a legenda vai para baixo da rosca, para os textos não serem cortados. */
+function donutOpts(){return{responsive:true,maintainAspectRatio:false,plugins:{valueLabels:{display:true},legend:{position:window.matchMedia('(max-width:640px)').matches?'bottom':'right',labels:{color:'#64748b',font:FONT,boxWidth:12,generateLabels:donutLegendLabels}}}};}
 function hbarOpts(unit=''){return{...bOpts(unit),indexAxis:'y',plugins:{legend:{labels:{color:'#64748b',font:FONT,boxWidth:12}}}};}
 
 // ── BADGES ────────────────────────────────────────────────────────────────────
@@ -857,7 +896,34 @@ let currentPage='dashboard', currentSprint=null, timeInited=false;
 /** Telas liberadas para o usuário logado; o servidor também bloqueia as APIs de cada tela. */
 const ALLOWED_SCREENS=@json(auth()->user()->screenValues());
 function canAccessScreen(page){return ALLOWED_SCREENS.includes(page);}
-function navigate(page,sp=null){
+/** Endereço de cada tela (definido em App\Screen): recarregar, voltar e compartilhar o link mantêm a tela aberta. */
+const SCREEN_SLUGS=@json(\App\Screen::slugs());
+/** URL da tela: a sprint vai no caminho da tela Sprints (/sprints/18) e em ?sprint= nas telas com filtro próprio. */
+function screenUrl(page,sp=null){
+  const slug=SCREEN_SLUGS[page];
+  if(!slug) return location.pathname+location.search;
+  if(page==='sprint') return sp?`/${slug}/${sp}`:`/${slug}`;
+  return sp?`/${slug}?sprint=${sp}`:`/${slug}`;
+}
+/** Tela e sprint pedidas na URL atual; aceita os links antigos com #tela. */
+function screenFromUrl(){
+  const [slug,pathSprint]=location.pathname.split('/').filter(Boolean);
+  const hash=location.hash.slice(1);
+  const page=Object.keys(SCREEN_SLUGS).find(key=>SCREEN_SLUGS[key]===slug)||(SCREEN_SLUGS[hash]?hash:null);
+  const sprint=Number(pathSprint||new URLSearchParams(location.search).get('sprint'))||null;
+  return {page,sprint};
+}
+/** Guarda no endereço a sprint escolhida no filtro da própria tela, sem criar nova entrada no histórico. */
+function rememberScreenSprint(page,sp){
+  if(currentPage!==page||!Number.isInteger(sp)) return;
+  const url=screenUrl(page,sp);
+  if(url!==location.pathname+location.search) history.replaceState({page,sp},'',url);
+}
+/**
+ * Abre a tela. history: 'push' cria entrada no histórico (clique no menu), 'replace' troca a atual
+ * (abertura e recarga dos dados) e 'none' só exibe (botão voltar/avançar do navegador).
+ */
+function navigate(page,sp=null,{history:mode='push'}={}){
   if(page!=='no-access'&&!canAccessScreen(page)){page=ALLOWED_SCREENS.find(p=>p!=='sprint')||'no-access';sp=null;}
   const previousPage=currentPage, previousSprint=currentSprint;
   if(previousPage==='bombeiro'&&page!=='bombeiro') window.Bombeiro?.leave();
@@ -870,32 +936,40 @@ function navigate(page,sp=null){
   if(previousPage==='control-tower'&&page!=='control-tower') window.ControlTower?.leave();
   if(previousPage==='burndown'&&page!=='burndown') window.Burndown?.leave();
   if(previousPage==='users'&&page!=='users') window.Users?.leave();
-  if(page==='sprint'&&!SPRINTS.includes(sp)) sp=defaultSprint();
+  // Antes dos dados chegarem, guarda a sprint pedida na URL; depois, troca por uma que exista.
+  if(page==='sprint'&&SPRINTS.length&&!SPRINTS.includes(sp)) sp=defaultSprint();
+  // Nas telas com filtro próprio, a sprint vem da URL ou de quem estava na tela Sprints.
+  const hint=page==='sprint'?sp:(sp??(previousPage==='sprint'?previousSprint:null));
   document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
   currentPage=page; currentSprint=sp;
+  if(mode!=='none'&&page!=='no-access'){
+    const url=screenUrl(page,hint);
+    if(mode==='push'&&url!==location.pathname+location.search) history.pushState({page,sp:hint},'',url);
+    else history.replaceState({page,sp:hint},'',url);
+  }
   setActiveNav(`nav-${page}`);
   if(page==='sprint'&&sp!==null) document.getElementById('sprintSel').value=String(sp);
   document.getElementById('page-'+page)?.classList.add('active');
-  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Dado Bruto','itens das sprints disponíveis'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar'],burndown:['Burndown','quanto falta implementar na sprint, dia a dia']};
+  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Tarefas','tarefas das sprints · detalhe, status e evidências'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar'],burndown:['Burndown','quanto falta implementar na sprint, dia a dia']};
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
   document.getElementById('tb-right').textContent=sp?`S${sp}`:sprintRangeLabel();
   dismissSidebar();
   if(page==='dashboard') renderDashboard();
-  else if(page==='sprint'&&sp!==null) renderSprint(sp);
+  else if(page==='sprint'&&SPRINTS.includes(sp)) renderSprint(sp);
   else if(page==='epicos') renderEpicos();
   else if(page==='time'){if(!timeInited)initTime();renderTime();}
-  else if(page==='raw') renderRaw();
-  else if(page==='bombeiro') window.Bombeiro?.enter(previousPage==='sprint'?previousSprint:null);
-  else if(page==='sprint-panel') window.SprintPanel?.enter(previousPage==='sprint'?previousSprint:null);
-  else if(page==='carousel') window.PanelCarousel?.enter(previousPage==='sprint-panel'?1:0,previousPage==='sprint'?previousSprint:null);
-  else if(page==='capacity') window.Capacity?.enter(previousPage==='sprint'?previousSprint:null);
-  else if(page==='forecast') window.Forecast?.enter(previousPage==='sprint'?previousSprint:null);
-  else if(page==='consumption') window.Consumption?.enter(previousPage==='sprint'?previousSprint:null);
-  else if(page==='release') window.SprintRelease?.enter(previousPage==='sprint'?previousSprint:null);
-  else if(page==='control-tower') window.ControlTower?.enter(previousPage==='sprint'?previousSprint:null);
-  else if(page==='burndown') window.Burndown?.enter(previousPage==='sprint'?previousSprint:null);
+  else if(page==='raw'){if(hint) rawSprintChoice=String(hint);rawPage=0;renderRaw();}
+  else if(page==='bombeiro') window.Bombeiro?.enter(hint);
+  else if(page==='sprint-panel') window.SprintPanel?.enter(hint);
+  else if(page==='carousel') window.PanelCarousel?.enter(previousPage==='sprint-panel'?1:0,hint);
+  else if(page==='capacity') window.Capacity?.enter(hint);
+  else if(page==='forecast') window.Forecast?.enter(hint);
+  else if(page==='consumption') window.Consumption?.enter(hint);
+  else if(page==='release') window.SprintRelease?.enter(hint);
+  else if(page==='control-tower') window.ControlTower?.enter(hint);
+  else if(page==='burndown') window.Burndown?.enter(hint);
   else if(page==='users') window.Users?.enter();
   if(page==='carousel') scheduleMondayRefresh();
   if((previousPage==='bombeiro'&&page!=='bombeiro')||(previousPage==='sprint-panel'&&page!=='sprint-panel')||(previousPage==='carousel'&&page!=='carousel')) scheduleMondayRefresh();
@@ -923,17 +997,47 @@ function initSprintNav(){
   const sprintSel=document.getElementById('sprintSel');
   sprintSel.replaceChildren(...[...SPRINTS].reverse().map(s=>new Option(`Sprint ${s}`,String(s))));
   if(currentSprint!==null) sprintSel.value=String(currentSprint);
-  // raw filters
+  // raw filters: as opções são refeitas a cada sincronização, mantendo o que estava selecionado.
   const rsp=document.getElementById('rawSpSel');
   rsp.length=1;
-  SPRINTS.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=`Sprint ${s}`;rsp.appendChild(o);});
-  const rdev=document.getElementById('rawDevSel');
-  rdev.length=1;
-  [...DEVS,...SprintRules.settings.excludedPeople].forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d.split(' ')[0]+' '+d.split(' ').slice(-1)[0];rdev.appendChild(o);});
-  const rtipo=document.getElementById('rawTipoSel');
+  [...SPRINTS].reverse().forEach(s=>rsp.appendChild(new Option(`Sprint ${s}`,String(s))));
+  const people=[...new Set([...DEVS,...SprintRules.settings.excludedPeople])].sort((a,b)=>a.localeCompare(b));
+  renderMultiSelect('rawDevMs',{label:'Responsáveis',all:'Todos os responsáveis',search:true,selected:rawDevs,options:people.map(d=>({value:d,label:d}))});
+  const statuses=[...new Set(DATA.map(x=>x.Status).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  renderMultiSelect('rawStatusMs',{label:'Status',all:'Todos os status',selected:rawStatuses,options:statuses.map(s=>({value:s,label:s}))});
+  const rtipo=document.getElementById('rawTipoSel'),tipo=rtipo.value;
   rtipo.length=1;
-  [...new Set(DATA.map(x=>x.Tipo))].filter(Boolean).forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;rtipo.appendChild(o);});
+  [...new Set(DATA.map(x=>x.Tipo))].filter(Boolean).forEach(t=>rtipo.appendChild(new Option(t,t)));
+  rtipo.value=[...rtipo.options].some(o=>o.value===tipo)?tipo:'all';
 }
+/** Filtro com várias opções marcáveis; o resumo mostra o que está selecionado. */
+function renderMultiSelect(id,{label,all,search=false,selected,options}){
+  const box=document.getElementById(id);
+  const values=new Set(options.map(o=>o.value));
+  [...selected].forEach(v=>{if(!values.has(v)) selected.delete(v);});
+  const summary=()=>{
+    const chosen=options.filter(o=>selected.has(o.value)).map(o=>o.label);
+    box.classList.toggle('on',chosen.length>0);
+    box.querySelector('summary').textContent=!chosen.length?all:chosen.length<=2?`${label}: ${chosen.join(', ')}`:`${label}: ${chosen.length} selecionados`;
+  };
+  box.innerHTML=`<summary></summary><div class="msel-pop">
+      ${search?`<input type="search" placeholder="Buscar ${esc(label.toLowerCase())}..." aria-label="Buscar ${esc(label.toLowerCase())}">`:''}
+      <div class="msel-list">${options.map(o=>`<label><input type="checkbox" value="${esc(o.value)}" ${selected.has(o.value)?'checked':''}>${esc(o.label)}</label>`).join('')||'<span class="td-empty">Nenhuma opção</span>'}</div>
+      <div class="msel-foot"><button type="button" data-clear>Limpar</button><button type="button" data-done>Fechar</button></div>
+    </div>`;
+  summary();
+  box.querySelector('input[type=search]')?.addEventListener('input',e=>{
+    const q=e.target.value.toLowerCase();
+    box.querySelectorAll('.msel-list label').forEach(l=>{l.hidden=!l.textContent.toLowerCase().includes(q);});
+  });
+  box.querySelector('.msel-list').addEventListener('change',e=>{
+    if(e.target.checked) selected.add(e.target.value); else selected.delete(e.target.value);
+    summary(); rawPage=0; renderRaw();
+  });
+  box.querySelector('[data-clear]').onclick=()=>{selected.clear();box.querySelectorAll('.msel-list input').forEach(i=>{i.checked=false;});summary();rawPage=0;renderRaw();};
+  box.querySelector('[data-done]').onclick=()=>{box.open=false;};
+}
+document.addEventListener('click',e=>{document.querySelectorAll('details.msel[open]').forEach(d=>{if(!d.contains(e.target)) d.open=false;});});
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard(){
@@ -1455,7 +1559,24 @@ function renderTimeIndividual(dev,rows,spFilter){
 
 // ── RAW PAGE ──────────────────────────────────────────────────────────────────
 let rawPage=0,rawSort={col:'Sprint',asc:true},rawActiveFilters=new Set();
+// Sem escolha (null), a tela segue a sprint ativa; os filtros de responsáveis e status aceitam várias opções.
+let rawSprintChoice=null;
+const rawDevs=new Set(),rawStatuses=new Set();
 const RAW_PER=30;
+function chooseRawSprint(value){
+  rawSprintChoice=value;
+  currentSprint=value==='all'?null:Number(value);
+  if(currentPage==='raw') history.replaceState({page:'raw',sp:currentSprint},'',screenUrl('raw',currentSprint));
+  rawPage=0; renderRaw();
+}
+function clearRawFilters(){
+  rawDevs.clear(); rawStatuses.clear(); rawActiveFilters.clear();
+  document.querySelectorAll('#raw-filters .tfbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('rawTipoSel').value='all';
+  document.getElementById('rawSearch').value='';
+  initSprintNav();
+  rawPage=0; renderRaw();
+}
 function toggleRawFilter(f){
   if(rawActiveFilters.has(f)) rawActiveFilters.delete(f); else rawActiveFilters.add(f);
   document.getElementById('rf'+f)?.classList.toggle('active',rawActiveFilters.has(f));
@@ -1464,14 +1585,20 @@ function toggleRawFilter(f){
 function sortRaw(col){rawSort=rawSort.col===col?{col,asc:!rawSort.asc}:{col,asc:true};rawPage=0;renderRaw();}
 function rawPg(d){rawPage+=d;renderRaw();}
 function renderRaw(){
-  const sp=document.getElementById('rawSpSel').value;
-  const dev=document.getElementById('rawDevSel').value;
+  const spSel=document.getElementById('rawSpSel');
+  const active=defaultSprint();
+  [...spSel.options].forEach(o=>{if(o.value!=='all') o.textContent=`Sprint ${o.value}${Number(o.value)===active?' (ativa)':''}`;});
+  const wanted=rawSprintChoice??(active===null?'all':String(active));
+  spSel.value=[...spSel.options].some(o=>o.value===wanted)?wanted:'all';
+  const sp=spSel.value;
   const tipo=document.getElementById('rawTipoSel').value;
   const q=document.getElementById('rawSearch').value.toLowerCase();
   let rows=DATA.filter(x=>x.Sprint);
   if(sp!=='all') rows=rows.filter(x=>x.Sprint===parseInt(sp));
-  if(dev!=='all') rows=rows.filter(x=>devPeople(x).includes(dev));
+  if(rawDevs.size) rows=rows.filter(x=>devPeople(x).some(p=>rawDevs.has(p)));
+  if(rawStatuses.size) rows=rows.filter(x=>rawStatuses.has(x.Status));
   if(tipo!=='all') rows=rows.filter(x=>x.Tipo===tipo);
+  document.getElementById('rawClear').hidden=!(rawDevs.size||rawStatuses.size||rawActiveFilters.size||tipo!=='all'||q);
   if(rawActiveFilters.has('bug')) rows=rows.filter(x=>x.BugProducao);
   if(rawActiveFilters.has('val')) rows=rows.filter(x=>x.ValorAgregado);
   if(rawActiveFilters.has('rework')) rows=rows.filter(x=>x.Retrabalho);
@@ -1487,7 +1614,7 @@ function renderRaw(){
   const slice=rows.slice(rawPage*RAW_PER,(rawPage+1)*RAW_PER);
   document.getElementById('raw-cnt').textContent=`${total} itens`;
   document.getElementById('raw-body').innerHTML=slice.map(x=>`<tr>
-    <td title="${esc(x.Nome)}">${esc(x.Nome)}</td>
+    <td title="${esc(x.Nome)}">${x.Id?`<button type="button" class="raw-link" onclick="ItemDetail.open('${esc(x.Id)}')">${esc(x.Nome)}</button>`:esc(x.Nome)}</td>
     <td class="cm">${esc(devPeople(x).filter(p=>!SprintRules.isExcludedPerson(p))[0]?.split(' ')[0]||'—')}</td>
     <td class="cm">Sprint ${x.Sprint}</td>
     <td>${stBadge(x.Status)}</td>
@@ -1509,26 +1636,29 @@ function renderRaw(){
 // ── INIT ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
   initSprintNav();
-  renderDashboard();
-  if(location.hash==='#bombeiro') navigate('bombeiro');
-  else if(location.hash==='#sprint-panel') navigate('sprint-panel');
-  else if(location.hash==='#carousel') navigate('carousel');
-  else if(location.hash==='#capacity') navigate('capacity');
-  else if(location.hash==='#forecast') navigate('forecast');
-  else if(location.hash==='#dashboard') navigate('dashboard');
-  else navigate('control-tower');
+  const {page,sprint}=screenFromUrl();
+  navigate(page||'control-tower',sprint,{history:'replace'});
+});
+window.addEventListener('popstate',()=>{
+  const {page,sprint}=screenFromUrl();
+  navigate(page||'control-tower',sprint,{history:'none'});
 });
 </script>
-<script src="monday-client.js"></script>
-<script src="bombeiro.js"></script>
-<script src="sprint-panel.js"></script>
-<script src="panel-carousel.js"></script>
-<script src="capacity.js"></script>
-<script src="forecast.js"></script>
-<script src="consumption.js"></script>
-<script src="release.js"></script>
-<script src="control-tower.js"></script>
-<script src="burndown.js"></script>
-<script src="users.js"></script>
+<script src="{{ asset('monday-client.js') }}"></script>
+<script src="{{ asset('bombeiro.js') }}"></script>
+<script src="{{ asset('sprint-panel.js') }}"></script>
+<script src="{{ asset('panel-carousel.js') }}"></script>
+<script src="{{ asset('capacity.js') }}"></script>
+<script src="{{ asset('forecast.js') }}"></script>
+<script src="{{ asset('consumption.js') }}"></script>
+<script src="{{ asset('release.js') }}"></script>
+<script src="{{ asset('control-tower.js') }}"></script>
+<script src="{{ asset('burndown.js') }}"></script>
+<script src="{{ asset('users.js') }}"></script>
+<script src="{{ asset('attachments.js') }}"></script>
+<script src="{{ asset('item-detail.js') }}"></script>
+@can('create-tickets')
+<script src="{{ asset('new-ticket.js') }}"></script>
+@endcan
 </body></html>
 

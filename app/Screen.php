@@ -34,7 +34,7 @@ enum Screen: string
             self::Sprints => 'Sprints',
             self::Epics => 'Épicos',
             self::Team => 'Time',
-            self::RawData => 'Dado Bruto',
+            self::RawData => 'Tarefas',
             self::Firefighter => 'Painel do Bombeiro',
             self::SprintPanel => 'Painel da Sprint',
             self::Carousel => 'Apresentação dos Painéis',
@@ -45,6 +45,39 @@ enum Screen: string
             self::Settings => 'Configurações',
             self::Users => 'Usuários',
         };
+    }
+
+    /** Caminho da tela na URL (/torre-de-controle, /sprints/18...): recarregar a página mantém a tela aberta. */
+    public function slug(): string
+    {
+        return match ($this) {
+            self::ControlTower => 'torre-de-controle',
+            self::Burndown => 'burndown',
+            self::Dashboard => 'dashboard',
+            self::Sprints => 'sprints',
+            self::Epics => 'epicos',
+            self::Team => 'time',
+            self::RawData => 'tarefas',
+            self::Firefighter => 'bombeiro',
+            self::SprintPanel => 'painel-da-sprint',
+            self::Carousel => 'apresentacao',
+            self::Capacity => 'capacity',
+            self::Forecast => 'previsibilidade',
+            self::Consumption => 'consumo',
+            self::Release => 'release',
+            self::Settings => 'configuracoes',
+            self::Users => 'usuarios',
+        };
+    }
+
+    /**
+     * Caminho de cada tela, pelo identificador usado em navigate().
+     *
+     * @return array<string, string>
+     */
+    public static function slugs(): array
+    {
+        return array_combine(self::values(), array_map(fn (self $screen): string => $screen->slug(), self::cases()));
     }
 
     /**

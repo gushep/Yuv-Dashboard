@@ -11,7 +11,7 @@
 .burndown-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:14px}
 .burndown-panel-all{grid-column:1/-1}
 .burndown-panels .burndown-card{margin-bottom:0}
-.burndown-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px}
+.burndown-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:12px}
 .burndown-facts>div{padding:8px 12px;border-radius:8px;background:#f5f8fc}
 .burndown-facts span{display:block;font-size:11px;font-weight:600;color:#4b5568}
 .burndown-facts strong{display:block;margin-top:2px;font-size:18px}
@@ -34,4 +34,4 @@
 .burndown-key-scope{background:#94a3b8}
 .burndown-key-ideal{background:repeating-linear-gradient(90deg,#16a34a 0 5px,transparent 5px 8px)}
 @media(max-width:1100px){.burndown-panels{grid-template-columns:1fr}}
-@media(max-width:600px){.burndown-facts,.burndown-method dl{grid-template-columns:1fr}.burndown-chart,.burndown-panel-all .burndown-chart{height:280px}}
+@media(max-width:600px){.burndown-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.burndown-method dl{grid-template-columns:1fr}.burndown-chart,.burndown-panel-all .burndown-chart{height:280px}}

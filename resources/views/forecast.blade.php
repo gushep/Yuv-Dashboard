@@ -1,6 +1,6 @@
 <div class="page" id="page-forecast">
   <header class="cap-hero">
-    <div class="cap-heading"><img src="yuv-logo.png" alt="YUV"><span class="cap-divider"></span><div><h1>Previsibilidade da sprint</h1><p>Demanda restante versus capacidade disponível</p></div></div>
+    <div class="cap-heading"><img src="{{ asset('yuv-logo.png') }}" alt="YUV"><span class="cap-divider"></span><div><h1>Previsibilidade da sprint</h1><p>Demanda restante versus capacidade disponível</p></div></div>
     <div class="cap-filters"><label>Sprint <select id="forecast-sprint" aria-label="Selecionar sprint da previsão"></select></label><span id="forecast-dates"></span></div>
   </header>
   <div class="forecast-toolbar">

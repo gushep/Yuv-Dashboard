@@ -1,0 +1,62 @@
+/*
+ * Camada responsiva comum, carregada depois dos estilos de cada tela. Abaixo de 640px: tabelas de lista viram cartões
+ * (células nomeadas por responsive.js) com o cabeçalho como botões de ordenação, modais ocupam a tela e os
+ * cabeçalhos das telas ficam compactos. Tabelas numéricas comparativas (Capacity, Previsibilidade, Consumo)
+ * continuam com rolagem lateral e primeira coluna fixa.
+ */
+@media screen and (max-width:640px){
+  /* Tabelas de lista como cartões */
+  :is(table.stack-mobile,.tscroll>table){display:block;min-width:0!important;width:100%;padding:10px 12px;border-collapse:separate}
+  :is(table.stack-mobile,.tscroll>table) thead{display:block;margin-bottom:10px}
+  :is(table.stack-mobile,.tscroll>table) thead tr{display:flex;flex-wrap:wrap;gap:6px;background:none}
+  :is(table.stack-mobile,.tscroll>table) thead th{display:inline-flex;align-items:center;position:static;width:auto!important;padding:5px 10px;border:1px solid var(--border);border-radius:999px;background:var(--card);font-size:10px;text-align:left;white-space:nowrap}
+  :is(table.stack-mobile,.tscroll>table) thead th:empty{display:none}
+  :is(table.stack-mobile,.tscroll>table) tbody{display:block}
+  :is(table.stack-mobile,.tscroll>table) tbody tr{display:flex;flex-direction:column;margin:0 0 10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--card)}
+  :is(table.stack-mobile,.tscroll>table) tbody tr:last-child{margin-bottom:0;border-bottom:1px solid var(--border)}
+  :is(table.stack-mobile,.tscroll>table) tbody td{display:flex;align-items:center;justify-content:space-between;gap:12px;width:auto!important;max-width:none;padding:4px 0!important;border:0!important;background:none!important;font-size:12px;text-align:right!important;white-space:normal;overflow:visible;overflow-wrap:anywhere}
+  :is(table.stack-mobile,.tscroll>table) tbody td::before{content:attr(data-label);flex:none;color:var(--muted);font:600 10px 'DM Sans',sans-serif;letter-spacing:.04em;text-align:left;text-transform:uppercase}
+  :is(table.stack-mobile,.tscroll>table) tbody td.cell-empty{display:none}
+  :is(table.stack-mobile,.tscroll>table) tbody td.cell-primary{order:-1;display:block;margin-bottom:4px;padding-bottom:8px!important;border-bottom:1px solid var(--border)!important;font-size:13px;font-weight:600;text-align:left!important}
+  :is(table.stack-mobile,.tscroll>table) tbody td:is(.cell-primary,[colspan],[data-label=""])::before{display:none}
+  :is(table.stack-mobile,.tscroll>table) tbody td[colspan]{display:block;text-align:center!important}
+  :is(table.stack-mobile,.tscroll>table) tbody td small{display:block;text-align:inherit}
+  :is(table.stack-mobile,.tscroll>table) tbody tr:hover{background:var(--card)}
+  .kpi-table-scroll,.cap-table-scroll:has(>table.stack-mobile){overflow:visible}
+
+  /* Cards de indicadores (Dashboard e Sprints): sempre 2 por linha, mais compactos, mesmo em telas de 320px */
+  .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .kpi{padding:12px 12px 10px}
+  .kpi-label{margin-bottom:6px;font-size:9px;letter-spacing:.05em}
+  .kpi-val{font-size:22px}
+  .kpi-sub{margin-bottom:6px;font-size:10.5px}
+
+  /* Roscas com a legenda embaixo precisam de mais altura para a rosca não encolher */
+  .g2 .cw.h220:has(canvas[id^="sStatus"],canvas[id^="sType"],canvas[id^="sPriority"],canvas[id^="sPlanned"],canvas[id^="cType"],canvas[id^="cQuality"],canvas[id^="tDev"]){height:340px}
+
+  /* Modais em tela cheia */
+  .kpi-modal{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;border:0;border-radius:0}
+  .kpi-modal-head{padding:14px 16px}
+  .kpi-modal-body{padding-bottom:16px}
+
+  /* Cabeçalho das telas: a barra do topo já mostra o nome; fica só o título, sem a marca */
+  .cap-heading img,.cap-divider{display:none}
+  .cap-heading h1{font-size:22px}
+  .cap-heading p{font-size:12px}
+  .cap-hero{gap:10px;margin-bottom:10px}
+
+  /* Torre de controle: grade por origem ocupa a largura da linha */
+  .tower-origin-stats{justify-self:stretch;display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
+  .tower-origin-stat{padding:3px 2px}
+  .tower-origin-stat span{font-size:7.5px;line-height:1.2;text-align:center;white-space:normal}
+
+  /* Release: data da atualização e situação dos resumos em linhas próprias */
+  .release-metadata{flex-direction:column;align-items:flex-start;gap:4px}
+  #release-summary-status{font-size:12px}
+
+  /* Kanbans: sem a marca no topo, o título cabe; coluna vazia não ocupa meia tela e coluna cheia rola por dentro */
+  .fire-brand{display:none}
+  .fire-hero{min-height:0;padding:16px 18px}
+  .fire-lane,#page-sprint-panel .fire-lane{height:auto;min-height:0;max-height:75vh}
+  .fire-lane-list{min-height:72px}
+}

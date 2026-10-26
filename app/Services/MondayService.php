@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -32,6 +34,18 @@ class MondayService
         $data = $this->query($token, 'query ($board: [ID!]!) { boards(ids: $board) { id name columns { id title type } } }', ['board' => [$boardId]]);
 
         return $data['boards'][0] ?? throw new RuntimeException('Quadro não encontrado ou sem permissão de leitura.');
+    }
+
+    /**
+     * Colunas do quadro com as configurações (rótulos de status, quadros vinculados).
+     *
+     * @return list<array{id: string, title: string, type: string, settings_str: string}>
+     */
+    public function boardColumns(string $token, string $boardId): array
+    {
+        $data = $this->query($token, 'query ($board: [ID!]!) { boards(ids: $board) { columns { id title type settings_str } } }', ['board' => [$boardId]]);
+
+        return $data['boards'][0]['columns'] ?? throw new RuntimeException('Quadro não encontrado ou sem permissão de leitura.');
     }
 
     public function boards(string $token): array
@@ -248,6 +262,290 @@ GRAPHQL;
         }
 
         return $result;
+    }
+
+    /**
+     * Card completo como aparece no Monday: todas as colunas (inclusive vazias), subitens, comentários com respostas
+     * e as opções da coluna de status. Só lê cards do quadro configurado.
+     *
+     * @return array{id: string, name: string, url: string, createdAt: ?string, updatedAt: ?string, creator: ?string,
+     *     board: ?string, group: ?array{title: string, color: ?string}, statusColumnId: ?string,
+     *     statusOptions: list<array{label: string, color: ?string}>,
+     *     columns: list<array{id: string, title: string, type: string, text: string, color: ?string}>,
+     *     subitems: list<array{id: string, name: string, status: string, color: ?string, people: string}>,
+     *     updates: list<array{id: string, author: string, createdAt: string, text: string, assets: list<array{name: string, url: string}>, replies: list<array{id: string, author: string, createdAt: string, text: string}>}>}
+     */
+    public function itemDetails(string $token, string $boardId, string $itemId, ?string $statusColumnId): array
+    {
+        $query = <<<'GRAPHQL'
+query ($ids: [ID!]!, $columns: [String!]) {
+  items(ids: $ids) {
+    id name url created_at updated_at
+    creator { name }
+    group { title color }
+    board { id name columns(ids: $columns) { id settings_str } }
+    column_values {
+      id text type column { title }
+      ... on StatusValue { label_style { color } }
+      ... on BoardRelationValue { display_value }
+      ... on MirrorValue { display_value }
+    }
+    subitems { id name column_values { text type ... on StatusValue { label_style { color } } } }
+    updates(limit: 100) { id body created_at creator { name } assets { name url } replies { id body created_at creator { name } } }
+  }
+}
+GRAPHQL;
+        $item = $this->boardItem($token, $boardId, $query, ['ids' => [$itemId], 'columns' => $statusColumnId ? [$statusColumnId] : null]);
+
+        $columns = [];
+        foreach ($item['column_values'] ?? [] as $value) {
+            if (in_array($value['type'] ?? '', ['name', 'subtasks'], true)) {
+                continue;
+            }
+            $columns[] = [
+                'id' => (string) $value['id'],
+                'title' => (string) ($value['column']['title'] ?? $value['id']),
+                'type' => (string) ($value['type'] ?? ''),
+                'text' => trim((string) (! empty($value['display_value']) ? $value['display_value'] : ($value['text'] ?? ''))),
+                'color' => $value['label_style']['color'] ?? null,
+            ];
+        }
+        $comment = fn (array $entry): array => [
+            'id' => (string) $entry['id'],
+            'author' => (string) ($entry['creator']['name'] ?? 'Automação'),
+            'createdAt' => (string) $entry['created_at'],
+            'text' => $this->plainText((string) ($entry['body'] ?? '')),
+        ];
+        $hasStatusColumn = $statusColumnId && collect($columns)->contains('id', $statusColumnId);
+
+        return [
+            'id' => (string) $item['id'],
+            'name' => (string) $item['name'],
+            'url' => (string) ($item['url'] ?? ''),
+            'createdAt' => $item['created_at'] ?? null,
+            'updatedAt' => $item['updated_at'] ?? null,
+            'creator' => $item['creator']['name'] ?? null,
+            'board' => $item['board']['name'] ?? null,
+            'group' => isset($item['group']['title']) ? ['title' => (string) $item['group']['title'], 'color' => $item['group']['color'] ?? null] : null,
+            'statusColumnId' => $hasStatusColumn ? $statusColumnId : null,
+            'statusOptions' => $hasStatusColumn ? $this->statusOptions(collect($item['board']['columns'] ?? [])->firstWhere('id', $statusColumnId) ?? []) : [],
+            'columns' => $columns,
+            'subitems' => array_map(function (array $subitem): array {
+                $values = collect($subitem['column_values'] ?? []);
+                $status = $values->firstWhere('type', 'status');
+
+                return [
+                    'id' => (string) $subitem['id'],
+                    'name' => (string) $subitem['name'],
+                    'status' => (string) ($status['text'] ?? ''),
+                    'color' => $status['label_style']['color'] ?? null,
+                    'people' => (string) ($values->firstWhere('type', 'people')['text'] ?? ''),
+                ];
+            }, $item['subitems'] ?? []),
+            'updates' => array_map(fn (array $update): array => [
+                ...$comment($update),
+                'assets' => array_map(fn (array $asset): array => ['name' => (string) $asset['name'], 'url' => (string) $asset['url']], $update['assets'] ?? []),
+                'replies' => array_map($comment, $update['replies'] ?? []),
+            ], $item['updates'] ?? []),
+        ];
+    }
+
+    /**
+     * Histórico de alterações do card (log de atividades do Monday), do mais recente para o mais antigo.
+     * Comentários ficam de fora: já aparecem com o texto completo em itemDetails().
+     *
+     * @return list<array{id: string, event: string, author: string, createdAt: string, column: ?string, from: string, to: string}>
+     */
+    public function itemActivity(string $token, string $boardId, string $itemId): array
+    {
+        $query = 'query ($board: [ID!]!, $items: [ID!]) { boards(ids: $board) { activity_logs(item_ids: $items, limit: 100) { id event user_id created_at data } } }';
+        $logs = $this->query($token, $query, ['board' => [$boardId], 'items' => [$itemId]])['boards'][0]['activity_logs'] ?? [];
+        $logs = array_values(array_filter($logs, fn (array $log): bool => ! in_array($log['event'] ?? '', ['create_update', 'edit_update', 'delete_update', 'create_reply'], true)));
+
+        $decoded = array_map(fn (array $log): array => json_decode($log['data'] ?? '', true) ?: [], $logs);
+        $userIds = collect($logs)->pluck('user_id')->merge(collect($decoded)->flatMap(fn (array $data): array => [
+            ...$this->personIds($data['value'] ?? null), ...$this->personIds($data['previous_value'] ?? null),
+        ]))->filter()->map(fn (mixed $id): string => (string) $id)->unique()->values()->all();
+        $names = [];
+        if ($userIds !== []) {
+            foreach ($this->query($token, 'query ($ids: [ID!]) { users(ids: $ids) { id name } }', ['ids' => $userIds])['users'] ?? [] as $user) {
+                $names[(string) $user['id']] = (string) $user['name'];
+            }
+        }
+
+        $activity = [];
+        foreach ($logs as $index => $log) {
+            $data = $decoded[$index];
+            $activity[] = [
+                'id' => (string) $log['id'],
+                'event' => (string) $log['event'],
+                'author' => $names[(string) ($log['user_id'] ?? '')] ?? 'Automação',
+                // created_at do log vem em unidades de 100 ns desde a época Unix.
+                'createdAt' => Carbon::createFromTimestampUTC(((int) $log['created_at']) / 10_000_000)->toIso8601String(),
+                'column' => $data['column_title'] ?? null,
+                'from' => $this->activityValue($data['previous_value'] ?? null, $names),
+                'to' => $this->activityValue($data['value'] ?? ($data['name'] ?? null), $names),
+            ];
+        }
+
+        return $activity;
+    }
+
+    /**
+     * Troca o status do card pelo rótulo informado, que precisa existir na coluna de status do quadro.
+     */
+    public function changeStatus(string $token, string $boardId, string $itemId, string $statusColumnId, string $label): void
+    {
+        $query = 'query ($ids: [ID!]!, $columns: [String!]) { items(ids: $ids) { id board { id columns(ids: $columns) { id settings_str } } } }';
+        $item = $this->boardItem($token, $boardId, $query, ['ids' => [$itemId], 'columns' => [$statusColumnId]]);
+        $labels = array_column($this->statusOptions(collect($item['board']['columns'] ?? [])->firstWhere('id', $statusColumnId) ?? []), 'label');
+        if (! in_array($label, $labels, true)) {
+            throw new RuntimeException('Status inválido para este quadro.');
+        }
+        $mutation = 'mutation ($board: ID!, $item: ID!, $column: String!, $value: String!) { change_simple_column_value(board_id: $board, item_id: $item, column_id: $column, value: $value) { id } }';
+        $this->query($token, $mutation, ['board' => $boardId, 'item' => $itemId, 'column' => $statusColumnId, 'value' => $label]);
+    }
+
+    /**
+     * Publica um comentário no card. O Monday registra o dono do token como autor, por isso o texto leva quem enviou pelo dashboard.
+     * Os anexos seguem depois, um por requisição (attachFile), para cada envio caber no limite de upload do servidor.
+     */
+    public function postComment(string $token, string $boardId, string $itemId, string $text, string $author): string
+    {
+        $this->boardItem($token, $boardId, 'query ($ids: [ID!]!) { items(ids: $ids) { id board { id } } }', ['ids' => [$itemId]]);
+        $paragraphs = $text === '' ? '<p>Evidências anexadas.</p>' : '<p>'.nl2br(e($text), false).'</p>';
+        $body = $paragraphs.'<p><em>Enviado por '.e($author).' pelo Dashboard YUV</em></p>';
+        $update = $this->query($token, 'mutation ($item: ID!, $body: String!) { create_update(item_id: $item, body: $body) { id } }', ['item' => $itemId, 'body' => $body]);
+        $updateId = (string) ($update['create_update']['id'] ?? '');
+        if (! ctype_digit($updateId)) {
+            throw new RuntimeException('O Monday não confirmou a criação do comentário.');
+        }
+
+        return $updateId;
+    }
+
+    /**
+     * Anexa um arquivo a um comentário do card. O comentário precisa ser desse card e o card, do quadro configurado.
+     */
+    public function attachFile(string $token, string $boardId, string $itemId, string $updateId, UploadedFile $file): void
+    {
+        $query = 'query ($ids: [ID!]!, $updates: [ID!]) { items(ids: $ids) { id board { id } } updates(ids: $updates) { id item_id } }';
+        $data = $this->query($token, $query, ['ids' => [$itemId], 'updates' => [$updateId]]);
+        if ((string) ($data['items'][0]['board']['id'] ?? '') !== $boardId) {
+            throw new RuntimeException('Card não encontrado no quadro configurado.');
+        }
+        if ((string) ($data['updates'][0]['item_id'] ?? '') !== $itemId) {
+            throw new RuntimeException('Comentário não encontrado neste card.');
+        }
+
+        $response = Http::timeout(120)
+            ->withHeaders(['Authorization' => $token, 'API-Version' => '2026-07'])
+            ->attach('variables[file]', fopen($file->getRealPath(), 'r'), $file->getClientOriginalName())
+            ->post('https://api.monday.com/v2/file', ['query' => 'mutation ($file: File!) { add_file_to_update(update_id: '.$updateId.', file: $file) { id } }']);
+        if (! $response->successful() || ! empty($response->json('errors')) || empty($response->json('data.add_file_to_update.id'))) {
+            throw new RuntimeException('Monday recusou o arquivo: '.($response->json('errors.0.message') ?? $response->json('error_message') ?? 'HTTP '.$response->status()).'.');
+        }
+    }
+
+    /**
+     * Card buscado pela consulta informada, recusando cards de outros quadros que o token também enxerga.
+     *
+     * @param  array<string, mixed>  $variables
+     * @return array<string, mixed>
+     */
+    private function boardItem(string $token, string $boardId, string $query, array $variables): array
+    {
+        $item = $this->query($token, $query, $variables)['items'][0] ?? null;
+        if ($item === null || (string) ($item['board']['id'] ?? '') !== $boardId) {
+            throw new RuntimeException('Card não encontrado no quadro configurado.');
+        }
+
+        return $item;
+    }
+
+    /**
+     * Rótulos da coluna de status na ordem do Monday. Aceita o formato antigo (índice => texto) e o de lista.
+     *
+     * @param  array{settings_str?: string}  $column
+     * @return list<array{label: string, color: ?string}>
+     */
+    public function statusOptions(array $column): array
+    {
+        $settings = json_decode($column['settings_str'] ?? '', true);
+        $options = [];
+        foreach (is_array($settings['labels'] ?? null) ? $settings['labels'] : [] as $index => $label) {
+            $text = is_array($label) ? ($label['name'] ?? $label['label'] ?? null) : $label;
+            $key = (string) (is_array($label) ? ($label['id'] ?? $index) : $index);
+            if (! is_string($text) || trim($text) === '' || in_array((int) $key, $settings['deactivated_labels'] ?? [], true)) {
+                continue;
+            }
+            $color = is_array($label) ? ($label['color'] ?? null) : ($settings['labels_colors'][$key]['color'] ?? null);
+            $options[$key] = ['label' => $text, 'color' => is_string($color) && str_starts_with($color, '#') ? $color : null];
+        }
+        $positions = $settings['labels_positions_v2'] ?? [];
+        uksort($options, fn (string $a, string $b): int => ($positions[$a] ?? (int) $a) <=> ($positions[$b] ?? (int) $b));
+
+        return array_values($options);
+    }
+
+    /**
+     * IDs de pessoas citadas num valor de coluna do log de atividades.
+     *
+     * @return list<string>
+     */
+    private function personIds(mixed $value): array
+    {
+        return is_array($value) ? array_map(fn (array $person): string => (string) $person['id'], array_filter($value['personsAndTeams'] ?? [], 'is_array')) : [];
+    }
+
+    /**
+     * Valor legível de uma coluna no log de atividades (status, pessoas, números, datas, textos, vínculos).
+     *
+     * @param  array<string, string>  $names
+     */
+    private function activityValue(mixed $value, array $names): string
+    {
+        if (! is_array($value)) {
+            return is_scalar($value) ? trim((string) $value) : '';
+        }
+        if (isset($value['label']['text'])) {
+            return (string) $value['label']['text'];
+        }
+        if (isset($value['personsAndTeams'])) {
+            return implode(', ', array_map(fn (string $id): string => $names[$id] ?? 'Equipe', $this->personIds($value)));
+        }
+        if (isset($value['linkedPulseIds'])) {
+            $count = count($value['linkedPulseIds']);
+
+            return $count === 1 ? '1 item vinculado' : "{$count} itens vinculados";
+        }
+        if (isset($value['from'], $value['to'])) {
+            return "{$value['from']} → {$value['to']}";
+        }
+        if (isset($value['duration'])) {
+            return round((float) $value['duration'] / 3600, 2).'h';
+        }
+        if (isset($value['checked'])) {
+            return filter_var($value['checked'], FILTER_VALIDATE_BOOLEAN) ? 'Marcado' : 'Desmarcado';
+        }
+        foreach (['text', 'value', 'date', 'name', 'url'] as $key) {
+            if (isset($value[$key]) && is_scalar($value[$key])) {
+                return trim((string) $value[$key].(isset($value['time']) && $key === 'date' ? ' '.$value['time'] : ''));
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Comentários do Monday vêm em HTML; o dashboard mostra só o texto, preservando as quebras de linha.
+     */
+    private function plainText(string $html): string
+    {
+        $text = preg_replace(['/<br\s*\/?>/i', '/<\/(p|div|li|h\d|tr)>/i', '/<li[^>]*>/i'], ["\n", "\n", '• '], $html);
+        $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        return trim(preg_replace("/\n{3,}/", "\n\n", str_replace("\u{00A0}", ' ', $text)));
     }
 
     public function hours(array $item, ?string $columnId): ?float

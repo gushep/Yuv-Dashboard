@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Entrar · YUV Dashboard</title>
+    @include('pwa-head')
     <style>
         *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#eef5ff,#f7f3ff);font:15px system-ui,sans-serif;color:#10214b}
         main{width:min(92vw,420px);padding:34px;background:#fff;border:1px solid #dfe7f4;border-radius:20px;box-shadow:0 18px 55px #172a5c1a}

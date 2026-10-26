@@ -1,3 +1,6 @@
+# Instalador do app Android baixado pelo menu.
+AddType application/vnd.android.package-archive .apk
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

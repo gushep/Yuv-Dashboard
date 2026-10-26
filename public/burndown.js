@@ -46,7 +46,7 @@ window.Burndown = (() => {
     el('burndown-updated').textContent = state.loading ? 'Atualizando…' : data?.syncedAt ? `Dados do Monday de ${new Date(data.syncedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}` : '';
     el('burndown-error').textContent = state.error; el('burndown-error').hidden = !state.error;
     el('burndown-sprint').replaceChildren(...(data?.sprints || []).map(value => new Option(`Sprint ${value}`, String(value))));
-    if (data?.sprint) el('burndown-sprint').value = String(data.sprint);
+    if (data?.sprint) { el('burndown-sprint').value = String(data.sprint); window.rememberScreenSprint?.('burndown', data.sprint); }
     document.querySelectorAll('#page-burndown .burndown-units button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.unit === state.unit)));
     const ready = Boolean(data?.available);
     el('burndown-content').hidden = !ready;

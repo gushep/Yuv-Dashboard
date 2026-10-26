@@ -1,6 +1,6 @@
 <div class="page" id="page-control-tower" data-url="{{ route('control-tower.show') }}">
   <header class="cap-hero">
-    <div class="cap-heading"><img src="yuv-logo.png" alt="YUV"><span class="cap-divider"></span><div><h1>Torre de controle</h1><p>Para onde a sprint está indo e quanto tempo resta para manobrar</p></div></div>
+    <div class="cap-heading"><img src="{{ asset('yuv-logo.png') }}" alt="YUV"><span class="cap-divider"></span><div><h1>Torre de controle</h1><p>Para onde a sprint está indo e quanto tempo resta para manobrar</p></div></div>
     <div class="cap-filters"><label>Sprint <select id="tower-sprint" aria-label="Selecionar sprint da torre de controle"></select></label><span id="tower-dates"></span></div>
   </header>
   <div class="tower-toolbar"><button type="button" id="tower-refresh">Atualizar dados</button><span id="tower-updated" role="status"></span></div>
@@ -68,9 +68,9 @@
         <button type="button" id="tower-filter-clear" class="tower-link-button">Limpar filtros</button>
         <span id="tower-filter-count" role="status"></span>
       </div>
-      <div class="cap-table-scroll"><table class="tower-table"><thead><tr>
+      <div class="cap-table-scroll"><table class="tower-table stack-mobile"><thead><tr>
         <th aria-sort="none"><button type="button" data-sort="committed">Origem</button></th>
-        <th aria-sort="none"><button type="button" data-sort="name">Card</button></th>
+        <th aria-sort="none" data-primary><button type="button" data-sort="name">Card</button></th>
         <th aria-sort="none"><button type="button" data-sort="status">Status</button></th>
         <th aria-sort="none"><button type="button" data-sort="owner">Responsável</button></th>
         <th aria-sort="none"><button type="button" data-sort="priority">Prioridade</button></th>

@@ -81,7 +81,7 @@ window.Consumption = (() => {
     const sprints = [...new Set([...(state.rows || []).map(row => Number(row.Sprint)), ...Object.keys(state.dates).map(Number)])].filter(value => Number.isInteger(value) && value > 0).sort((a,b) => b-a);
     if (!sprints.includes(state.sprint)) state.sprint = sprints[0] ?? null;
     el('cons-sprint').replaceChildren(...sprints.map(value => new Option(`Sprint ${value}`,String(value))));
-    if (state.sprint !== null) el('cons-sprint').value = state.sprint;
+    if (state.sprint !== null) { el('cons-sprint').value = state.sprint; window.rememberScreenSprint?.('consumption', state.sprint); }
     const dates = state.dates[state.sprint];
     const date = value => new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR');
     el('cons-dates').textContent = dates ? `${date(dates.start)} – ${date(dates.end)}` : 'Datas da sprint indisponíveis no Monday';
@@ -171,7 +171,6 @@ window.Consumption = (() => {
     el('cons-developer').onchange = event => { state.developer = event.target.value; render(); };
     el('cons-refresh').onclick = () => syncMonday(true);
     el('cons-reserve-form').onsubmit = saveReserve;
-    if (location.hash === '#consumption') navigate('consumption');
   });
   return {enter,leave,onDataUpdated,onError,onLoading,onSyncComplete,model,reserveModel,shares,format,bar};
 })();
