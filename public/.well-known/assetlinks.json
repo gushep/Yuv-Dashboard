@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "br.com.yuv.metrics",
+        "sha256_cert_fingerprints": ["A6:7F:D0:AA:20:E8:F3:F8:43:D7:51:C4:FB:E2:ED:F1:2B:96:57:EF:C1:F9:52:F8:18:3C:38:B1:1E:52:78:7A"]
+      }
+    }]

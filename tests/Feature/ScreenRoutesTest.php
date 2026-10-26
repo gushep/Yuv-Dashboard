@@ -63,6 +63,14 @@ class ScreenRoutesTest extends TestCase
         }
     }
 
+    public function test_android_app_is_verified_by_the_digital_asset_links_file(): void
+    {
+        $links = json_decode((string) file_get_contents(public_path('.well-known/assetlinks.json')), true);
+
+        $this->assertSame('br.com.yuv.metrics', $links[0]['target']['package_name']);
+        $this->assertSame(['delegate_permission/common.handle_all_urls'], $links[0]['relation']);
+    }
+
     public function test_menu_offers_the_android_app_download_only_when_the_apk_was_published(): void
     {
         $apk = public_path('downloads/yuv-metrics.apk');
@@ -74,7 +82,8 @@ class ScreenRoutesTest extends TestCase
             $this->get('/')->assertOk()->assertDontSee('Baixar app Android');
 
             file_put_contents($apk, 'apk');
-            $this->get('/')->assertOk()->assertSee('Baixar app Android')->assertSee(asset('downloads/yuv-metrics.apk'), false);
+            $this->get('/')->assertOk()->assertSee('Baixar app Android')
+                ->assertSee(asset('downloads/yuv-metrics.apk').'?v='.filemtime($apk), false);
         } finally {
             $existing === null ? @unlink($apk) : file_put_contents($apk, $existing);
         }
