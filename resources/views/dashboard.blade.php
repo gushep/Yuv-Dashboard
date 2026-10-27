@@ -1836,6 +1836,10 @@ window.addEventListener('popstate',()=>{
 <script src="{{ URL::versioned('item-detail.js') }}"></script>
 <script src="{{ URL::versioned('task-views.js') }}"></script>
 @can('create-tickets')
+<button type="button" id="nt-fab" class="nt-fab" aria-label="Nova solicitação" aria-expanded="false" title="Nova solicitação" data-user="{{ auth()->user()->name }}" onclick="NewTicket.toggleChat()">
+  <svg class="nt-fab-chat" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.2 3.6c-.5.4-1.3.1-1.3-.6V16A2.5 2.5 0 0 1 4 13.5z"/><path d="M12 6.5v6M9 9.5h6" class="nt-fab-plus"/></svg>
+  <span class="nt-fab-close" aria-hidden="true">✕</span>
+</button>
 <script src="{{ URL::versioned('new-ticket.js') }}"></script>
 @endcan
 </body></html>
