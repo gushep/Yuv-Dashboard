@@ -581,16 +581,17 @@ GRAPHQL;
     }
 
     /**
-     * Itens do quadro do Roadmap (ex.: Funil de Demandas), com as colunas reconhecidas pelo título,
-     * sem mapeamento manual. Mesmo formato de linha das tarefas onde os campos coincidem.
+     * Itens de um quadro das abas Roadmap e Backlog da tela Tarefas (ex.: Funil de Demandas, Product Backlog),
+     * com as colunas reconhecidas pelo título, sem mapeamento manual. Mesmo formato de linha das tarefas onde
+     * os campos coincidem; `titles` guarda o nome real de cada coluna no quadro (ex.: Prioridade = "Severidade").
      *
-     * @return array{boardName: string, rows: list<array<string, mixed>>, statusOptions: list<array{label: string, color: ?string}>, fields: list<string>, syncedAt: string}
+     * @return array{boardName: string, rows: list<array<string, mixed>>, statusOptions: list<array{label: string, color: ?string}>, fields: list<string>, titles: array<string, string>, syncedAt: string}
      */
-    public function roadmap(string $token, string $boardId): array
+    public function boardTab(string $token, string $boardId): array
     {
         $items = 'items { id name url created_at group { title } column_values { id text type ... on BoardRelationValue { display_value } ... on MirrorValue { display_value } } }';
         $data = $this->query($token, 'query ($board: [ID!]!) { boards(ids: $board) { name columns { id title type settings_str } items_page(limit: 500) { cursor '.$items.' } } }', ['board' => [$boardId]]);
-        $board = $data['boards'][0] ?? throw new RuntimeException('Quadro do Roadmap não encontrado ou sem permissão de leitura.');
+        $board = $data['boards'][0] ?? throw new RuntimeException('Quadro não encontrado ou sem permissão de leitura.');
         $all = $board['items_page']['items'] ?? [];
         for ($cursor = $board['items_page']['cursor'] ?? null, $page = 1; $cursor && $page < 20; $page++) {
             $next = $this->query($token, 'query ($cursor: String!) { next_items_page(limit: 500, cursor: $cursor) { cursor '.$items.' } }', ['cursor' => $cursor])['next_items_page'] ?? [];
@@ -599,16 +600,18 @@ GRAPHQL;
         }
 
         $byTitle = [
-            'status' => 'Status', 'impacto' => 'Prioridade', 'prioridade' => 'Prioridade', 'priority' => 'Prioridade',
+            'status' => 'Status', 'impacto' => 'Prioridade', 'prioridade' => 'Prioridade', 'priority' => 'Prioridade', 'severidade' => 'Prioridade',
             'tipo' => 'Tipo', 'origem' => 'Origem', 'modulo' => 'Modulo', 'esforco' => 'Esforco', 'cliente' => 'Cliente',
             'estimativa (h)' => 'EstH', 'estimativa' => 'EstH', 'nome solicitante' => 'Solicitante', 'solicitante' => 'Solicitante',
             'data do registro' => 'DataRegistro',
         ];
         $map = [];
+        $titles = [];
         foreach ($board['columns'] ?? [] as $column) {
             $field = $byTitle[$this->normalizedTitle((string) $column['title'])] ?? (($column['type'] ?? '') === 'people' ? 'Responsavel' : null);
             if ($field !== null && ! isset($map[$field]) && ($field !== 'Status' || $column['type'] === 'status')) {
                 $map[$field] = (string) $column['id'];
+                $titles[$field] = (string) $column['title'];
             }
         }
 
@@ -633,6 +636,7 @@ GRAPHQL;
             'rows' => $rows,
             'statusOptions' => $this->statusOptions(collect($board['columns'] ?? [])->firstWhere('id', $map['Status'] ?? null) ?? []),
             'fields' => array_keys($map),
+            'titles' => $titles,
             'syncedAt' => now()->toIso8601String(),
         ];
     }

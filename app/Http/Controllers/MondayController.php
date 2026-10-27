@@ -27,8 +27,11 @@ class MondayController extends Controller
     /** Trava que limita a cópia do log de atividades a uma vez por hora. */
     private const ACTIVITY_IMPORT_KEY = 'monday-activity-import';
 
-    /** Cache do quadro do Roadmap; descartado quando o status de um card muda pelo dashboard. */
-    private const ROADMAP_CACHE_KEY = 'monday-roadmap-1';
+    /** Abas da tela Tarefas que mostram outros quadros do Monday, e a coluna de configuração de cada uma. */
+    private const BOARD_TABS = ['roadmap' => 'roadmap_board_id', 'backlog' => 'backlog_board_id'];
+
+    /** Prefixo do cache de cada aba; descartado quando o status de um card muda pelo dashboard. */
+    private const BOARD_TAB_CACHE = 'monday-board-tab-';
 
     private const FIELDS = [
         'Responsavel', 'Status', 'Prioridade', 'Tipo', 'EstH', 'RealH',
@@ -42,6 +45,7 @@ class MondayController extends Controller
         return response()->json([
             'boardId' => $connection->board_id,
             'roadmapBoardId' => $connection->roadmap_board_id,
+            'backlogBoardId' => $connection->backlog_board_id,
             'map' => $connection->column_map ?? [],
             'refreshMinutes' => $connection->refresh_minutes,
             'hasToken' => filled($connection->token),
@@ -294,7 +298,9 @@ class MondayController extends Controller
             $connection = $this->configuredConnection();
             $monday->changeStatus($connection->token, $this->itemBoards($connection), $item, $data['status']);
             Cache::forget(MondaySnapshotService::CACHE_KEY);
-            Cache::forget(self::ROADMAP_CACHE_KEY);
+            foreach (array_keys(self::BOARD_TABS) as $tab) {
+                Cache::forget(self::BOARD_TAB_CACHE.$tab);
+            }
             Log::info('Status de card alterado pelo dashboard.', ['item' => $item, 'status' => $data['status'], 'user' => $request->user()->email]);
 
             return ['saved' => true, 'status' => $data['status']];
@@ -350,24 +356,24 @@ class MondayController extends Controller
     }
 
     /**
-     * Quadro do Roadmap (aba Roadmap da tela Tarefas). Lido com o mesmo intervalo de cache das tarefas.
+     * Quadro de uma aba da tela Tarefas (Roadmap ou Backlog). Lido com o mesmo intervalo de cache das tarefas.
      */
-    public function roadmap(Request $request, MondayService $monday): JsonResponse
+    public function boardTab(Request $request, string $tab, MondayService $monday): JsonResponse
     {
         $data = $request->validate(['force' => ['nullable', 'boolean']]);
 
-        return $this->attempt(function () use ($monday, $data): array {
+        return $this->attempt(function () use ($monday, $data, $tab): array {
             $connection = $this->configuredConnection();
-            if (blank($connection->roadmap_board_id)) {
+            $boardId = (string) $connection->{self::BOARD_TABS[$tab]};
+            if ($boardId === '') {
                 return ['configured' => false];
             }
             $ttl = $connection->refresh_minutes === 0 ? 60 : $connection->refresh_minutes * 60;
-            $cached = Cache::get(self::ROADMAP_CACHE_KEY);
-            $fresh = $cached && ($cached['boardId'] ?? null) === $connection->roadmap_board_id
-                && Carbon::parse($cached['syncedAt'])->diffInSeconds(now(), false) < $ttl;
+            $cached = Cache::get(self::BOARD_TAB_CACHE.$tab);
+            $fresh = $cached && ($cached['boardId'] ?? null) === $boardId && Carbon::parse($cached['syncedAt'])->diffInSeconds(now(), false) < $ttl;
             if (! $fresh || ! empty($data['force'])) {
-                $cached = ['boardId' => (string) $connection->roadmap_board_id, ...$monday->roadmap($connection->token, (string) $connection->roadmap_board_id)];
-                Cache::put(self::ROADMAP_CACHE_KEY, $cached, 3600);
+                $cached = ['boardId' => $boardId, ...$monday->boardTab($connection->token, $boardId)];
+                Cache::put(self::BOARD_TAB_CACHE.$tab, $cached, 3600);
             }
 
             return ['configured' => true, ...$cached];
@@ -375,23 +381,30 @@ class MondayController extends Controller
     }
 
     /**
-     * Grava o quadro do Roadmap, conferindo antes que o token consegue lê-lo. Vazio desliga a aba.
+     * Grava os quadros das abas Roadmap e Backlog, conferindo antes que o token consegue lê-los. Vazio desliga a aba.
      */
-    public function saveRoadmapBoard(Request $request, MondayService $monday): JsonResponse
+    public function saveBoardTabs(Request $request, MondayService $monday): JsonResponse
     {
-        $data = $request->validate(['roadmapBoardId' => ['nullable', 'regex:/^\d+$/']], [
-            'roadmapBoardId.regex' => 'Informe o ID numérico do quadro (o número no link do quadro).',
+        $data = $request->validate([
+            'roadmapBoardId' => ['nullable', 'regex:/^\d+$/'],
+            'backlogBoardId' => ['nullable', 'regex:/^\d+$/'],
+        ], [
+            'roadmapBoardId.regex' => 'Informe o ID numérico do quadro do Roadmap (o número no link do quadro).',
+            'backlogBoardId.regex' => 'Informe o ID numérico do quadro do Backlog (o número no link do quadro).',
         ]);
 
         return $this->attempt(function () use ($monday, $data): array {
             $connection = $this->configuredConnection();
-            $boardId = (string) ($data['roadmapBoardId'] ?? '');
-            $name = $boardId === '' ? null : $monday->board($connection->token, $boardId)['name'];
-            $connection->roadmap_board_id = $boardId === '' ? null : $boardId;
+            $names = [];
+            foreach (self::BOARD_TABS as $tab => $column) {
+                $boardId = (string) ($data[$tab.'BoardId'] ?? '');
+                $names[$tab] = $boardId === '' ? null : $monday->board($connection->token, $boardId)['name'];
+                $connection->{$column} = $boardId === '' ? null : $boardId;
+                Cache::forget(self::BOARD_TAB_CACHE.$tab);
+            }
             $connection->save();
-            Cache::forget(self::ROADMAP_CACHE_KEY);
 
-            return ['saved' => true, 'roadmapBoardId' => $connection->roadmap_board_id, 'boardName' => $name];
+            return ['saved' => true, 'roadmapBoardId' => $connection->roadmap_board_id, 'backlogBoardId' => $connection->backlog_board_id, 'boardNames' => $names];
         });
     }
 
@@ -403,8 +416,10 @@ class MondayController extends Controller
     private function itemBoards(MondayConnection $connection): array
     {
         $boards = [(string) $connection->board_id => $connection->column_map['Status'] ?? null];
-        if (filled($connection->roadmap_board_id)) {
-            $boards[(string) $connection->roadmap_board_id] = null;
+        foreach (self::BOARD_TABS as $column) {
+            if (filled($connection->{$column})) {
+                $boards[(string) $connection->{$column}] ??= null;
+            }
         }
 
         return $boards;

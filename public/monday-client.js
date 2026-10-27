@@ -147,20 +147,22 @@ async function saveMonday() {
   }
 }
 
-/** Quadro da aba Roadmap da tela Tarefas; o servidor confere que o token consegue lê-lo antes de gravar. */
-async function saveRoadmapBoard() {
-  const button = document.getElementById('roadmap-save');
+/** Quadros das abas Roadmap e Backlog da tela Tarefas; o servidor confere que o token consegue lê-los antes de gravar. */
+async function saveBoardTabs() {
+  const button = document.getElementById('board-tabs-save');
   button.disabled = true;
-  mondayMessage('roadmap-status', 'Conferindo o quadro no Monday...');
+  mondayMessage('board-tabs-status', 'Conferindo os quadros no Monday...');
+  // Aceita o ID ou o link do quadro.
+  const boardId = id => { const value = document.getElementById(id).value.trim(); return value.match(/(?:\/boards\/)?(\d+)(?:\/|$)/)?.[1] || value; };
   try {
-    const value = document.getElementById('roadmap-board').value.trim();
-    const roadmapBoardId = value.match(/(?:\/boards\/)?(\d+)(?:\/|$)/)?.[1] || value;
-    const result = await mondayRequest('/api/roadmap-board', { roadmapBoardId });
+    const result = await mondayRequest('/api/board-tabs', { roadmapBoardId: boardId('roadmap-board'), backlogBoardId: boardId('backlog-board') });
     document.getElementById('roadmap-board').value = result.roadmapBoardId || '';
-    mondayMessage('roadmap-status', result.boardName ? `Roadmap configurado com o quadro “${result.boardName}”.` : 'Aba Roadmap desligada.', 'success');
-    Object.assign(window.RAW_ROADMAP || {}, { loaded: false, rows: [], error: '' });
+    document.getElementById('backlog-board').value = result.backlogBoardId || '';
+    const describe = (label, name) => name ? `${label}: “${name}”` : `${label}: desligado`;
+    mondayMessage('board-tabs-status', `Salvo. ${describe('Roadmap', result.boardNames.roadmap)} · ${describe('Backlog', result.boardNames.backlog)}.`, 'success');
+    Object.values(window.RAW_BOARDS || {}).forEach(board => Object.assign(board, { loaded: false, rows: [], error: '' }));
   } catch (error) {
-    mondayMessage('roadmap-status', error.message, 'error');
+    mondayMessage('board-tabs-status', error.message, 'error');
   } finally {
     button.disabled = false;
   }
@@ -236,7 +238,6 @@ function useMondayRows(rows) {
   devSelect.length = 1;
   sprintSelect.length = 1;
   timeInited = false;
-  if (typeof rawState === 'function') rawState().page = 0;
   // Telas montadas com estes dados são redesenhadas onde estão; as demais buscam os próprios dados.
   if (['dashboard', 'sprint', 'epicos', 'time', 'raw'].includes(currentPage)) navigate(currentPage, currentSprint, { history: 'replace' });
   else document.getElementById('tb-right').textContent = sprintRangeLabel();
@@ -259,8 +260,8 @@ async function syncMonday(force = true) {
     window.Capacity?.onDataUpdated(result);
     // As datas das sprints chegam com o Capacity; com elas a tela Tarefas descobre a sprint ativa.
     if (currentPage === 'raw') renderRaw();
-    // A aba Roadmap acompanha o mesmo ciclo de atualização (o servidor decide se busca de novo no Monday).
-    if (currentPage === 'raw' && rawTab === 'roadmap') loadRoadmap(false);
+    // As abas Roadmap e Backlog acompanham o mesmo ciclo de atualização (o servidor decide se busca de novo no Monday).
+    if (currentPage === 'raw' && isBoardTab()) loadBoardTab(rawTab, false);
     window.Forecast?.onDataUpdated(result);
     window.Consumption?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);
@@ -293,6 +294,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     applyMetricSettings(config.metrics);
     document.getElementById('monday-board').value = config.boardId || '';
     document.getElementById('roadmap-board').value = config.roadmapBoardId || '';
+    document.getElementById('backlog-board').value = config.backlogBoardId || '';
     mondayRefreshMinutes = config.refreshMinutes ?? 5;
     document.getElementById('monday-refresh').value = String(mondayRefreshMinutes);
     mondaySavedMap = config.map || {};

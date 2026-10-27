@@ -33,13 +33,13 @@ class ScreenRoutesTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('#(src|href)="'.preg_quote(asset(''), '#').'[^"?]+\.(js|css)"#', $html);
     }
 
-    public function test_tasks_screen_offers_the_tasks_support_and_roadmap_tabs(): void
+    public function test_tasks_screen_offers_the_roadmap_backlog_current_sprint_and_support_tabs_in_flow_order(): void
     {
         $this->actingAs(User::factory()->create());
 
         $this->get('/tarefas')->assertOk()
-            ->assertSeeInOrder(["chooseRawTab('tarefas')", "chooseRawTab('suporte')", "chooseRawTab('roadmap')"], false)
-            ->assertSee('Suporte da sprint');
+            ->assertSeeInOrder(["chooseRawTab('roadmap')", "chooseRawTab('backlog')", "chooseRawTab('tarefas')", "chooseRawTab('suporte')"], false)
+            ->assertSee('Sprint atual');
     }
 
     public function test_old_raw_data_address_redirects_to_the_tasks_screen(): void

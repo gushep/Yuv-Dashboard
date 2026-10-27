@@ -30,15 +30,15 @@ class RoadmapTest extends TestCase
     public function test_roadmap_tab_reports_when_the_board_is_not_configured(): void
     {
         $this->actingAs(User::factory()->withScreens(Screen::RawData)->create())
-            ->getJson('/api/roadmap')->assertOk()->assertExactJson(['configured' => false]);
+            ->getJson('/api/board-tabs/roadmap')->assertOk()->assertExactJson(['configured' => false]);
         Http::assertNothingSent();
     }
 
     public function test_roadmap_requires_the_tasks_screen_and_its_board_only_settings_can_change(): void
     {
-        $this->actingAs(User::factory()->withScreens(Screen::Dashboard)->create())->getJson('/api/roadmap')->assertForbidden();
+        $this->actingAs(User::factory()->withScreens(Screen::Dashboard)->create())->getJson('/api/board-tabs/roadmap')->assertForbidden();
         $this->actingAs(User::factory()->withScreens(Screen::RawData)->create())
-            ->postJson('/api/roadmap-board', ['roadmapBoardId' => '999'])->assertForbidden();
+            ->postJson('/api/board-tabs', ['roadmapBoardId' => '999'])->assertForbidden();
         Http::assertNothingSent();
     }
 
@@ -47,10 +47,10 @@ class RoadmapTest extends TestCase
         Http::fake(['api.monday.com/v2' => Http::response(['data' => ['boards' => [['id' => '999', 'name' => 'Funil de Demandas', 'columns' => []]]]])]);
         $this->actingAs(User::factory()->withScreens(Screen::Settings)->create());
 
-        $this->postJson('/api/roadmap-board', ['roadmapBoardId' => 'abc'])
-            ->assertUnprocessable()->assertJsonValidationErrors(['roadmapBoardId' => 'Informe o ID numérico do quadro']);
-        $this->postJson('/api/roadmap-board', ['roadmapBoardId' => '999'])
-            ->assertOk()->assertJsonPath('boardName', 'Funil de Demandas');
+        $this->postJson('/api/board-tabs', ['roadmapBoardId' => 'abc'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['roadmapBoardId' => 'Informe o ID numérico do quadro do Roadmap']);
+        $this->postJson('/api/board-tabs', ['roadmapBoardId' => '999'])
+            ->assertOk()->assertJsonPath('boardNames.roadmap', 'Funil de Demandas')->assertJsonPath('boardNames.backlog', null);
 
         $this->assertSame('999', MondayConnection::current()->roadmap_board_id);
         $this->getJson('/api/config')->assertJsonPath('roadmapBoardId', '999');
@@ -83,7 +83,7 @@ class RoadmapTest extends TestCase
         ]]]])]);
         $this->actingAs(User::factory()->withScreens(Screen::RawData)->create());
 
-        $this->getJson('/api/roadmap')->assertOk()
+        $this->getJson('/api/board-tabs/roadmap')->assertOk()
             ->assertJsonPath('configured', true)
             ->assertJsonPath('boardName', 'Funil de Demandas')
             ->assertJsonPath('rows.0.Nome', 'Dashboard de Motoristas')
@@ -95,8 +95,35 @@ class RoadmapTest extends TestCase
             ->assertJsonPath('rows.0.Esforco', 'Média')
             ->assertJsonPath('rows.0.EstH', 16)
             ->assertJsonPath('statusOptions.0', ['label' => 'Aguardando revisão', 'color' => '#fdab3d']);
-        $this->getJson('/api/roadmap')->assertOk();
+        $this->getJson('/api/board-tabs/roadmap')->assertOk();
         Http::assertSentCount(1);
+    }
+
+    public function test_backlog_tab_reads_its_own_board_with_severity_as_priority_and_people_as_owner(): void
+    {
+        $connection = MondayConnection::current();
+        $connection->backlog_board_id = '888';
+        $connection->save();
+        Http::fake(['api.monday.com/v2' => Http::response(['data' => ['boards' => [[
+            'name' => 'Product Backlog',
+            'columns' => [
+                ['id' => 'status', 'title' => 'Status', 'type' => 'status', 'settings_str' => '{"labels":{"0":"Falta Escopo","1":"Preparado"}}'],
+                ['id' => 'sev', 'title' => 'Severidade', 'type' => 'status', 'settings_str' => '{}'],
+                ['id' => 'people', 'title' => 'Pessoas', 'type' => 'people', 'settings_str' => '{}'],
+            ],
+            'items_page' => ['cursor' => null, 'items' => [[
+                'id' => '601', 'name' => 'Homologação Intelbras', 'url' => '', 'created_at' => null, 'group' => ['title' => 'Backlog'],
+                'column_values' => [['id' => 'status', 'text' => 'Preparado', 'type' => 'status'], ['id' => 'sev', 'text' => 'Alta', 'type' => 'status'], ['id' => 'people', 'text' => 'Ana Souza', 'type' => 'people']],
+            ]]],
+        ]]]])]);
+
+        $this->actingAs(User::factory()->withScreens(Screen::RawData)->create())
+            ->getJson('/api/board-tabs/backlog')->assertOk()
+            ->assertJsonPath('boardName', 'Product Backlog')
+            ->assertJsonPath('rows.0.Prioridade', 'Alta')
+            ->assertJsonPath('rows.0.Responsavel', 'Ana Souza')
+            ->assertJsonPath('titles.Prioridade', 'Severidade');
+        $this->getJson('/api/board-tabs/outra')->assertNotFound();
     }
 
     public function test_status_of_a_roadmap_item_changes_using_the_status_column_of_its_own_board(): void

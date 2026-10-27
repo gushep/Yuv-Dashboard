@@ -16,8 +16,8 @@ window.ItemDetail = (() => {
   /** Campos que o dashboard já destaca no topo, na ordem do ClickUp. */
   const HIGHLIGHT_TYPES = ['status', 'people', 'date', 'timeline', 'numbers', 'time_tracking'];
 
-  /** Linhas já carregadas na tela: tarefas das sprints e demandas do Roadmap. */
-  function knownRows() { return [...DATA, ...(window.RAW_ROADMAP?.rows || [])]; }
+  /** Linhas já carregadas na tela: tarefas das sprints e itens das abas Roadmap e Backlog. */
+  function knownRows() { return [...DATA, ...Object.values(window.RAW_BOARDS || {}).flatMap(board => board.rows)]; }
 
   function initials(name) { return String(name).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?'; }
   function avatarColor(name) { let hash = 0; for (const char of String(name)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0; return AVATAR_COLORS[hash % AVATAR_COLORS.length]; }

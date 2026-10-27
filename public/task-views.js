@@ -1,6 +1,6 @@
 /* Visualizações da tela Tarefas além da tabela: quadro Kanban e lista agrupada, sobre a mesma lista já filtrada.
  * Tarefas: por etapa, as colunas são as mesmas 4 dos painéis do Bombeiro e da Sprint (regra de SprintPanel.statusBucket);
- * arrastar para outra etapa abre a escolha do status do Monday. Roadmap: as colunas são os status do funil,
+ * arrastar para outra etapa abre a escolha do status do Monday. Roadmap e Backlog: as colunas são os status na ordem do fluxo,
  * e arrastar aplica o status da coluna. Só arrasta quem pode atualizar cards. */
 window.TaskViews = (() => {
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -14,9 +14,9 @@ window.TaskViews = (() => {
   ];
   const stageOf = status => window.SprintPanel.statusBucket(status);
   const state = {collapsed:new Set(), dragging:null, options:{}};
-  const roadmapMode = () => state.options.mode === 'roadmap';
+  const boardMode = () => state.options.mode === 'board';
   const GROUPS = {
-    status:{empty:'Sem status', keys:row => [roadmapMode() ? clean(row.Status) : stageOf(row.Status)]},
+    status:{empty:'Sem status', keys:row => [boardMode() ? clean(row.Status) : stageOf(row.Status)]},
     responsavel:{empty:'Sem responsável', keys:row => devPeople(row).length ? devPeople(row) : ['']},
     cliente:{empty:'Sem cliente', keys:row => [clean(row.Cliente)]},
     prioridade:{empty:'Sem prioridade', keys:row => [clean(row.Prioridade)]},
@@ -28,15 +28,15 @@ window.TaskViews = (() => {
     esforco:{empty:'Sem esforço', keys:row => [clean(row.Esforco)]},
   };
 
-  /** Rótulos de status com cor: os do Roadmap vêm nas opções; os das tarefas, da sincronização. */
+  /** Rótulos de status com cor: os das abas de quadro (Roadmap, Backlog) vêm nas opções; os das tarefas, da sincronização. */
   function statusOptions() { return state.options.statusOptions || window.MONDAY_STATUS_OPTIONS || []; }
   function statusColor(label) { return statusOptions().find(option => option.label === label)?.color || '#94a3b8'; }
   /** Status do Monday que pertencem a uma etapa, na ordem do quadro. */
   function stageStatuses(stage) { return (window.MONDAY_STATUS_OPTIONS || []).map(option => option.label).filter(label => stageOf(label) === stage); }
 
-  /** Ordem das colunas: etapas (sempre as 4) ou o funil inteiro do Roadmap; prioridade e esforço do maior para o menor; sprint da mais recente. */
+  /** Ordem das colunas: etapas (sempre as 4) ou o fluxo inteiro do quadro; prioridade e esforço do maior para o menor; sprint da mais recente. */
   function orderedKeys(groupBy, present) {
-    if (groupBy === 'status' && !roadmapMode()) return STAGES.map(stage => stage.key);
+    if (groupBy === 'status' && !boardMode()) return STAGES.map(stage => stage.key);
     const known = groupBy === 'status' ? statusOptions().map(option => option.label)
       : (groupBy === 'prioridade' ? PRIORITY_ORDER : groupBy === 'esforco' ? EFFORT_ORDER : []).filter(key => present.has(key));
     const rest = [...present].filter(key => key !== '' && !known.includes(key));
@@ -52,7 +52,7 @@ window.TaskViews = (() => {
       buckets.get(key).push(row);
     }));
     return orderedKeys(groupBy, new Set(buckets.keys())).map(key => {
-      const stage = groupBy === 'status' && !roadmapMode() ? STAGES.find(item => item.key === key) : null;
+      const stage = groupBy === 'status' && !boardMode() ? STAGES.find(item => item.key === key) : null;
       return {
         key,
         color:stage?.color || (groupBy === 'status' && key ? statusColor(key) : '#94a3b8'),
@@ -71,16 +71,19 @@ window.TaskViews = (() => {
       statusChip(row),
       row.Prioridade && options.groupBy !== 'prioridade' ? prioBadge(row.Prioridade) : '',
       row.Tipo && options.groupBy !== 'tipo' ? `<span class="b bo">${escape(row.Tipo)}</span>` : '',
-      roadmapMode() && row.Modulo && options.groupBy !== 'modulo' ? `<span class="b bo">${escape(row.Modulo)}</span>` : '',
+      boardMode() && row.Modulo && options.groupBy !== 'modulo' ? `<span class="b bo">${escape(row.Modulo)}</span>` : '',
       options.showSprint && options.groupBy !== 'sprint' ? `<span class="b bo">S${escape(row.Sprint)}</span>` : '',
     ].join('');
+    const people = devPeople(row).filter(person => !SprintRules.isExcludedPerson(person));
+    const avatars = people.map(person => `<span class="tv-avatar" title="${escape(person)}">${escape(initials(person))}</span>`).join('');
     let foot;
-    if (roadmapMode()) {
+    if (boardMode()) {
+      // Quadros sem coluna de pessoas (ex.: Funil de Demandas) mostram quem pediu e de onde veio.
       const who = [row.Solicitante && `👤 ${escape(row.Solicitante)}`, row.Origem && options.groupBy !== 'origem' && escape(row.Origem)].filter(Boolean).join(' · ');
-      foot = `<span class="tv-muted" title="Solicitante · Origem">${who || '—'}</span>${row.Esforco && options.groupBy !== 'esforco' ? `<span class="tv-hours" title="Esforço">${escape(row.Esforco)}</span>` : ''}`;
+      foot = `${avatars ? `<span class="tv-people">${avatars}</span>` : `<span class="tv-muted" title="Solicitante · Origem">${who || '—'}</span>`}
+        ${row.Esforco && options.groupBy !== 'esforco' ? `<span class="tv-hours" title="Esforço">${escape(row.Esforco)}</span>` : ''}`;
     } else {
-      const people = devPeople(row).filter(person => !SprintRules.isExcludedPerson(person));
-      foot = `<span class="tv-people">${people.map(person => `<span class="tv-avatar" title="${escape(person)}">${escape(initials(person))}</span>`).join('') || '<span class="tv-muted">Sem responsável</span>'}</span>
+      foot = `<span class="tv-people">${avatars || '<span class="tv-muted">Sem responsável</span>'}</span>
         ${row.EstH || row.RealH ? `<span class="tv-hours" title="Estimado / Real">${row.RealH || 0}h / ${row.EstH || '—'}h</span>` : ''}`;
     }
     return `<article class="tv-card" ${draggable ? `draggable="true" data-id="${escape(row.Id)}"` : ''}>
@@ -96,15 +99,15 @@ window.TaskViews = (() => {
     const byStatus = options.groupBy === 'status';
     const hint = !byStatus ? ''
       : !options.canMove ? 'Para mudar status arrastando, peça a permissão "Atualizar cards".'
-      : roadmapMode() ? 'Arraste uma demanda para outra coluna para mudar o status no Monday.'
+      : boardMode() ? 'Arraste um item para outra coluna para mudar o status no Monday.'
       : 'Arraste um card para outra etapa e escolha o status do Monday a aplicar.';
-    const noun = roadmapMode() ? 'demanda' : 'tarefa';
+    const noun = boardMode() ? 'item' : 'tarefa';
     container.innerHTML = `<div class="tv-toolbar">
         <span class="tv-muted">${hint}</span>
-        ${byStatus ? `<span class="tv-muted">${roadmapMode() ? 'Colunas na ordem do funil de demandas.' : 'Mesmas etapas dos painéis do Bombeiro e da Sprint.'}</span>` : ''}
+        ${byStatus ? `<span class="tv-muted">${boardMode() ? 'Colunas na ordem do fluxo do quadro.' : 'Mesmas etapas dos painéis do Bombeiro e da Sprint.'}</span>` : ''}
       </div>
-      <div class="tv-board ${byStatus && !roadmapMode() ? 'tv-stages' : ''}">${columns.map(column => `<section class="tv-column"
-          ${byStatus ? (roadmapMode() ? `data-status="${escape(column.key)}"` : `data-stage="${escape(column.key)}"`) : ''} style="--stage:${escape(column.color)}">
+      <div class="tv-board ${byStatus && !boardMode() ? 'tv-stages' : ''}">${columns.map(column => `<section class="tv-column"
+          ${byStatus ? (boardMode() ? `data-status="${escape(column.key)}"` : `data-stage="${escape(column.key)}"`) : ''} style="--stage:${escape(column.color)}">
           <header><span class="tv-dot" style="background:${escape(column.color)}"></span><h3 title="${escape(column.label)}">${escape(column.label)}</h3><span class="tv-count">${column.rows.length}</span></header>
           <div class="tv-cards">${column.rows.map(row => card(row, options)).join('') || `<div class="tv-empty">Nenhuma ${noun}</div>`}</div>
         </section>`).join('') || `<div class="nd">Nenhuma ${noun} com esses filtros.</div>`}</div>`;
@@ -112,7 +115,7 @@ window.TaskViews = (() => {
 
   function renderList(container, rows, options) {
     const groups = group(rows, options.groupBy);
-    const row = item => roadmapMode()
+    const row = item => boardMode()
       ? `<div class="tv-row">
           <button type="button" class="tv-row-title" ${item.Id ? `data-open="${escape(item.Id)}"` : 'disabled'} title="${escape(item.Nome)}">${escape(item.Nome)}</button>
           ${statusChip(item)}
@@ -133,7 +136,7 @@ window.TaskViews = (() => {
     container.innerHTML = `<div class="tv-list">${sections.map(section => `<details class="tv-group" ${state.collapsed.has(`${options.groupBy}:${section.key}`) ? '' : 'open'} data-group="${escape(`${options.groupBy}:${section.key}`)}">
         <summary><span class="tv-dot" style="background:${escape(section.color)}"></span><strong>${escape(section.label)}</strong><span class="tv-count">${section.rows.length}</span></summary>
         <div class="tv-rows">${section.rows.map(row).join('')}</div>
-      </details>`).join('') || `<div class="nd">Nenhuma ${roadmapMode() ? 'demanda' : 'tarefa'} com esses filtros.</div>`}</div>`;
+      </details>`).join('') || `<div class="nd">${boardMode() ? 'Nenhum item' : 'Nenhuma tarefa'} com esses filtros.</div>`}</div>`;
   }
 
   function render(container, rows, options) {
@@ -151,7 +154,7 @@ window.TaskViews = (() => {
     box.timer = setTimeout(() => box.classList.remove('show'), 4000);
   }
 
-  /** Lista de onde os itens vêm (tarefas ou demandas do Roadmap), para a mudança aparecer na hora. */
+  /** Lista de onde os itens vêm (tarefas ou itens das abas Roadmap e Backlog), para a mudança aparecer na hora. */
   function source() { return state.options.source || DATA; }
 
   /** Muda o status na tela na hora e no Monday em seguida; se o Monday recusar, volta ao status anterior. */
@@ -242,7 +245,7 @@ window.TaskViews = (() => {
       if (!column) return;
       event.preventDefault();
       const id = state.dragging;
-      // Roadmap: a coluna já é o status exato.
+      // Roadmap e Backlog: a coluna já é o status exato.
       if (column.dataset.status) { move(id, column.dataset.status); return; }
       // Tarefas: soltar na mesma etapa não muda nada; para trocar o status dentro dela, use o detalhe do card.
       if (stageOf(source().find(row => row.Id === id)?.Status) === column.dataset.stage) return;

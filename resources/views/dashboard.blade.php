@@ -504,9 +504,10 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <!-- RAW -->
     <div class="page" id="page-raw">
       <div class="raw-tabs" id="raw-tabs" role="tablist" aria-label="Listas de tarefas">
-        <button type="button" role="tab" data-tab="tarefas" aria-selected="true" onclick="chooseRawTab('tarefas')">Tarefas <span class="raw-tab-count" id="raw-tab-count-tarefas"></span></button>
-        <button type="button" role="tab" data-tab="suporte" aria-selected="false" onclick="chooseRawTab('suporte')">Suporte da sprint <span class="raw-tab-count" id="raw-tab-count-suporte"></span></button>
         <button type="button" role="tab" data-tab="roadmap" aria-selected="false" onclick="chooseRawTab('roadmap')">Roadmap <span class="raw-tab-count" id="raw-tab-count-roadmap"></span></button>
+        <button type="button" role="tab" data-tab="backlog" aria-selected="false" onclick="chooseRawTab('backlog')">Backlog <span class="raw-tab-count" id="raw-tab-count-backlog"></span></button>
+        <button type="button" role="tab" data-tab="tarefas" aria-selected="true" onclick="chooseRawTab('tarefas')">Sprint atual <span class="raw-tab-count" id="raw-tab-count-tarefas"></span></button>
+        <button type="button" role="tab" data-tab="suporte" aria-selected="false" onclick="chooseRawTab('suporte')">Suporte <span class="raw-tab-count" id="raw-tab-count-suporte"></span></button>
       </div>
       <div class="tcard raw-roadmap" id="raw-roadmap" hidden>
         <div class="raw-roadmap-empty"><strong id="raw-roadmap-title">Roadmap</strong><p id="raw-roadmap-msg"></p></div>
@@ -544,8 +545,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           <details class="msel" id="rawOriginMs" hidden></details>
           <details class="msel" id="rawModuleMs" hidden></details>
           <details class="msel" id="rawEffortMs" hidden></details>
-          <select id="rawTipoSel" onchange="rawState().tipo=this.value;rawState().page=0;renderRaw()" style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;cursor:pointer"><option value="all">Todos os tipos</option></select>
-          <input class="tsrch" type="text" id="rawSearch" placeholder="Buscar..." oninput="rawState().q=this.value;rawState().page=0;renderRaw()">
+          <select id="rawTipoSel" onchange="rawState().tipo=this.value;renderRaw()" style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;cursor:pointer"><option value="all">Todos os tipos</option></select>
+          <input class="tsrch" type="text" id="rawSearch" placeholder="Buscar..." oninput="rawState().q=this.value;renderRaw()">
           <button type="button" class="raw-clear" id="rawClear" onclick="clearRawFilters()" hidden>Limpar filtros</button>
         </div>
         <div id="raw-table-view">
@@ -557,10 +558,6 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
         </div>
         <div class="tfoot">
           <span class="pgr" id="raw-pgr"></span>
-          <div class="pbtns">
-            <button class="pbtn" id="rawPrev" onclick="rawPg(-1)">← Anterior</button>
-            <button class="pbtn" id="rawNext" onclick="rawPg(1)">Próximo →</button>
-          </div>
         </div>
         </div>
         <div id="raw-board-view" class="raw-board-view" hidden></div>
@@ -693,15 +690,16 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
         <div class="settings-message" id="monday-refresh-status" aria-live="polite"></div>
       </div>
       <div class="settings-card">
-        <h2>Roadmap</h2>
-        <p>Quadro do Monday exibido na aba Roadmap da tela Tarefas (por exemplo, o Funil de Demandas). As colunas Status, Impacto, Tipo, Origem, Módulo, Esforço, Cliente e Solicitante são reconhecidas pelo título. Deixe vazio para desligar a aba.</p>
+        <h2>Abas Roadmap e Backlog</h2>
+        <p>Quadros do Monday exibidos nas abas Roadmap e Backlog da tela Tarefas (por exemplo, o Funil de Demandas e o Product Backlog). As colunas Status, Impacto ou Severidade, Tipo, Origem, Módulo, Esforço, Pessoas, Cliente e Solicitante são reconhecidas pelo título. Deixe vazio para desligar a aba.</p>
         <div class="settings-grid">
           <label class="settings-field">ID do quadro do Roadmap<input id="roadmap-board" inputmode="numeric" autocomplete="off" placeholder="Ex.: 18401224089"></label>
+          <label class="settings-field">ID do quadro do Backlog<input id="backlog-board" inputmode="numeric" autocomplete="off" placeholder="Ex.: 18432927592"></label>
         </div>
         <div class="settings-actions">
-          <button type="button" id="roadmap-save" onclick="saveRoadmapBoard()">Salvar quadro do Roadmap</button>
+          <button type="button" id="board-tabs-save" onclick="saveBoardTabs()">Salvar quadros das abas</button>
         </div>
-        <div class="settings-message" id="roadmap-status" aria-live="polite"></div>
+        <div class="settings-message" id="board-tabs-status" aria-live="polite"></div>
       </div>
       <div class="settings-card" id="monday-mapping-card" style="display:none">
         <h2>Colunas do quadro</h2>
@@ -984,7 +982,7 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   else if(page==='sprint'&&SPRINTS.includes(sp)) renderSprint(sp);
   else if(page==='epicos') renderEpicos();
   else if(page==='time'){if(!timeInited)initTime();renderTime();}
-  else if(page==='raw'){if(hint) rawState(rawTab==='roadmap'?'tarefas':rawTab).sprint=String(hint);rawState().page=0;renderRaw();}
+  else if(page==='raw'){if(hint) rawState(isBoardTab()?'tarefas':rawTab).sprint=String(hint);renderRaw();}
   else if(page==='bombeiro') window.Bombeiro?.enter(hint);
   else if(page==='sprint-panel') window.SprintPanel?.enter(hint);
   else if(page==='carousel') window.PanelCarousel?.enter(previousPage==='sprint-panel'?1:0,hint);
@@ -1049,9 +1047,9 @@ function renderMultiSelect(id,{label,all,search=false,selected,options}){
   });
   box.querySelector('.msel-list').addEventListener('change',e=>{
     if(e.target.checked) selected.add(e.target.value); else selected.delete(e.target.value);
-    summary(); rawState().page=0; renderRaw();
+    summary(); renderRaw();
   });
-  box.querySelector('[data-clear]').onclick=()=>{selected.clear();box.querySelectorAll('.msel-list input').forEach(i=>{i.checked=false;});summary();rawState().page=0;renderRaw();};
+  box.querySelector('[data-clear]').onclick=()=>{selected.clear();box.querySelectorAll('.msel-list input').forEach(i=>{i.checked=false;});summary();renderRaw();};
   box.querySelector('[data-done]').onclick=()=>{box.open=false;};
 }
 document.addEventListener('click',e=>{document.querySelectorAll('details.msel[open]').forEach(d=>{if(!d.contains(e.target)) d.open=false;});});
@@ -1575,86 +1573,101 @@ function renderTimeIndividual(dev,rows,spFilter){
 }
 
 // ── RAW PAGE ──────────────────────────────────────────────────────────────────
-// Abas da tela: Tarefas (todas), Suporte da sprint (Tipo = Suporte) e Roadmap (quadro configurado em Configurações).
-// Cada aba guarda os próprios filtros, sprint, ordenação, página e agrupamento; visualizações e filtros são os mesmos.
-const RAW_TABS=['tarefas','suporte','roadmap'];
+// Abas da tela, na ordem do fluxo: Roadmap e Backlog (quadros do Monday configurados em Configurações),
+// Sprint atual (todas as tarefas da sprint) e Suporte (Tipo = Suporte). Cada aba guarda os próprios filtros,
+// sprint, ordenação e agrupamento; visualizações e filtros são os mesmos. Sem paginação: a lista mostra tudo.
+const RAW_TABS=['roadmap','backlog','tarefas','suporte'];
+const BOARD_TABS=['roadmap','backlog'];
 /** Opção do filtro de clientes para itens com a coluna Cliente vazia. */
 const RAW_NO_CLIENT='__sem_cliente__';
-const RAW_PER=30;
 const CAN_UPDATE_ITEMS=@json(auth()->user()->can('update-items'));
 // A mesma lista filtrada em tabela, quadro Kanban ou lista agrupada; a escolha fica guardada no navegador.
 const RAW_VIEWS=['table','board','list'];
 const rawPref=key=>{try{return localStorage.getItem('yuv.tarefas.'+key);}catch{return null;}};
 const rawSavePref=(key,value)=>{try{localStorage.setItem('yuv.tarefas.'+key,value);}catch{}};
 const isSupportTask=x=>SprintRules.normalize(x.Tipo)==='suporte';
+const isBoardTab=(tab=rawTab)=>BOARD_TABS.includes(tab);
 let rawView=RAW_VIEWS.includes(rawPref('view'))?rawPref('view'):'table';
 let rawTab=RAW_TABS.includes(rawPref('tab'))?rawPref('tab'):'tarefas';
 const rawTabState={};
 function rawState(tab=rawTab){
   return rawTabState[tab]||=({sprint:null,devs:new Set(),statuses:new Set(),clients:new Set(),impacts:new Set(),origins:new Set(),modules:new Set(),efforts:new Set(),
-    flags:new Set(),tipo:'all',q:'',page:0,sort:tab==='roadmap'?{col:'Nome',asc:true}:{col:'Sprint',asc:true},group:rawPref('group.'+tab)||'status'});
+    flags:new Set(),tipo:'all',q:'',sort:isBoardTab(tab)?{col:'Nome',asc:true}:{col:'Sprint',asc:true},group:rawPref('group.'+tab)||'status'});
 }
-/** Ordem do funil do Roadmap (o quadro do Monday guarda os status em outra ordem); status desconhecidos vão para o fim. */
-const ROADMAP_FUNNEL=['aguardando revisao','informacoes ausentes','dependencia externa','adicionado ao backlog','action to sprint','em validacao','implementado','descontinuado'];
-const RAW_ROADMAP={loaded:false,loading:false,configured:true,rows:[],statusOptions:[],boardName:'',error:''};
-window.RAW_ROADMAP=RAW_ROADMAP;
-function roadmapStatuses(){
-  const rank=label=>{const i=ROADMAP_FUNNEL.indexOf(SprintRules.normalize(label));return i<0?ROADMAP_FUNNEL.length:i;};
-  return [...RAW_ROADMAP.statusOptions].sort((a,b)=>rank(a.label)-rank(b.label));
+/** Ordem de fluxo dos status de cada quadro (o Monday guarda os status em outra ordem); status desconhecidos vão para o fim. */
+const BOARD_FUNNELS={
+  roadmap:['aguardando revisao','informacoes ausentes','dependencia externa','adicionado ao backlog','action to sprint','em validacao','implementado','descontinuado'],
+  backlog:['falta escopo','refinamento tecnico','mockup','preparado','adicionado ao backlog'],
+};
+const BOARD_TITLES={roadmap:'Roadmap',backlog:'Backlog'};
+/** Dados de cada aba de quadro, lidos de /api/board-tabs/{aba}. */
+const RAW_BOARDS=Object.fromEntries(BOARD_TABS.map(tab=>[tab,{loaded:false,loading:false,configured:true,rows:[],statusOptions:[],fields:[],titles:{},boardName:'',error:''}]));
+window.RAW_BOARDS=RAW_BOARDS;
+function boardStatuses(tab=rawTab){
+  const funnel=BOARD_FUNNELS[tab]||[];
+  const rank=label=>{const i=funnel.indexOf(SprintRules.normalize(label));return i<0?funnel.length:i;};
+  return [...RAW_BOARDS[tab].statusOptions].sort((a,b)=>rank(a.label)-rank(b.label));
 }
-/** Lê o quadro do Roadmap; o servidor reaproveita o cache dentro do intervalo de atualização. */
-async function loadRoadmap(force=false){
-  if(RAW_ROADMAP.loading) return;
-  RAW_ROADMAP.loading=true;
+/** Lê o quadro da aba; o servidor reaproveita o cache dentro do intervalo de atualização. */
+async function loadBoardTab(tab,force=false){
+  const board=RAW_BOARDS[tab];
+  if(!board||board.loading) return;
+  board.loading=true;
   try{
-    const result=await mondayRequest(`/api/roadmap${force?'?force=1':''}`);
-    Object.assign(RAW_ROADMAP,{configured:result.configured,rows:result.rows||[],statusOptions:result.statusOptions||[],boardName:result.boardName||'',error:''});
-  }catch(error){RAW_ROADMAP.error=error.message;}
-  finally{RAW_ROADMAP.loading=false;RAW_ROADMAP.loaded=true;}
-  if(currentPage==='raw'){buildRawFilters();renderRaw();}
+    const result=await mondayRequest(`/api/board-tabs/${tab}${force?'?force=1':''}`);
+    Object.assign(board,{configured:result.configured,rows:result.rows||[],statusOptions:result.statusOptions||[],fields:result.fields||[],titles:result.titles||{},boardName:result.boardName||'',error:''});
+  }catch(error){board.error=error.message;}
+  finally{board.loading=false;board.loaded=true;}
+  if(currentPage==='raw'){if(rawTab===tab) buildRawFilters();renderRaw();}
 }
 const rawLink=x=>x.Id?`<button type="button" class="raw-link" onclick="ItemDetail.open('${esc(x.Id)}')">${esc(x.Nome)}</button>`:esc(x.Nome);
-const roadmapStatusChip=label=>label?`<span class="tv-status" style="--st:${esc(RAW_ROADMAP.statusOptions.find(o=>o.label===label)?.color||'#94a3b8')}">${esc(label)}</span>`:'—';
-/** Colunas da tabela de cada aba: Tarefas/Suporte com os campos da sprint; Roadmap com os campos do funil. */
-const RAW_COLUMNS={
-  tasks:[
+const boardStatusChip=(tab,label)=>label?`<span class="tv-status" style="--st:${esc(RAW_BOARDS[tab].statusOptions.find(o=>o.label===label)?.color||'#94a3b8')}">${esc(label)}</span>`:'—';
+/** Rótulo de um campo nas abas de quadro: o título real da coluna no Monday (ex.: Impacto, Severidade). */
+const boardLabel=(field,fallback,tab=rawTab)=>RAW_BOARDS[tab]?.titles?.[field]||fallback;
+const TASK_COLUMNS=[
+  {key:'Nome',label:'Item',title:true,cell:rawLink},
+  {key:'Responsavel',label:'Responsável',cls:'cm',cell:x=>esc(devPeople(x).filter(p=>!SprintRules.isExcludedPerson(p))[0]?.split(' ')[0]||'—')},
+  {key:'Cliente',label:'Cliente',cell:x=>esc(x.Cliente)||'—'},
+  {key:'Sprint',label:'Sprint',cls:'cm',cell:x=>`Sprint ${x.Sprint}`},
+  {key:'Status',label:'Status',cell:x=>stBadge(x.Status)},
+  {key:'Prioridade',label:'Prioridade',cell:x=>prioBadge(x.Prioridade)},
+  {key:'Tipo',label:'Tipo',cell:x=>`<span class="b bo">${esc(x.Tipo)}</span>`},
+  {key:'Epico',label:'Épico',cell:x=>epicBadge(x.Epico)},
+  {key:'EstH',label:'Est(h)',cls:'cm',cell:x=>x.EstH||'—'},
+  {key:'RealH',label:'Real(h)',cls:'cm',cell:x=>x.RealH||'—'},
+  {key:'Planejada',label:'Planejado',cell:x=>x.Planejada==='Planejada'?'<span class="b bval">Sim</span>':x.Planejada==='Não Planejado'?'<span class="b bs">Não</span>':'—'},
+  {key:'Retrabalho',label:'Retrab.',cell:x=>boolBadge(x.Retrabalho)},
+  {key:'BugProducao',label:'Bug Prod.',cell:x=>bugBadge(x.BugProducao)},
+  {key:'ValorAgregado',label:'Melhorias',cell:x=>boolBadge(x.ValorAgregado,'★')},
+];
+/** Colunas das abas de quadro: só as que o quadro tem, com o título real de cada uma. */
+function boardColumns(tab=rawTab){
+  const has=field=>RAW_BOARDS[tab].fields.includes(field);
+  return [
     {key:'Nome',label:'Item',title:true,cell:rawLink},
-    {key:'Responsavel',label:'Responsável',cls:'cm',cell:x=>esc(devPeople(x).filter(p=>!SprintRules.isExcludedPerson(p))[0]?.split(' ')[0]||'—')},
-    {key:'Cliente',label:'Cliente',cell:x=>esc(x.Cliente)||'—'},
-    {key:'Sprint',label:'Sprint',cls:'cm',cell:x=>`Sprint ${x.Sprint}`},
-    {key:'Status',label:'Status',cell:x=>stBadge(x.Status)},
-    {key:'Prioridade',label:'Prioridade',cell:x=>prioBadge(x.Prioridade)},
-    {key:'Tipo',label:'Tipo',cell:x=>`<span class="b bo">${esc(x.Tipo)}</span>`},
-    {key:'Epico',label:'Épico',cell:x=>epicBadge(x.Epico)},
-    {key:'EstH',label:'Est(h)',cls:'cm',cell:x=>x.EstH||'—'},
-    {key:'RealH',label:'Real(h)',cls:'cm',cell:x=>x.RealH||'—'},
-    {key:'Planejada',label:'Planejado',cell:x=>x.Planejada==='Planejada'?'<span class="b bval">Sim</span>':x.Planejada==='Não Planejado'?'<span class="b bs">Não</span>':'—'},
-    {key:'Retrabalho',label:'Retrab.',cell:x=>boolBadge(x.Retrabalho)},
-    {key:'BugProducao',label:'Bug Prod.',cell:x=>bugBadge(x.BugProducao)},
-    {key:'ValorAgregado',label:'Melhorias',cell:x=>boolBadge(x.ValorAgregado,'★')},
-  ],
-  roadmap:[
-    {key:'Nome',label:'Demanda',title:true,cell:rawLink},
-    {key:'Status',label:'Status',cell:x=>roadmapStatusChip(x.Status)},
-    {key:'Prioridade',label:'Impacto',cell:x=>x.Prioridade?prioBadge(x.Prioridade):'—'},
-    {key:'Tipo',label:'Tipo',cell:x=>x.Tipo?`<span class="b bo">${esc(x.Tipo)}</span>`:'—'},
-    {key:'Origem',label:'Origem',cell:x=>esc(x.Origem)||'—'},
-    {key:'Modulo',label:'Módulo',cell:x=>esc(x.Modulo)||'—'},
-    {key:'Esforco',label:'Esforço',cell:x=>esc(x.Esforco)||'—'},
-    {key:'Cliente',label:'Cliente',cell:x=>esc(x.Cliente)||'—'},
-    {key:'Solicitante',label:'Solicitante',cell:x=>esc(x.Solicitante)||'—'},
-    {key:'EstH',label:'Est(h)',cls:'cm',cell:x=>x.EstH??'—'},
-    {key:'DataRegistro',label:'Registro',cls:'cm',cell:x=>esc(x.DataRegistro)||'—'},
-  ],
-};
-/** Agrupamentos do Kanban e da lista: por etapa nas tarefas; pelo funil de status no Roadmap. */
-const RAW_GROUPS={
-  tasks:[['status','Etapa (Backlog → Concluído)'],['responsavel','Responsável'],['cliente','Cliente'],['prioridade','Prioridade'],['tipo','Tipo'],['epico','Épico'],['sprint','Sprint']],
-  roadmap:[['status','Status (funil)'],['prioridade','Impacto'],['tipo','Tipo'],['origem','Origem'],['modulo','Módulo'],['esforco','Esforço'],['cliente','Cliente']],
-};
-const rawKind=(tab=rawTab)=>tab==='roadmap'?'roadmap':'tasks';
+    {key:'Status',label:boardLabel('Status','Status',tab),cell:x=>boardStatusChip(tab,x.Status)},
+    has('Prioridade')&&{key:'Prioridade',label:boardLabel('Prioridade','Prioridade',tab),cell:x=>x.Prioridade?prioBadge(x.Prioridade):'—'},
+    has('Tipo')&&{key:'Tipo',label:boardLabel('Tipo','Tipo',tab),cell:x=>x.Tipo?`<span class="b bo">${esc(x.Tipo)}</span>`:'—'},
+    has('Responsavel')&&{key:'Responsavel',label:boardLabel('Responsavel','Responsável',tab),cell:x=>esc(x.Responsavel)||'—'},
+    has('Origem')&&{key:'Origem',label:boardLabel('Origem','Origem',tab),cell:x=>esc(x.Origem)||'—'},
+    has('Modulo')&&{key:'Modulo',label:boardLabel('Modulo','Módulo',tab),cell:x=>esc(x.Modulo)||'—'},
+    has('Esforco')&&{key:'Esforco',label:boardLabel('Esforco','Esforço',tab),cell:x=>esc(x.Esforco)||'—'},
+    has('Cliente')&&{key:'Cliente',label:boardLabel('Cliente','Cliente',tab),cell:x=>esc(x.Cliente)||'—'},
+    has('Solicitante')&&{key:'Solicitante',label:boardLabel('Solicitante','Solicitante',tab),cell:x=>esc(x.Solicitante)||'—'},
+    has('EstH')&&{key:'EstH',label:'Est(h)',cls:'cm',cell:x=>x.EstH??'—'},
+    has('DataRegistro')&&{key:'DataRegistro',label:boardLabel('DataRegistro','Registro',tab),cls:'cm',cell:x=>esc(x.DataRegistro)||'—'},
+  ].filter(Boolean);
+}
+/** Agrupamentos do Kanban e da lista: por etapa nas tarefas; pelo fluxo de status e pelos campos do quadro nas abas de quadro. */
+function rawGroups(tab=rawTab){
+  if(!isBoardTab(tab)) return [['status','Etapa (Backlog → Concluído)'],['responsavel','Responsável'],['cliente','Cliente'],['prioridade','Prioridade'],['tipo','Tipo'],['epico','Épico'],['sprint','Sprint']];
+  const has=field=>RAW_BOARDS[tab].fields.includes(field);
+  return [['status','Status (fluxo)',true],['prioridade',boardLabel('Prioridade','Prioridade',tab),has('Prioridade')],['tipo','Tipo',has('Tipo')],
+    ['responsavel',boardLabel('Responsavel','Responsável',tab),has('Responsavel')],['origem','Origem',has('Origem')],['modulo','Módulo',has('Modulo')],
+    ['esforco','Esforço',has('Esforco')],['cliente','Cliente',has('Cliente')]].filter(group=>group[2]).map(([value,label])=>[value,label]);
+}
 function rawDataset(tab=rawTab){
-  if(tab==='roadmap') return RAW_ROADMAP.rows;
+  if(isBoardTab(tab)) return RAW_BOARDS[tab].rows;
   const rows=DATA.filter(x=>x.Sprint);
   return tab==='suporte'?rows.filter(isSupportTask):rows;
 }
@@ -1665,53 +1678,55 @@ function chooseRawSprint(value){
   rawState().sprint=value;
   currentSprint=value==='all'?null:Number(value);
   if(currentPage==='raw') history.replaceState({page:'raw',sp:currentSprint},'',screenUrl('raw',currentSprint));
-  rawState().page=0; renderRaw();
+  renderRaw();
 }
 /** Opções dos filtros a partir dos itens da aba atual, mantendo o que já estava marcado nela. */
 function buildRawFilters(){
-  const s=rawState(),rows=rawDataset(),roadmap=rawTab==='roadmap';
-  const uniq=(field,sort=true)=>{const v=[...new Set(rows.map(x=>clean(x[field])).filter(Boolean))];return sort?v.sort((a,b)=>a.localeCompare(b)):v;};
+  const s=rawState(),rows=rawDataset(),board=isBoardTab();
+  const has=field=>!board||RAW_BOARDS[rawTab].fields.includes(field);
+  const uniq=field=>[...new Set(rows.map(x=>clean(x[field])).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const opts=values=>values.map(v=>({value:v,label:v}));
   const people=[...new Set(rows.flatMap(x=>devPeople(x)))].sort((a,b)=>a.localeCompare(b));
   document.getElementById('rawDevMs').hidden=!people.length;
   renderMultiSelect('rawDevMs',{label:'Responsáveis',all:'Todos os responsáveis',search:true,selected:s.devs,options:opts(people)});
-  const statuses=roadmap?roadmapStatuses().map(o=>o.label).filter(l=>rows.some(x=>x.Status===l)):uniq('Status');
+  const statuses=board?boardStatuses().map(o=>o.label).filter(l=>rows.some(x=>x.Status===l)):uniq('Status');
   renderMultiSelect('rawStatusMs',{label:'Status',all:'Todos os status',selected:s.statuses,options:opts(statuses)});
+  document.getElementById('rawClientMs').hidden=!has('Cliente');
   renderMultiSelect('rawClientMs',{label:'Clientes',all:'Todos os clientes',search:true,selected:s.clients,options:[...opts(uniq('Cliente')),{value:RAW_NO_CLIENT,label:'Sem cliente'}]});
-  for(const [id,field,label,all,set] of [['rawImpactMs','Prioridade','Impacto','Todos os impactos',s.impacts],['rawOriginMs','Origem','Origem','Todas as origens',s.origins],
-    ['rawModuleMs','Modulo','Módulo','Todos os módulos',s.modules],['rawEffortMs','Esforco','Esforço','Todos os esforços',s.efforts]]){
-    document.getElementById(id).hidden=!roadmap;
-    if(roadmap) renderMultiSelect(id,{label,all,selected:set,options:opts(uniq(field))});
+  for(const [id,field,label,set] of [['rawImpactMs','Prioridade',boardLabel('Prioridade','Prioridade'),s.impacts],['rawOriginMs','Origem','Origem',s.origins],
+    ['rawModuleMs','Modulo','Módulo',s.modules],['rawEffortMs','Esforco','Esforço',s.efforts]]){
+    const show=board&&has(field);
+    document.getElementById(id).hidden=!show;
+    if(show) renderMultiSelect(id,{label,all:`${label}: todos`,selected:set,options:opts(uniq(field))});
   }
   const tipoSel=document.getElementById('rawTipoSel');
   tipoSel.length=1;
   uniq('Tipo').forEach(t=>tipoSel.appendChild(new Option(t,t)));
   if(![...tipoSel.options].some(o=>o.value===s.tipo)) s.tipo='all';
   tipoSel.value=s.tipo;
-  tipoSel.hidden=rawTab==='suporte';
+  tipoSel.hidden=rawTab==='suporte'||!has('Tipo');
   document.getElementById('rawSearch').value=s.q;
-  document.getElementById('raw-filters').hidden=roadmap;
+  document.getElementById('raw-filters').hidden=board;
   document.querySelectorAll('#raw-filters .tfbtn').forEach(b=>b.classList.toggle('active',s.flags.has(b.id.slice(2))));
-  const groupSel=document.getElementById('rawGroupSel');
-  groupSel.replaceChildren(...RAW_GROUPS[rawKind()].map(([value,label])=>new Option(label,value)));
-  if(!RAW_GROUPS[rawKind()].some(([value])=>value===s.group)) s.group='status';
+  const groupSel=document.getElementById('rawGroupSel'),groups=rawGroups();
+  groupSel.replaceChildren(...groups.map(([value,label])=>new Option(label,value)));
+  if(!groups.some(([value])=>value===s.group)) s.group='status';
   groupSel.value=s.group;
 }
 function clearRawFilters(){
   const s=rawState();
   [s.devs,s.statuses,s.clients,s.impacts,s.origins,s.modules,s.efforts,s.flags].forEach(set=>set.clear());
-  s.tipo='all'; s.q=''; s.page=0;
+  s.tipo='all'; s.q='';
   buildRawFilters(); renderRaw();
 }
 function toggleRawFilter(f){
   const flags=rawState().flags;
   if(flags.has(f)) flags.delete(f); else flags.add(f);
   document.getElementById('rf'+f)?.classList.toggle('active',flags.has(f));
-  rawState().page=0; renderRaw();
+  renderRaw();
 }
-function sortRaw(col){const s=rawState();s.sort=s.sort.col===col?{col,asc:!s.sort.asc}:{col,asc:true};s.page=0;renderRaw();}
-function rawPg(d){rawState().page+=d;renderRaw();}
-function showRoadmapMessage(title,message){
+function sortRaw(col){const s=rawState();s.sort=s.sort.col===col?{col,asc:!s.sort.asc}:{col,asc:true};renderRaw();}
+function showBoardMessage(title,message){
   document.getElementById('raw-list-card').hidden=true;
   document.getElementById('raw-roadmap').hidden=false;
   document.getElementById('raw-roadmap-title').textContent=title;
@@ -1726,31 +1741,31 @@ function renderRaw(){
   const inSprint=(tab,rows)=>{const v=sprintOf(tab);return rows.filter(x=>v==='all'||x.Sprint===parseInt(v));};
   document.getElementById('raw-tab-count-tarefas').textContent=inSprint('tarefas',rawDataset('tarefas')).length;
   document.getElementById('raw-tab-count-suporte').textContent=inSprint('suporte',rawDataset('suporte')).length;
-  document.getElementById('raw-tab-count-roadmap').textContent=RAW_ROADMAP.loaded&&RAW_ROADMAP.configured&&!RAW_ROADMAP.error?RAW_ROADMAP.rows.length:'';
-  const roadmap=rawTab==='roadmap';
-  if(roadmap&&!RAW_ROADMAP.loaded){
-    showRoadmapMessage('Roadmap','Carregando as demandas do Monday...');
-    loadRoadmap();
+  BOARD_TABS.forEach(tab=>{const b=RAW_BOARDS[tab];document.getElementById(`raw-tab-count-${tab}`).textContent=b.loaded&&b.configured&&!b.error?b.rows.length:'';});
+  const board=isBoardTab(),boardData=RAW_BOARDS[rawTab];
+  if(board&&!boardData.loaded){
+    showBoardMessage(BOARD_TITLES[rawTab],'Carregando os itens do Monday...');
+    loadBoardTab(rawTab);
     return;
   }
-  if(roadmap&&!RAW_ROADMAP.configured){
-    showRoadmapMessage('Roadmap não configurado',`Informe o quadro do Roadmap em <b>Configurações → Roadmap</b>.${canAccessScreen('settings')?' <a href="#" onclick="navigate(\'settings\');return false">Abrir Configurações</a>':' Peça a quem administra as configurações.'}`);
+  if(board&&!boardData.configured){
+    showBoardMessage(`${BOARD_TITLES[rawTab]} não configurado`,`Informe o quadro da aba em <b>Configurações → Abas Roadmap e Backlog</b>.${canAccessScreen('settings')?' <a href="#" onclick="navigate(\'settings\');return false">Abrir Configurações</a>':' Peça a quem administra as configurações.'}`);
     return;
   }
-  if(roadmap&&RAW_ROADMAP.error){
-    showRoadmapMessage('Não foi possível carregar o Roadmap',`${esc(RAW_ROADMAP.error)} <a href="#" onclick="loadRoadmap(true);return false">Tentar de novo</a>`);
+  if(board&&boardData.error){
+    showBoardMessage(`Não foi possível carregar o ${BOARD_TITLES[rawTab]}`,`${esc(boardData.error)} <a href="#" onclick="loadBoardTab(rawTab,true);return false">Tentar de novo</a>`);
     return;
   }
   document.getElementById('raw-list-card').hidden=false;
   document.getElementById('raw-roadmap').hidden=true;
   const s=rawState();
   const support=rawTab==='suporte';
-  document.getElementById('raw-title').textContent=roadmap?(RAW_ROADMAP.boardName||'Roadmap'):support?'Suporte da sprint':'Tarefas';
-  spSel.hidden=roadmap;
-  const sp=roadmap?'all':(spSel.value=sprintOf(rawTab));
+  document.getElementById('raw-title').textContent=board?(boardData.boardName||BOARD_TITLES[rawTab]):support?'Suporte da sprint':'Sprint atual';
+  spSel.hidden=board;
+  const sp=board?'all':(spSel.value=sprintOf(rawTab));
   const tipo=support?'all':s.tipo;
   const q=s.q.toLowerCase();
-  let rows=roadmap?rawDataset():inSprint(rawTab,rawDataset());
+  let rows=board?rawDataset():inSprint(rawTab,rawDataset());
   if(s.devs.size) rows=rows.filter(x=>devPeople(x).some(p=>s.devs.has(p)));
   if(s.statuses.size) rows=rows.filter(x=>s.statuses.has(x.Status));
   if(s.clients.size) rows=rows.filter(x=>s.clients.has(clean(x.Cliente)||RAW_NO_CLIENT));
@@ -1770,26 +1785,22 @@ function renderRaw(){
     if(typeof av==='number'||typeof bv==='number') return s.sort.asc?(Number(av)||0)-(Number(bv)||0):(Number(bv)||0)-(Number(av)||0);
     return s.sort.asc?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
   });
-  document.getElementById('raw-cnt').textContent=`${rows.length} ${roadmap?'demandas':'itens'}`;
+  const count=`${rows.length} ${rows.length===1?'item':'itens'}`;
+  document.getElementById('raw-cnt').textContent=count;
   document.querySelectorAll('#raw-views [data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===rawView)));
   document.getElementById('rawGroupSel').closest('label').hidden=rawView==='table';
   document.getElementById('raw-table-view').hidden=rawView!=='table';
   document.getElementById('raw-board-view').hidden=rawView==='table';
   if(rawView!=='table'){
-    TaskViews.render(document.getElementById('raw-board-view'),rows,{view:rawView,groupBy:s.group,showSprint:!roadmap&&sp==='all',canMove:CAN_UPDATE_ITEMS,
-      mode:rawKind(),statusOptions:roadmap?roadmapStatuses():null,source:roadmap?RAW_ROADMAP.rows:DATA});
+    TaskViews.render(document.getElementById('raw-board-view'),rows,{view:rawView,groupBy:s.group,showSprint:!board&&sp==='all',canMove:CAN_UPDATE_ITEMS,
+      mode:board?'board':'tasks',statusOptions:board?boardStatuses():null,source:board?boardData.rows:DATA});
     return;
   }
-  const columns=RAW_COLUMNS[rawKind()];
+  const columns=board?boardColumns():TASK_COLUMNS;
   document.getElementById('raw-head').innerHTML=`<tr>${columns.map(c=>`<th onclick="sortRaw('${c.key}')">${esc(c.label)}${s.sort.col===c.key?(s.sort.asc?' ▲':' ▼'):''}</th>`).join('')}</tr>`;
-  const total=rows.length,pages=Math.ceil(total/RAW_PER)||1;
-  s.page=Math.max(0,Math.min(s.page,pages-1));
-  const slice=rows.slice(s.page*RAW_PER,(s.page+1)*RAW_PER);
-  document.getElementById('raw-body').innerHTML=slice.map(x=>`<tr>${columns.map(c=>`<td${c.cls?` class="${c.cls}"`:''}${c.title?` title="${esc(x.Nome)}"`:''}>${c.cell(x)}</td>`).join('')}</tr>`).join('')
+  document.getElementById('raw-body').innerHTML=rows.map(x=>`<tr>${columns.map(c=>`<td${c.cls?` class="${c.cls}"`:''}${c.title?` title="${esc(x.Nome)}"`:''}>${c.cell(x)}</td>`).join('')}</tr>`).join('')
     ||`<tr><td colspan="${columns.length}" class="nd">Nenhum item com esses filtros.</td></tr>`;
-  document.getElementById('raw-pgr').textContent=`${s.page+1} / ${pages} · ${total} ${roadmap?'demandas':'itens'}`;
-  document.getElementById('rawPrev').disabled=s.page===0;
-  document.getElementById('rawNext').disabled=s.page>=pages-1;
+  document.getElementById('raw-pgr').textContent=count;
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
