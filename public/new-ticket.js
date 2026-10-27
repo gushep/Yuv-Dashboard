@@ -1,9 +1,10 @@
 /* Botão Novo Ticket (Tarefas e Painel do Bombeiro): primeiro a pessoa escolhe o tipo de demanda, com critérios e exemplos.
  * Sustentação abre ticket de suporte no Monday, sempre em Backlog e na sprint atual; imagens coladas ou arrastadas na descrição
  * vão como anexos do comentário inicial do ticket, como o Monday faz no corpo do texto.
- * Melhoria / Feature abre demanda no Funil de Demandas com os campos do formulário de demandas; os arquivos vão para a coluna Evidências. */
+ * Melhoria / Feature abre demanda no Funil de Demandas com os campos do formulário de demandas; os arquivos vão para a coluna Evidências.
+ * O mesmo conteúdo abre como modal (botões das telas) ou como chat no canto inferior direito (botão flutuante, em qualquer tela). */
 window.NewTicket = (() => {
-  const state = {kind:null, options:null, loading:false, featureOptions:null, featureLoading:false, saving:false, preparing:false, created:null, error:'', files:[], failed:[]};
+  const state = {mode:'modal', userName:'', kind:null, options:null, loading:false, featureOptions:null, featureLoading:false, saving:false, preparing:false, created:null, error:'', files:[], failed:[]};
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const PRIORITY_CLASS = {'Crítica':'critical', 'Crítico':'critical', 'Alta':'high', 'Média':'medium', 'Baixa':'low'};
   const MAX_FILES = 10;
@@ -118,8 +119,7 @@ window.NewTicket = (() => {
       ? `<strong>#${escape(created.id)}</strong> foi aberta no <strong>${escape(created.boardName || 'Funil de Demandas')}</strong> com status Aguardando revisão${sent ? ` e ${sent} evidência(s)` : ''}. O time de produto avalia e prioriza junto às demais demandas.`
       : `<strong>#${escape(created.id)}</strong> foi aberto no Monday na <strong>Sprint ${escape(created.sprint.number)}</strong>, com tipo Suporte e status Backlog${sent ? ` e ${sent} imagem(ns)/anexo(s) na descrição` : ''}.`;
     const canRetry = state.failed.length && (feature || created.commentId);
-    return `<div class="nt-head"><div class="nt-title">${feature ? 'Demanda criada' : 'Ticket criado'}</div><button type="button" class="kpi-modal-close" aria-label="Fechar" data-close>✕</button></div>
-      <div class="nt-success">
+    return `<div class="nt-success">
         <div class="nt-success-icon" aria-hidden="true">✓</div>
         <p>${summary}</p>
         ${state.failed.length ? `<p class="nt-warning">Não foi possível anexar: ${state.failed.map(entry => `${escape(entry.file.name)} (${escape(entry.error)})`).join('; ')}.</p>` : ''}
@@ -134,11 +134,12 @@ window.NewTicket = (() => {
 
   function renderList(items) { return `<ul>${items.map(item => `<li>${escape(item)}</li>`).join('')}</ul>`; }
 
-  /** Primeira etapa: escolha do tipo de demanda, com quando usar e quando não usar cada um. */
+  const RULE_OF_THUMB = 'Na dúvida, pergunte: isso já funcionava, ou deveria funcionar, e não funciona? Então é <b>Sustentação</b>. Ainda não existe ou precisa funcionar diferente do combinado? Então é <b>Melhoria / Feature</b>.';
+
+  /** Primeira etapa: escolha do tipo de demanda, com quando usar e quando não usar cada um. No chat, a pergunta vem nos balões. */
   function renderChooser() {
-    return `<div class="nt-head"><div class="nt-title">Novo Ticket</div><button type="button" class="kpi-modal-close" aria-label="Fechar" data-close>✕</button></div>
-      <div class="nt-choose">
-        <p class="nt-choose-intro"><b>Que tipo de demanda você vai abrir?</b> Na dúvida, pergunte: isso já funcionava, ou deveria funcionar, e não funciona? Então é <b>Sustentação</b>. Ainda não existe ou precisa funcionar diferente do combinado? Então é <b>Melhoria / Feature</b>.</p>
+    return `<div class="nt-choose">
+        ${state.mode === 'chat' ? '' : `<p class="nt-choose-intro"><b>Que tipo de demanda você vai abrir?</b> ${RULE_OF_THUMB}</p>`}
         <div class="nt-kinds">${KINDS.map(kind => `<div class="nt-kind ${kind.kind}" data-kind="${kind.kind}">
             <div class="nt-kind-head"><span class="nt-kind-icon" aria-hidden="true">${kind.icon}</span><div><div class="nt-kind-name">${escape(kind.name)}</div><div class="nt-kind-sub">${escape(kind.sub)}</div></div></div>
             <p class="nt-kind-text">${escape(kind.text)}</p>
@@ -179,8 +180,7 @@ window.NewTicket = (() => {
   function renderSupportForm() {
     const options = state.options;
     const sprint = options ? `Sprint ${options.sprint.number}` : state.loading ? 'Sprint atual…' : 'Sprint atual';
-    return `<div class="nt-head"><div class="nt-title">Novo Ticket · Sustentação</div><button type="button" class="kpi-modal-close" aria-label="Fechar" data-close>✕</button></div>
-      <form class="nt-form" novalidate>
+    return `<form class="nt-form" novalidate>
         <div class="nt-fixed" aria-label="Valores definidos automaticamente">
           <span class="nt-chip">Tipo: <b>Suporte</b></span><span class="nt-chip">Status: <b>Backlog</b></span><span class="nt-chip">${escape(sprint)}${options ? ' <b>(atual)</b>' : ''}</span>
           <button type="button" class="nt-link nt-change-kind" data-change-kind>← Trocar tipo</button>
@@ -221,8 +221,7 @@ window.NewTicket = (() => {
       return `<label class="nt-field"><span>${escape(label)} ${mark(optional)}</span><span class="nt-hint">${escape(hint)}</span>
         <textarea name="${name}" rows="4" maxlength="2000" ${optional ? '' : 'required'}></textarea></label>`;
     };
-    return `<div class="nt-head"><div class="nt-title">Novo Ticket · Melhoria / Feature</div><button type="button" class="kpi-modal-close" aria-label="Fechar" data-close>✕</button></div>
-      <form class="nt-form" novalidate>
+    return `<form class="nt-form" novalidate>
         <div class="nt-fixed" aria-label="Valores definidos automaticamente">
           <span class="nt-chip">Quadro: <b>${escape(options?.boardName || 'Funil de Demandas')}</b></span><span class="nt-chip">Status: <b>Aguardando revisão</b></span>
           <button type="button" class="nt-link nt-change-kind" data-change-kind>← Trocar tipo</button>
@@ -253,10 +252,38 @@ window.NewTicket = (() => {
       </form>`;
   }
 
+  function kindName(kind) { return KINDS.find(item => item.kind === kind)?.name || ''; }
+  function bubble(html, from = 'bot') { return `<div class="nt-bubble ${from}">${html}</div>`; }
+
+  /** Conversa do chat até a etapa atual: a pergunta do tipo, a escolha da pessoa e o próximo passo. */
+  function renderTrail() {
+    const kind = state.created?.kind || state.kind;
+    const next = kind === 'feature' ? 'Conte a demanda para o time de produto. Ela vai para o Funil de Demandas.'
+      : 'Descreva a falha. O ticket entra no Backlog da sprint atual e aparece no Painel do Bombeiro.';
+    return `<div class="nt-trail">
+        ${bubble(`Olá${state.userName ? `, ${escape(state.userName)}` : ''}! Que tipo de solicitação você quer abrir?`)}
+        ${bubble(RULE_OF_THUMB)}
+        ${kind ? bubble(escape(kindName(kind)), 'me') : ''}
+        ${kind && !state.created ? bubble(next) : ''}
+      </div>`;
+  }
+
+  /** No modal, cabeçalho com o título da etapa; no chat, cabeçalho fixo e a conversa acima do conteúdo. */
   function render() {
-    if (state.created) { dialog.innerHTML = renderSuccess(); return; }
-    if (!state.kind) { dialog.innerHTML = renderChooser(); return; }
-    dialog.innerHTML = state.kind === 'feature' ? renderFeatureForm() : renderSupportForm();
+    const kind = state.created?.kind || state.kind;
+    const body = state.created ? renderSuccess() : !state.kind ? renderChooser() : state.kind === 'feature' ? renderFeatureForm() : renderSupportForm();
+    if (state.mode !== 'chat') {
+      const title = state.created ? (kind === 'feature' ? 'Demanda criada' : 'Ticket criado') : kind ? `Novo Ticket · ${kindName(kind)}` : 'Novo Ticket';
+      dialog.innerHTML = `<div class="nt-head"><div class="nt-title">${escape(title)}</div><button type="button" class="kpi-modal-close" aria-label="Fechar" data-close>✕</button></div>${body}`;
+      return;
+    }
+    dialog.innerHTML = `<div class="nt-chat-head"><span class="nt-chat-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.2 3.6c-.5.4-1.3.1-1.3-.6V16A2.5 2.5 0 0 1 4 13.5z"/></svg></span>
+        <div class="nt-chat-heading"><div class="nt-title">Nova solicitação</div><div class="nt-chat-sub">Sustentação ou melhoria, de qualquer tela</div></div>
+        <button type="button" class="kpi-modal-close" aria-label="Minimizar" title="Minimizar (o que foi preenchido continua aqui)" data-minimize>—</button></div>
+      <div class="nt-chat-body">${renderTrail()}${body}</div>`;
+    const chatBody = dialog.querySelector('.nt-chat-body');
+    const anchor = dialog.querySelector('.nt-success') || dialog.querySelector('.nt-bubble.me');
+    chatBody.scrollTop = anchor ? anchor.offsetTop - 12 : 0;
   }
 
   /** Redesenha o formulário mantendo o que já foi digitado e as opções marcadas; campos não alterados recebem o valor novo (ex.: solicitante). */
@@ -396,29 +423,92 @@ window.NewTicket = (() => {
     render();
   }
 
+  /** Volta ao início (escolha do tipo), descartando rascunho e arquivos. */
+  function reset() {
+    clearFiles();
+    Object.assign(state, {kind:null, created:null, error:'', saving:false, preparing:false, failed:[]});
+  }
+
+  /** Cancelar ou fechar descarta o rascunho; no chat, a conversa recomeça na próxima abertura. */
   function close() {
     if (state.saving) return;
     if (hasDraft() && !confirm('Descartar o que ainda não foi enviado?')) return;
-    clearFiles();
+    reset();
+    if (state.mode === 'chat') render();
     dialog.close();
+  }
+
+  /** Minimizar o chat só esconde o painel: o que foi preenchido continua lá. */
+  function minimize() { dialog.close(); }
+
+  function updateFab() {
+    const fab = document.getElementById('nt-fab');
+    if (!fab) return;
+    const open = Boolean(dialog?.open && state.mode === 'chat');
+    fab.classList.toggle('open', open);
+    fab.setAttribute('aria-expanded', String(open));
+    fab.setAttribute('aria-label', open ? 'Minimizar nova solicitação' : 'Nova solicitação');
+  }
+
+  function focusStep() {
+    (field('title') || dialog.querySelector('button[data-kind]'))?.focus({preventScroll:state.mode === 'chat'});
   }
 
   function chooseKind(kind) {
     Object.assign(state, {kind, error:''});
     render();
-    field('title')?.focus();
+    focusStep();
     if (kind === 'feature' && !state.featureOptions && !state.featureLoading) loadFeatureOptions();
     if (kind === 'support' && !state.options && !state.loading) loadOptions();
   }
 
+  /** Botão Novo Ticket das telas: modal. Se o chat tem um rascunho em andamento, reabre o chat para não perder o que foi preenchido. */
   function open() {
+    ensureDialog();
+    if (state.mode === 'chat' && (hasDraft() || state.saving)) { openChat(); return; }
+    if (dialog.open) dialog.close();
+    state.mode = 'modal';
+    dialog.classList.remove('nt-chat');
+    reset();
+    render();
+    dialog.showModal();
+    focusStep();
+    if (!state.options) loadOptions();
+  }
+
+  /** Botão flutuante: abre ou minimiza o chat, disponível em qualquer tela. */
+  function toggleChat() {
+    ensureDialog();
+    if (dialog.open && state.mode === 'chat') { minimize(); return; }
+    openChat();
+  }
+
+  function openChat() {
+    if (dialog.open) dialog.close();
+    // Mantém a conversa de quando o chat foi minimizado; recomeça se vinha do modal ou de um envio concluído.
+    if (state.mode !== 'chat' || state.created || !dialog.innerHTML) {
+      state.mode = 'chat';
+      state.userName = (document.getElementById('nt-fab')?.dataset.user || '').trim().split(/\s+/)[0];
+      dialog.classList.add('nt-chat');
+      reset();
+      render();
+    }
+    dialog.show();
+    updateFab();
+    focusStep();
+    if (!state.options) loadOptions();
+  }
+
+  function ensureDialog() {
     if (!dialog) {
       dialog = document.createElement('dialog');
       dialog.className = 'kpi-modal nt-modal';
       dialog.setAttribute('aria-label', 'Novo Ticket');
       document.body.appendChild(dialog);
+      dialog.addEventListener('close', updateFab);
       dialog.addEventListener('click', event => {
-        if (event.target === dialog || event.target.closest('[data-close]')) { close(); return; }
+        if ((event.target === dialog && state.mode !== 'chat') || event.target.closest('[data-close]')) { close(); return; }
+        if (event.target.closest('[data-minimize]')) { minimize(); return; }
         const remove = event.target.closest('[data-remove-file]');
         if (remove && !state.saving) {
           const [entry] = state.files.splice(Number(remove.dataset.removeFile), 1);
@@ -442,7 +532,7 @@ window.NewTicket = (() => {
           if (!descriptionChanged(description.value) || confirm('Substituir a descrição atual pelo modelo em branco?')) { description.value = DESCRIPTION_TEMPLATE; description.focus(); }
           return;
         }
-        if (event.target.closest('[data-another]')) { Object.assign(state, {created:null, error:'', failed:[]}); render(); field('title')?.focus(); return; }
+        if (event.target.closest('[data-another]')) { Object.assign(state, {created:null, error:'', failed:[]}); render(); focusStep(); return; }
         if (event.target.closest('[data-details]')) { const id = state.created.id; dialog.close(); window.ItemDetail.open(id); }
       });
       dialog.addEventListener('submit', event => { event.preventDefault(); submit(); });
@@ -472,12 +562,6 @@ window.NewTicket = (() => {
         addFiles([...event.dataTransfer.files]);
       });
     }
-    clearFiles();
-    Object.assign(state, {kind:null, created:null, error:'', saving:false, preparing:false, failed:[]});
-    render();
-    dialog.showModal();
-    dialog.querySelector('button[data-kind]')?.focus();
-    if (!state.options) loadOptions();
   }
 
   async function loadOptions() {
@@ -489,7 +573,8 @@ window.NewTicket = (() => {
     } finally {
       state.loading = false;
     }
-    if (dialog.open && state.kind === 'support' && !state.created) rerender();
+    // Mesmo com o chat minimizado o formulário continua na página e precisa receber as opções.
+    if (state.kind === 'support' && !state.created) rerender();
   }
 
   async function loadFeatureOptions() {
@@ -501,8 +586,8 @@ window.NewTicket = (() => {
     } finally {
       state.featureLoading = false;
     }
-    if (dialog.open && state.kind === 'feature' && !state.created) rerender();
+    if (state.kind === 'feature' && !state.created) rerender();
   }
 
-  return {open};
+  return {open, toggleChat};
 })();

@@ -44,9 +44,15 @@ class SupportTicketTest extends TestCase
     public function test_button_is_shown_only_to_who_can_open_tickets(): void
     {
         $this->actingAs(User::factory()->withScreens(Screen::Firefighter, Screen::RawData)->create())
-            ->get('/bombeiro')->assertOk()->assertDontSee('NewTicket.open()')->assertDontSee('new-ticket.js');
+            ->get('/bombeiro')->assertOk()->assertDontSee('NewTicket.open()')->assertDontSee('NewTicket.toggleChat()')->assertDontSee('new-ticket.js');
         $this->actingAs(User::factory()->withScreens(Screen::Firefighter)->canCreateTickets()->create())
-            ->get('/bombeiro')->assertOk()->assertSee('NewTicket.open()')->assertSee('new-ticket.js');
+            ->get('/bombeiro')->assertOk()->assertSee('NewTicket.open()')->assertSee('NewTicket.toggleChat()')->assertSee('new-ticket.js');
+    }
+
+    public function test_floating_chat_button_is_on_every_screen_for_who_can_open_tickets(): void
+    {
+        $this->actingAs(User::factory()->withScreens(Screen::Firefighter, Screen::Dashboard)->canCreateTickets()->create(['name' => 'Davi Suporte']))
+            ->get('/dashboard')->assertOk()->assertSee('NewTicket.toggleChat()')->assertSee('data-user="Davi Suporte"', false);
     }
 
     public function test_options_list_the_board_priorities_and_the_current_sprint(): void
