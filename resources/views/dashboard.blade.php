@@ -503,9 +503,17 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 
     <!-- RAW -->
     <div class="page" id="page-raw">
-      <div class="tcard">
+      <div class="raw-tabs" id="raw-tabs" role="tablist" aria-label="Listas de tarefas">
+        <button type="button" role="tab" data-tab="tarefas" aria-selected="true" onclick="chooseRawTab('tarefas')">Tarefas <span class="raw-tab-count" id="raw-tab-count-tarefas"></span></button>
+        <button type="button" role="tab" data-tab="suporte" aria-selected="false" onclick="chooseRawTab('suporte')">Suporte da sprint <span class="raw-tab-count" id="raw-tab-count-suporte"></span></button>
+        <button type="button" role="tab" data-tab="roadmap" aria-selected="false" onclick="chooseRawTab('roadmap')">Roadmap <span class="raw-tab-soon">em breve</span></button>
+      </div>
+      <div class="tcard raw-roadmap" id="raw-roadmap" hidden>
+        <div class="raw-roadmap-empty"><strong>Roadmap</strong><p>A lista do roadmap ainda não está integrada ao Yuv Sprint Metrics. Quando estiver, ela aparece aqui com as mesmas visualizações e filtros das outras abas.</p></div>
+      </div>
+      <div class="tcard" id="raw-list-card">
         <div class="tbar">
-          <span class="tbar-title">Tarefas</span>
+          <span class="tbar-title" id="raw-title">Tarefas</span>
           <span class="tcnt" id="raw-cnt"></span>
           <div class="tfilters" id="raw-filters">
             <button class="tfbtn" id="rfbug" onclick="toggleRawFilter('bug')">🐛 Bug prod.</button>
@@ -984,7 +992,7 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   else if(page==='sprint'&&SPRINTS.includes(sp)) renderSprint(sp);
   else if(page==='epicos') renderEpicos();
   else if(page==='time'){if(!timeInited)initTime();renderTime();}
-  else if(page==='raw'){if(hint) rawSprintChoice=String(hint);rawPage=0;renderRaw();}
+  else if(page==='raw'){if(hint) rawSprintChoice[rawTab==='roadmap'?'tarefas':rawTab]=String(hint);rawPage=0;renderRaw();}
   else if(page==='bombeiro') window.Bombeiro?.enter(hint);
   else if(page==='sprint-panel') window.SprintPanel?.enter(hint);
   else if(page==='carousel') window.PanelCarousel?.enter(previousPage==='sprint-panel'?1:0,hint);
@@ -1586,8 +1594,11 @@ function renderTimeIndividual(dev,rows,spFilter){
 
 // ── RAW PAGE ──────────────────────────────────────────────────────────────────
 let rawPage=0,rawSort={col:'Sprint',asc:true},rawActiveFilters=new Set();
-// Sem escolha (null), a tela segue a sprint ativa; os filtros de responsáveis e status aceitam várias opções.
-let rawSprintChoice=null;
+// Abas da tela: todas as tarefas, só o suporte (Tipo = Suporte) e o roadmap (ainda não integrado).
+// Cada aba guarda a própria sprint; sem escolha (null), segue a sprint ativa.
+const RAW_TABS=['tarefas','suporte','roadmap'];
+const rawSprintChoice={tarefas:null,suporte:null};
+const isSupportTask=x=>SprintRules.normalize(x.Tipo)==='suporte';
 const rawDevs=new Set(),rawStatuses=new Set(),rawClients=new Set();
 /** Opção do filtro de clientes para tarefas com a coluna Cliente vazia. */
 const RAW_NO_CLIENT='__sem_cliente__';
@@ -1599,6 +1610,8 @@ const rawPref=key=>{try{return localStorage.getItem('yuv.tarefas.'+key);}catch{r
 const rawSavePref=(key,value)=>{try{localStorage.setItem('yuv.tarefas.'+key,value);}catch{}};
 let rawView=RAW_VIEWS.includes(rawPref('view'))?rawPref('view'):'table';
 let rawGroup=rawPref('group')||'status';
+let rawTab=RAW_TABS.includes(rawPref('tab'))?rawPref('tab'):'tarefas';
+function chooseRawTab(tab){rawTab=tab;rawSavePref('tab',tab);rawPage=0;renderRaw();}
 function chooseRawView(view){
   rawView=view; rawSavePref('view',view);
   document.querySelectorAll('#raw-views [data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
@@ -1606,7 +1619,7 @@ function chooseRawView(view){
 }
 function chooseRawGroup(group){rawGroup=group;rawSavePref('group',group);renderRaw();}
 function chooseRawSprint(value){
-  rawSprintChoice=value;
+  rawSprintChoice[rawTab]=value;
   currentSprint=value==='all'?null:Number(value);
   if(currentPage==='raw') history.replaceState({page:'raw',sp:currentSprint},'',screenUrl('raw',currentSprint));
   rawPage=0; renderRaw();
@@ -1627,16 +1640,26 @@ function toggleRawFilter(f){
 function sortRaw(col){rawSort=rawSort.col===col?{col,asc:!rawSort.asc}:{col,asc:true};rawPage=0;renderRaw();}
 function rawPg(d){rawPage+=d;renderRaw();}
 function renderRaw(){
+  document.querySelectorAll('#raw-tabs [data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===rawTab)));
+  document.getElementById('raw-list-card').hidden=rawTab==='roadmap';
+  document.getElementById('raw-roadmap').hidden=rawTab!=='roadmap';
+  if(rawTab==='roadmap') return;
   const spSel=document.getElementById('rawSpSel');
   const active=defaultSprint();
   [...spSel.options].forEach(o=>{if(o.value!=='all') o.textContent=`Sprint ${o.value}${Number(o.value)===active?' (ativa)':''}`;});
-  const wanted=rawSprintChoice??(active===null?'all':String(active));
-  spSel.value=[...spSel.options].some(o=>o.value===wanted)?wanted:'all';
-  const sp=spSel.value;
-  const tipo=document.getElementById('rawTipoSel').value;
+  const sprintOf=tab=>{const wanted=rawSprintChoice[tab]??(active===null?'all':String(active));return [...spSel.options].some(o=>o.value===wanted)?wanted:'all';};
+  const tabRows=tab=>{const v=sprintOf(tab);const base=DATA.filter(x=>x.Sprint&&(v==='all'||x.Sprint===parseInt(v)));return tab==='suporte'?base.filter(isSupportTask):base;};
+  document.getElementById('raw-tab-count-tarefas').textContent=tabRows('tarefas').length;
+  document.getElementById('raw-tab-count-suporte').textContent=tabRows('suporte').length;
+  const sp=spSel.value=sprintOf(rawTab);
+  const support=rawTab==='suporte';
+  document.getElementById('raw-title').textContent=support?'Suporte da sprint':'Tarefas';
+  // Na aba Suporte o tipo já é fixo; o filtro de tipo some e é ignorado.
+  const tipoSel=document.getElementById('rawTipoSel');
+  tipoSel.hidden=support;
+  const tipo=support?'all':tipoSel.value;
   const q=document.getElementById('rawSearch').value.toLowerCase();
-  let rows=DATA.filter(x=>x.Sprint);
-  if(sp!=='all') rows=rows.filter(x=>x.Sprint===parseInt(sp));
+  let rows=tabRows(rawTab);
   if(rawDevs.size) rows=rows.filter(x=>devPeople(x).some(p=>rawDevs.has(p)));
   if(rawStatuses.size) rows=rows.filter(x=>rawStatuses.has(x.Status));
   if(rawClients.size) rows=rows.filter(x=>rawClients.has(clean(x.Cliente)||RAW_NO_CLIENT));

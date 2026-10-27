@@ -1,4 +1,16 @@
-/* Tela Tarefas: seletor de visualização, quadro Kanban e lista agrupada. */
+/* Tela Tarefas: abas (Tarefas, Suporte da sprint, Roadmap), seletor de visualização, quadro Kanban e lista agrupada. */
+.raw-tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--border);overflow-x:auto}
+.raw-tabs button{display:inline-flex;align-items:center;gap:7px;border:0;border-bottom:2px solid transparent;background:none;padding:9px 14px;font:inherit;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;white-space:nowrap;margin-bottom:-1px}
+.raw-tabs button:hover{color:var(--blue)}
+.raw-tabs button[aria-selected="true"]{color:var(--blue);border-bottom-color:var(--blue)}
+.raw-tab-count{font-size:11px;font-weight:700;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:0 7px}
+.raw-tab-count:empty{display:none}
+.raw-tabs button[aria-selected="true"] .raw-tab-count{color:var(--blue);background:var(--blue-bg);border-color:var(--blue-bg2)}
+.raw-tab-soon{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.raw-roadmap-empty{padding:40px 24px;text-align:center;color:var(--text2)}
+.raw-roadmap-empty strong{display:block;font-size:15px;color:var(--text);margin-bottom:6px}
+.raw-roadmap-empty p{max-width:460px;margin:0 auto;font-size:12.5px;line-height:1.55}
+#rawTipoSel[hidden]{display:none}
 .raw-viewbar{gap:12px;flex-wrap:wrap;border-top:none;padding-top:0}
 .raw-views{display:inline-flex;padding:3px;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
 .raw-views button{border:0;background:none;padding:6px 12px;border-radius:7px;font:inherit;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;white-space:nowrap}
