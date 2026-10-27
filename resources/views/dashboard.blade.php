@@ -786,6 +786,11 @@ function spMetrics(sp){
   // Desenvolvimento concluído: já saiu do dev (Implementado, Aguardando Deploy, QA em teste ou aprovado); QA - Reprovado volta ao dev.
   const devFinishedItems=d.filter(x=>SprintRules.isDone(x.Status)||SprintRules.isDoneNotDelivered(x.Status)||(SprintRules.isInTest(x.Status)&&SprintRules.normalize(x.Status)!=='qa - reprovado'));
   const devFinished=devFinishedItems.length;
+  // Em teste: mesma coluna "Em teste" dos painéis (QA - Testes, QA - Reprovado e QA - Aprovado).
+  const inTestItems=d.filter(x=>SprintRules.isInTest(x.Status));
+  const inTest=inTestItems.length;
+  const inTestRejected=inTestItems.filter(x=>SprintRules.normalize(x.Status)==='qa - reprovado').length;
+  const inTestApproved=inTestItems.filter(x=>SprintRules.normalize(x.Status)==='qa - aprovado').length;
   const unplan=d.filter(x=>x.Planejada==='Não Planejado').length;
   const rework=d.filter(x=>x.Retrabalho).length;
   const bugs=d.filter(x=>x.BugProducao).length;
@@ -811,13 +816,13 @@ function spMetrics(sp){
   const cleanScope=cleanItems.length;
   // Tasks por indicador, listadas no modal ao clicar no card.
   const lists={
-    tot:d,done:d.filter(x=>SprintRules.isDone(x.Status)),devFinished:devFinishedItems,waiting:d.filter(x=>SprintRules.isDoneNotDelivered(x.Status)),
+    tot:d,done:d.filter(x=>SprintRules.isDone(x.Status)),devFinished:devFinishedItems,waiting:d.filter(x=>SprintRules.isDoneNotDelivered(x.Status)),inTest:inTestItems,
     open:d.filter(x=>SprintRules.isOpen(x.Status)),planned:plannedItems,unplanned:unplannedItems,support:supportItems,
     rework:d.filter(x=>x.Retrabalho),clean:cleanItems,
     drag:d.filter(x=>isArrastado(x)),noEst:d.filter(x=>!(x.EstH>0)),bugs:d.filter(x=>x.BugProducao),
     valor:d.filter(x=>x.ValorAgregado),epic:d.filter(x=>x.Epico),
   };
-  return {lists,tot,done,waiting,open,removed,unplan,rework,bugs,valor,drag,withEst,epicItems,cleanScope,unplanCrit,unplanBug,support,supportDone,
+  return {lists,tot,done,waiting,inTest,inTestRejected,inTestApproved,open,removed,unplan,rework,bugs,valor,drag,withEst,epicItems,cleanScope,unplanCrit,unplanBug,support,supportDone,
     planned,plannedDone,unplanned,unplannedDone,unplannedCrit,unplannedBug,unplannedPct:pct(unplanned,tot),
     conclusao:pct(done,tot),devFinished,devFinishedPct:pct(devFinished,tot),reworkPct:pct(rework,tot),aderencia:pct(withEst,tot),
     arrastPct:pct(drag,tot),cleanPct:pct(cleanScope,sprintItems.length),epicPct:pct(epicItems,tot),
@@ -1166,6 +1171,7 @@ const SPRINT_KPI_INFO={
   'Taxa de Conclusão':{text:'Quanto da sprint já foi implementado.',criteria:'Cards com status Implementado ÷ total de itens. Aguardando Deploy e QA - Aprovado ainda não contam. Meta: acima de 90%.',list:'done',listTitle:'Tasks implementadas'},
   'Desenvolvimento Concluído':{text:'Quanto da sprint já saiu do desenvolvimento: entregue ou em QA.',criteria:'Status Implementado, Aguardando Deploy, QA - Testes ou QA - Aprovado ÷ total de itens. QA - Reprovado não conta, porque o card volta ao desenvolvimento.',list:'devFinished',listTitle:'Tasks com desenvolvimento concluído'},
   'Feitos Não Entregues':{text:'Cards prontos que ainda não chegaram em produção.',criteria:'Status Aguardando Deploy ou QA - Aprovado.',list:'waiting'},
+  'Em Teste':{text:'Cards que estão com o QA agora.',criteria:'Status QA - Testes, QA - Reprovado ou QA - Aprovado, a mesma coluna "Em teste" dos painéis.',list:'inTest',listTitle:'Tasks em teste'},
   'Não Entregues':{text:'Cards que ainda exigem trabalho do time nesta sprint.',criteria:'Tudo que não está Implementado, Aguardando Deploy ou QA - Aprovado.',list:'open'},
   'Sprint Planejados':{text:'Trabalho que entrou no planejamento da sprint.',criteria:'Campo Planejada igual a "Planejada" e Tipo diferente de Suporte.',list:'planned'},
   'Sprint Não Planejados':{text:'Trabalho que entrou na sprint fora do planejamento.',criteria:'Tipo diferente de Suporte e campo Planejada diferente de "Planejada" (inclusive vazio). Verde até 20% do total de itens.',list:'unplanned'},
@@ -1224,6 +1230,7 @@ function renderSprint(sp){
     {lbl:'Taxa de Conclusão',val:`${m.conclusao}%`,sub:`${m.done}/${m.tot} · meta >90%`,cls:m.conclusao>=90?'green':'red',trend:prevM?trendHtml(m.conclusao,prevM.conclusao,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Desenvolvimento Concluído',val:`${m.devFinishedPct}%`,sub:`${m.devFinished}/${m.tot} · implementados + em QA`,cls:'blue',trend:prevM?trendHtml(m.devFinishedPct,prevM.devFinishedPct,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Feitos Não Entregues',val:m.waiting,sub:`Aguardando Deploy ou QA aprovado`,cls:prevM?(m.waiting<=prevM.waiting?'green':'red'):'neutral',trend:prevM?trendHtml(m.waiting,prevM.waiting,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Em Teste',val:m.inTest,sub:`${m.inTest-m.inTestRejected-m.inTestApproved} em testes · ${m.inTestRejected} reprovados · ${m.inTestApproved} aprovados`,cls:'blue',trend:prevM?trendHtml(m.inTest,prevM.inTest,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Não Entregues',val:m.open,sub:`itens em aberto`,cls:prevM?(m.open<=prevM.open?'green':'red'):'neutral',trend:prevM?trendHtml(m.open,prevM.open,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Sprint Planejados',val:m.planned,sub:`${m.plannedDone}/${m.planned} implementados · sem suporte`,cls:'neutral',trend:prevM?trendHtml(m.planned,prevM.planned,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Sprint Não Planejados',val:m.unplanned,sub:`${m.unplannedDone}/${m.unplanned} implementados · ${m.unplannedCrit} críticos · ${m.unplannedBug} bugs · sem suporte`,cls:m.unplannedPct<=20?'green':'red',trend:prevM?trendHtml(m.unplanned,prevM.unplanned,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
