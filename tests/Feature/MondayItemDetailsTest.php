@@ -183,7 +183,7 @@ class MondayItemDetailsTest extends TestCase
             ->assertOk()->assertJsonPath('updateId', '777');
 
         Http::assertSent(fn (Request $request): bool => str_contains((string) $request['query'], 'create_update')
-            && $request['variables']['body'] === '<p>Cenário 1 ok<br>'."\n".'&lt;b&gt;Cenário 2&lt;/b&gt; falhou</p><p><em>Enviado por Carla QA pelo Dashboard YUV</em></p>');
+            && $request['variables']['body'] === '<p>Cenário 1 ok<br>'."\n".'&lt;b&gt;Cenário 2&lt;/b&gt; falhou</p><p><em>Enviado por Carla QA pelo Yuv Sprint Metrics</em></p>');
     }
 
     public function test_file_is_attached_to_the_comment_of_the_card(): void

@@ -1,4 +1,4 @@
-﻿# YUV Dashboard em Laravel
+# Yuv Sprint Metrics em Laravel
 
 Esta é a primeira etapa da migração do dashboard local. O aplicativo original em PowerShell permanece na pasta pai. Esta versão usa Laravel 13, login com sessão, banco SQLite local e integração Monday no servidor. O token é criptografado no banco com a chave `APP_KEY` e nunca é incluído na resposta da API.
 

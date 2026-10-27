@@ -73,7 +73,7 @@ class ScreenRoutesTest extends TestCase
 
     public function test_menu_offers_the_android_app_download_only_when_the_apk_was_published(): void
     {
-        $apk = public_path('downloads/yuv-metrics.apk');
+        $apk = public_path('downloads/yuv-sprint-metrics.apk');
         $existing = is_file($apk) ? file_get_contents($apk) : null;
         $this->actingAs(User::factory()->create());
 
@@ -83,7 +83,7 @@ class ScreenRoutesTest extends TestCase
 
             file_put_contents($apk, 'apk');
             $this->get('/')->assertOk()->assertSee('Baixar app Android')
-                ->assertSee(asset('downloads/yuv-metrics.apk').'?v='.filemtime($apk), false);
+                ->assertSee(asset('downloads/yuv-sprint-metrics.apk').'?v='.filemtime($apk), false);
         } finally {
             $existing === null ? @unlink($apk) : file_put_contents($apk, $existing);
         }

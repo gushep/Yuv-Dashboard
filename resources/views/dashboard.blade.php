@@ -4,7 +4,7 @@
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>yuv · sprint metrics</title>
+<title>Yuv Sprint Metrics</title>
 @include('pwa-head')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -255,7 +255,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <body>
 <aside class="sidebar" id="sidebar" onmouseleave="this.classList.remove('suppressed')" onkeydown="this.classList.remove('suppressed')">
   <div class="sidebar-logo">
-    <div class="logo-text"><img src="{{ asset('yuv-logo.png') }}" alt="YUV" class="sidebar-brand-image"><span>metrics</span></div>
+    <div class="logo-text"><img src="{{ asset('yuv-logo.png') }}" alt="YUV" class="sidebar-brand-image"><span>sprint metrics</span></div>
     <button type="button" class="sidebar-close" onclick="dismissSidebar()" aria-label="Fechar menu lateral">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
@@ -360,8 +360,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     @endcan
   </nav>
   <div class="sidebar-footer">
-    @if (file_exists(public_path('downloads/yuv-metrics.apk')))
-    <a class="sidebar-action apk-download" href="{{ URL::versioned('downloads/yuv-metrics.apk') }}" download="yuv-metrics.apk">
+    @if (file_exists(public_path('downloads/yuv-sprint-metrics.apk')))
+    <a class="sidebar-action apk-download" href="{{ URL::versioned('downloads/yuv-sprint-metrics.apk') }}" download="yuv-sprint-metrics.apk">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M12 7v7m-3-3 3 3 3-3M10 18h4"/></svg>
       <span class="nav-label">Baixar app Android</span>
     </a>
@@ -370,7 +370,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       <span class="nav-label">Sair da conta</span>
     </button></form>
-    <div class="sidebar-version">sprint metrics v4</div>
+    <div class="sidebar-version">Yuv Sprint Metrics v4</div>
   </div>
 </aside>
 <div class="sidebar-overlay" id="overlay" onclick="dismissSidebar()"></div>
