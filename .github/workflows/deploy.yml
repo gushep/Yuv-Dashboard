@@ -31,7 +31,8 @@ jobs:
 
   deploy:
     needs: testes
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # Só o repositório principal publica; a cópia em jimibrasil/yuv-sprint-metrics apenas roda os testes.
+    if: github.repository == 'gushep/Yuv-Dashboard' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: producao
     # Um deploy por vez; um push novo espera o anterior terminar.

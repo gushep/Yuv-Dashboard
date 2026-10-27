@@ -137,6 +137,8 @@ A Hostinger entrega `.js` e `.css` por um CDN com cache de 7 dias. Por isso as p
 
 O nome do produto é **Yuv Sprint Metrics**. Endereço (`yuvmetrics.novaconquista.org`), pasta no servidor (`yuv-metrics`), backups, repositório (`Yuv-Dashboard`) e pacote Android (`br.com.yuv.metrics`) mantêm os identificadores técnicos antigos: trocá-los exige mudar DNS, a pipeline ou reinstalar o app.
 
+O código fica em dois repositórios. O principal é `gushep/Yuv-Dashboard`: nele são abertos os PRs e só ele publica em produção. `jimibrasil/yuv-sprint-metrics` (da Yuv) é uma cópia da `main`, atualizada a cada merge com `git push yuv main`; lá o workflow apenas roda os testes.
+
 O servidor usa o PHP 8.4 em `/opt/alt/php84/usr/bin/php` (o `php` padrão do terminal é mais antigo). A chave SSH do deploy fica no secret `SSH_PRIVATE_KEY` do ambiente `producao` no GitHub; host, porta, usuário, pasta e a identidade verificada do servidor (`SSH_KNOWN_HOSTS`) ficam nas variáveis do mesmo ambiente. Para publicar de novo sem um push, use **Run workflow** na aba Actions.
 
 ## Verificação
