@@ -30,11 +30,47 @@ window.ItemDetail = (() => {
     return escape(text).replace(/https?:\/\/[^\s,]+/g, url => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
   }
 
+  const FILE_ICONS = {pdf:'📄', html:'🌐', htm:'🌐', mp4:'🎬', mov:'🎬', webm:'🎬', zip:'🗜️', rar:'🗜️', xls:'📊', xlsx:'📊', csv:'📊', doc:'📝', docx:'📝', txt:'📝', json:'🧾', log:'🧾'};
+  const VIDEO = ['mp4', 'webm', 'mov'];
+
+  /** Arquivo do Monday: imagem vira miniatura (abre ampliada); demais arquivos, um item com ícone, tamanho e link. */
+  function attachment(file) {
+    if (file.image) {
+      return `<button type="button" class="td-thumb" data-preview="${escape(file.id)}" title="${escape(file.name)}"><img src="${escape(file.url)}" alt="${escape(file.name)}" loading="lazy"></button>`;
+    }
+    const icon = FILE_ICONS[file.extension] || '📎';
+    const preview = VIDEO.includes(file.extension) ? `data-preview="${escape(file.id)}"` : '';
+    return `<span class="td-file-chip">
+        <span class="td-file-icon">${icon}</span>
+        <span class="td-file-info"><b title="${escape(file.name)}">${escape(file.name)}</b><small>${escape((file.extension || 'arquivo').toUpperCase())}${file.size ? ` · ${Attachments.fileSize(file.size)}` : ''}</small></span>
+        ${preview ? `<button type="button" class="td-file-open" ${preview}>Ver</button>` : ''}
+        <a class="td-file-open" href="${escape(file.url)}" target="_blank" rel="noopener">Abrir ↗</a>
+      </span>`;
+  }
+
+  function attachmentList(files) {
+    const images = files.filter(file => file.image);
+    const others = files.filter(file => !file.image);
+    return `${images.length ? `<div class="td-gallery">${images.map(attachment).join('')}</div>` : ''}${others.length ? `<div class="td-file-list">${others.map(attachment).join('')}</div>` : ''}`;
+  }
+
+  /** Visualizador dentro do modal para imagens e vídeos; outros arquivos abrem em nova aba. */
+  function preview(id) {
+    const file = state.item.attachments.find(entry => entry.id === id);
+    if (!file) return;
+    const box = document.createElement('div');
+    box.className = 'td-lightbox';
+    box.innerHTML = `<div class="td-lightbox-bar"><span>${escape(file.name)}</span><a href="${escape(file.url)}" target="_blank" rel="noopener">Abrir em nova aba ↗</a><button type="button" data-lightbox-close aria-label="Fechar">✕</button></div>
+      ${file.image ? `<img src="${escape(file.url)}" alt="${escape(file.name)}">` : `<video src="${escape(file.url)}" controls autoplay></video>`}`;
+    el('item-modal').appendChild(box);
+  }
+
   function value(column) {
     if (column.type === 'status' && column.id === state.item.statusColumnId && state.item.canUpdateItems) return statusPicker(column);
     if (column.type === 'status') return pill(column.text, column.color);
     if (column.type === 'people') return people(column.text);
     if (!column.text) return '<span class="td-empty">Vazio</span>';
+    if (column.type === 'file' && column.files?.length) return attachmentList(column.files);
     if (column.type === 'file' || column.type === 'link') return `<span class="td-text">${links(column.text)}</span>`;
     return `<span class="td-text">${escape(column.text)}</span>`;
   }
@@ -67,7 +103,7 @@ window.ItemDetail = (() => {
     const empty = ordered.filter(column => column !== status && !isFilled(column));
     const descriptions = item.columns.filter(column => column.type === 'long_text' && column.text);
     const done = item.subitems.filter(subitem => /feito|conclu|done|finaliz|entreg/i.test(subitem.status)).length;
-    const assets = item.updates.flatMap(update => update.assets);
+    const assets = item.attachments || [];
 
     return `<h2 class="td-title">${escape(item.name)}</h2>
       <div class="td-meta-line">Criado por ${escape(item.creator || '—')} em ${dateTime(item.createdAt)} · Atualizado em ${dateTime(item.updatedAt)}</div>
@@ -88,7 +124,7 @@ window.ItemDetail = (() => {
           </div>`).join('')}</div>
       </section>` : ''}
       ${assets.length ? `<section class="td-section"><div class="td-section-title">Anexos <span class="td-count">${assets.length}</span></div>
-        <div class="td-assets">${assets.map(asset => `<a href="${escape(asset.url)}" target="_blank" rel="noopener">📎 ${escape(asset.name)}</a>`).join('')}</div></section>` : ''}
+        ${attachmentList(assets)}</section>` : ''}
       <section class="td-section"><div class="td-section-title">Comentários <span class="td-count">${item.updates.length}</span></div>
         <div class="td-comments">${item.updates.map(entry => comment(entry)).join('') || '<div class="td-feed-note">Nenhum comentário neste card.</div>'}</div>
       </section>`;
@@ -98,7 +134,7 @@ window.ItemDetail = (() => {
     return `<div class="td-comment ${reply ? 'reply' : ''}">
         <div class="td-comment-head">${avatar(entry.author, 'sm')}<b>${escape(entry.author)}</b><span>${dateTime(entry.createdAt)}</span></div>
         <div class="td-comment-text">${entry.text ? links(entry.text) : '<span class="td-empty">(sem texto)</span>'}</div>
-        ${entry.assets?.length ? `<div class="td-assets">${entry.assets.map(asset => `<a href="${escape(asset.url)}" target="_blank" rel="noopener">📎 ${escape(asset.name)}</a>`).join('')}</div>` : ''}
+        ${entry.images?.length || entry.assets?.length ? attachmentList([...(entry.images || []), ...(entry.assets || [])]) : ''}
         ${(entry.replies || []).map(item => comment(item, true)).join('')}
       </div>`;
   }
@@ -330,6 +366,10 @@ window.ItemDetail = (() => {
     const modal = el('item-modal');
     if (!modal) return;
     modal.addEventListener('click', event => {
+      const lightbox = modal.querySelector('.td-lightbox');
+      if (lightbox && (event.target === lightbox || event.target.closest('[data-lightbox-close]'))) { lightbox.remove(); return; }
+      const previewButton = event.target.closest('[data-preview]');
+      if (previewButton) { preview(previewButton.dataset.preview); return; }
       if (event.target === modal || event.target.closest('[data-close]')) {
         if (!(state.draft.trim() || state.files.length) || confirm('Descartar o comentário que ainda não foi enviado?')) modal.close();
         return;
@@ -375,6 +415,9 @@ window.ItemDetail = (() => {
       if (!state.sending) addFiles(event.dataTransfer.files);
     });
     modal.addEventListener('cancel', event => {
+      // Esc fecha primeiro a imagem ampliada, depois o card.
+      const lightbox = modal.querySelector('.td-lightbox');
+      if (lightbox) { event.preventDefault(); lightbox.remove(); return; }
       if ((state.draft.trim() || state.files.length) && !confirm('Descartar o comentário que ainda não foi enviado?')) event.preventDefault();
     });
     modal.addEventListener('close', () => { state.request++; modal.replaceChildren(); });

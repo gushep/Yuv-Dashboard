@@ -17,6 +17,8 @@ class MondayItemDetailsTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const PRINT = ['id' => '100', 'name' => 'print.png', 'url' => 'https://files.monday.com/public/100', 'extension' => 'png', 'size' => 2048, 'image' => true];
+
     private const STATUS_SETTINGS = '{"labels":{"0":"Em progresso","1":"Feito","2":"Em QA","5":""},"labels_colors":{"0":{"color":"#fdab3d"},"1":{"color":"#00c875"},"2":{"color":"#a25ddc"}},"labels_positions_v2":{"0":1,"1":2,"2":0}}';
 
     protected function setUp(): void
@@ -62,12 +64,30 @@ class MondayItemDetailsTest extends TestCase
             ->assertJsonPath('subitems', [['id' => '60', 'name' => 'Ajustar tela', 'status' => 'Feito', 'color' => '#00c875', 'people' => 'Ana Souza']])
             ->assertJsonPath('updates.0.author', 'Ana Souza')
             ->assertJsonPath('updates.0.text', "Primeira linha\nSegunda & <final>")
-            ->assertJsonPath('updates.0.assets', [['name' => 'print.png', 'url' => 'https://monday.com/files/1']])
+            ->assertJsonPath('updates.0.assets', [self::PRINT])
             ->assertJsonPath('updates.0.replies.0.text', 'Ok, verificado')
             ->assertJsonPath('updates.0.replies.0.author', 'Automação')
             ->assertJsonPath('canUpdateItems', false)
             ->assertDontSee('token-secreto');
         Http::assertSent(fn (Request $request): bool => $request['variables'] === ['ids' => ['55'], 'columns' => ['status']]);
+    }
+
+    public function test_item_details_bring_every_attachment_with_public_links_including_images_pasted_in_comments(): void
+    {
+        Http::fakeSequence('api.monday.com/v2')
+            ->push(['data' => ['items' => [$this->item(withAttachments: true)]]])
+            ->push(['data' => ['assets' => [['id' => '200', 'name' => 'colado.png', 'file_extension' => '.png', 'file_size' => 4096, 'public_url' => 'https://files.monday.com/public/200', 'url' => 'https://x.monday.com/protected_static/1/resources/200/colado.png']]]]);
+        $laudo = ['id' => '300', 'name' => 'laudo.pdf', 'url' => 'https://files.monday.com/public/300', 'extension' => 'pdf', 'size' => 51200, 'image' => false];
+        $colado = ['id' => '200', 'name' => 'colado.png', 'url' => 'https://files.monday.com/public/200', 'extension' => 'png', 'size' => 4096, 'image' => true];
+
+        $this->actingAs(User::factory()->withScreens(Screen::RawData)->create())
+            ->getJson('/api/items/55')->assertOk()
+            ->assertJsonPath('attachments', [$laudo, self::PRINT, $colado])
+            ->assertJsonPath('columns.3.files', [$laudo])
+            ->assertJsonPath('updates.0.images', [$colado])
+            ->assertJsonPath('updates.0.assets', [self::PRINT])
+            ->assertJsonPath('updates.0.text', "Veja o erro:\n\nNo aguardo.");
+        Http::assertSent(fn (Request $request): bool => ($request['variables']['ids'] ?? null) === ['200'] && str_contains((string) $request['query'], 'assets(ids'));
     }
 
     public function test_item_details_tell_whether_the_user_may_change_the_status(): void
@@ -225,8 +245,22 @@ class MondayItemDetailsTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private function item(): array
+    private function item(bool $withAttachments = false): array
     {
+        $printAsset = ['id' => '100', 'name' => 'print.png', 'file_extension' => '.png', 'file_size' => 2048, 'public_url' => 'https://files.monday.com/public/100', 'url' => 'https://monday.com/files/1'];
+        if ($withAttachments) {
+            return [...$this->item(),
+                'assets' => [['id' => '300', 'name' => 'laudo.pdf', 'file_extension' => '.pdf', 'file_size' => 51200, 'public_url' => 'https://files.monday.com/public/300', 'url' => 'https://x.monday.com/protected_static/1/resources/300/laudo.pdf']],
+                'column_values' => [...$this->item()['column_values'],
+                    ['id' => 'evidencias', 'text' => 'https://x.monday.com/protected_static/1/resources/300/laudo.pdf', 'type' => 'file', 'column' => ['title' => 'Evidências']],
+                ],
+                'updates' => [[
+                    'id' => '900', 'body' => '<p>Veja o erro:</p><p><img src="https://x.monday.com/protected_static/1/resources/200/colado.png" alt=""></p><p>No aguardo.</p>',
+                    'created_at' => '2026-10-02T10:00:00Z', 'creator' => ['name' => 'Ana Souza'], 'assets' => [$printAsset], 'replies' => [],
+                ]],
+            ];
+        }
+
         return [
             'id' => '55', 'name' => 'Corrigir login', 'url' => 'https://monday.com/boards/123/pulses/55',
             'created_at' => '2026-10-01T12:00:00Z', 'updated_at' => '2026-10-05T12:00:00Z',
@@ -245,7 +279,7 @@ class MondayItemDetailsTest extends TestCase
             ]]],
             'updates' => [[
                 'id' => '900', 'body' => '<p>Primeira linha</p><p>Segunda &amp; &lt;final&gt;</p>', 'created_at' => '2026-10-02T10:00:00Z',
-                'creator' => ['name' => 'Ana Souza'], 'assets' => [['name' => 'print.png', 'url' => 'https://monday.com/files/1']],
+                'creator' => ['name' => 'Ana Souza'], 'assets' => [$printAsset],
                 'replies' => [['id' => '901', 'body' => 'Ok,&nbsp;verificado', 'created_at' => '2026-10-02T11:00:00Z', 'creator' => null]],
             ]],
         ];
