@@ -503,7 +503,7 @@ GRAPHQL;
     {
         $this->boardItem($token, $boardId, 'query ($ids: [ID!]!) { items(ids: $ids) { id board { id } } }', ['ids' => [$itemId]]);
         $paragraphs = $text === '' ? '<p>Evidências anexadas.</p>' : '<p>'.nl2br(e($text), false).'</p>';
-        $body = $paragraphs.'<p><em>Enviado por '.e($author).' pelo Dashboard YUV</em></p>';
+        $body = $paragraphs.'<p><em>Enviado por '.e($author).' pelo Yuv Sprint Metrics</em></p>';
         $update = $this->query($token, 'mutation ($item: ID!, $body: String!) { create_update(item_id: $item, body: $body) { id } }', ['item' => $itemId, 'body' => $body]);
         $updateId = (string) ($update['create_update']['id'] ?? '');
         if (! ctype_digit($updateId)) {

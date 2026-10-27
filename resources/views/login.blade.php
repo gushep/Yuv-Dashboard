@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Entrar · YUV Dashboard</title>
+    <title>Entrar · Yuv Sprint Metrics</title>
     @include('pwa-head')
     <style>
         *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#eef5ff,#f7f3ff);font:15px system-ui,sans-serif;color:#10214b}

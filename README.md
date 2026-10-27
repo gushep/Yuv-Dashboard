@@ -1,6 +1,6 @@
-﻿<p align="center"><img src="public/yuv-logo.png" width="180" alt="YUV"></p>
+<p align="center"><img src="public/yuv-logo.png" width="180" alt="YUV"></p>
 
-# YUV Dashboard
+# Yuv Sprint Metrics
 
 Plataforma interna de acompanhamento de métricas do time responsável pela evolução e sustentação da plataforma YUV. O dashboard transforma os dados dos cards da Monday em uma visão compartilhada de planejamento, execução, suporte e entregas por sprint.
 
@@ -39,7 +39,7 @@ No celular (até 640px), `public/responsive.css` e `public/responsive.js` transf
 
 ### App Android
 
-O app (`br.com.yuv.metrics`) é um pacote TWA gerado pelo PWABuilder: abre o próprio site em tela cheia, então sempre mostra a versão publicada e não precisa ser gerado de novo a cada deploy. O `public/.well-known/assetlinks.json` liga o app ao domínio (sem ele, o app abre com a barra do Chrome). O instalador fica em `public/downloads/yuv-metrics.apk` no servidor, fora do Git (`*.apk` é ignorado); quando o arquivo existe, o menu lateral mostra "Baixar app Android". Para publicar uma versão nova, gere o pacote com a **mesma chave de assinatura** (guardada fora do repositório) e substitua o arquivo no servidor.
+O app **Yuv Sprint Metrics** (pacote `br.com.yuv.metrics`, identificador técnico mantido para não quebrar as instalações existentes) é um pacote TWA gerado pelo PWABuilder: abre o próprio site em tela cheia, então sempre mostra a versão publicada e não precisa ser gerado de novo a cada deploy. O `public/.well-known/assetlinks.json` liga o app ao domínio (sem ele, o app abre com a barra do Chrome). O instalador fica em `public/downloads/yuv-sprint-metrics.apk` no servidor, fora do Git (`*.apk` é ignorado); quando o arquivo existe, o menu lateral mostra "Baixar app Android". Para publicar uma versão nova, gere o pacote com a **mesma chave de assinatura** (guardada fora do repositório) e substitua o arquivo no servidor.
 
 ## Integração com a Monday
 
@@ -54,7 +54,7 @@ O dashboard é de acompanhamento: classificações da sprint continuam sendo fei
 - **Atualizar cards** (tela Tarefas): trocar o status pelas opções da coluna Status do quadro e comentar com anexos (evidências de QA). Prints colados ou arrastados viram anexos; imagens acima de 1,5 MB são reduzidas no navegador e cada anexo é enviado numa requisição própria (`public/attachments.js`).
 - **Abrir tickets** (botão Novo Ticket nas telas Tarefas e Painel do Bombeiro): Título, Cliente, Descrição e Prioridade são obrigatórios; a descrição vem com o modelo de abertura de chamado do time (`DESCRIPTION_TEMPLATE` em `public/new-ticket.js`) e aceita prints colados. O card é criado com Tipo Suporte, Status Backlog e na sprint atual (a que contém o dia de hoje; entre sprints, a próxima a começar). As regras ficam em `App\Services\SupportTicketService`.
 
-Como a Monday registra o dono do token como autor, os comentários e o comentário inicial dos tickets terminam com "Enviado por {usuário} pelo Dashboard YUV", e cada ação é registrada no log do Laravel. O token precisa ter permissão de escrita no quadro. O tamanho de cada anexo também é limitado pelo PHP (`upload_max_filesize` e `post_max_size`): para aceitar vídeos, use ao menos `upload_max_filesize = 50M` e `post_max_size = 55M`.
+Como a Monday registra o dono do token como autor, os comentários e o comentário inicial dos tickets terminam com "Enviado por {usuário} pelo Yuv Sprint Metrics", e cada ação é registrada no log do Laravel. O token precisa ter permissão de escrita no quadro. O tamanho de cada anexo também é limitado pelo PHP (`upload_max_filesize` e `post_max_size`): para aceitar vídeos, use ao menos `upload_max_filesize = 50M` e `post_max_size = 55M`.
 
 ### Regras dos indicadores
 
@@ -134,6 +134,8 @@ A produção (`https://yuvmetrics.novaconquista.org`, hospedagem Hostinger) acom
 4. Limpa os caches do Laravel e tira o site da manutenção, mesmo se algum passo falhar.
 
 A Hostinger entrega `.js` e `.css` por um CDN com cache de 7 dias. Por isso as páginas referenciam esses arquivos com `URL::versioned('arquivo.js')` (macro em `AppServiceProvider`), que acrescenta `?v=` com a data de modificação: a cada deploy, arquivos alterados ganham endereço novo e o navegador não fica com a versão antiga. Novos `.js`/`.css` devem ser incluídos da mesma forma.
+
+O nome do produto é **Yuv Sprint Metrics**. Endereço (`yuvmetrics.novaconquista.org`), pasta no servidor (`yuv-metrics`), backups, repositório (`Yuv-Dashboard`) e pacote Android (`br.com.yuv.metrics`) mantêm os identificadores técnicos antigos: trocá-los exige mudar DNS, a pipeline ou reinstalar o app.
 
 O servidor usa o PHP 8.4 em `/opt/alt/php84/usr/bin/php` (o `php` padrão do terminal é mais antigo). A chave SSH do deploy fica no secret `SSH_PRIVATE_KEY` do ambiente `producao` no GitHub; host, porta, usuário, pasta e a identidade verificada do servidor (`SSH_KNOWN_HOSTS`) ficam nas variáveis do mesmo ambiente. Para publicar de novo sem um push, use **Run workflow** na aba Actions.
 
