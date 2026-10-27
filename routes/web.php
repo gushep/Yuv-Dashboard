@@ -56,12 +56,14 @@ Route::middleware('auth')->group(function () {
         Route::post('/api/config', [MondayController::class, 'saveConfig']);
         Route::post('/api/refresh', [MondayController::class, 'saveRefresh']);
         Route::post('/api/metric-settings', [MondayController::class, 'saveMetricSettings'])->name('metric-settings.store');
+        Route::post('/api/board-tabs', [MondayController::class, 'saveBoardTabs'])->name('board-tabs.store');
     });
     Route::post('/api/capacity', [MondayController::class, 'saveCapacity'])->middleware('screen:capacity');
     Route::post('/api/support-reserves', [MondayController::class, 'saveSupportReserve'])->middleware('screen:consumption')->name('support-reserves.store');
     Route::post('/api/release', [MondayController::class, 'release'])->middleware('screen:release')->name('release.data');
     Route::get('/api/control-tower', [MondayController::class, 'controlTower'])->middleware('screen:control-tower')->name('control-tower.show');
     Route::get('/api/burndown', [MondayController::class, 'burndown'])->middleware('screen:burndown')->name('burndown.show');
+    Route::get('/api/board-tabs/{tab}', [MondayController::class, 'boardTab'])->whereIn('tab', ['roadmap', 'backlog'])->middleware('screen:raw')->name('board-tabs.show');
     Route::middleware('screen:raw')->whereNumber('item')->group(function () {
         Route::get('/api/items/{item}', [MondayController::class, 'item'])->name('items.show');
         Route::get('/api/items/{item}/activity', [MondayController::class, 'itemActivity'])->name('items.activity');

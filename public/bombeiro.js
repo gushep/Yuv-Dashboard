@@ -23,7 +23,7 @@ window.Bombeiro = (() => {
   function priorityMeta(priority) {
     const label = String(priority ?? '').trim() || 'Não informada';
     const key = normalized(label).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const classes = { critica: ['critical', 0], alta: ['high', 1], media: ['medium', 2], baixa: ['low', 3] };
+    const classes = { critica: ['critical', 0], critico: ['critical', 0], alta: ['high', 1], media: ['medium', 2], baixa: ['low', 3] };
     const [css, rank] = classes[key] || ['neutral', 4];
     return { label, css, rank };
   }

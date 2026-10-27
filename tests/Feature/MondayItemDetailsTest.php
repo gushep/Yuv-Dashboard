@@ -69,7 +69,7 @@ class MondayItemDetailsTest extends TestCase
             ->assertJsonPath('updates.0.replies.0.author', 'Automação')
             ->assertJsonPath('canUpdateItems', false)
             ->assertDontSee('token-secreto');
-        Http::assertSent(fn (Request $request): bool => $request['variables'] === ['ids' => ['55'], 'columns' => ['status']]);
+        Http::assertSent(fn (Request $request): bool => $request['variables'] === ['ids' => ['55']]);
     }
 
     public function test_item_details_bring_every_attachment_with_public_links_including_images_pasted_in_comments(): void

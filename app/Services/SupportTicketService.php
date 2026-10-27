@@ -72,7 +72,7 @@ class SupportTicketService
         // e recebe as imagens da descrição (no Monday, imagens do corpo são anexos do comentário).
         $commentId = null;
         try {
-            $commentId = $this->monday->postComment((string) $connection->token, (string) $connection->board_id, (string) $created['id'],
+            $commentId = $this->monday->postComment((string) $connection->token, [(string) $connection->board_id], (string) $created['id'],
                 "Ticket de suporte aberto pelo botão Novo Ticket.\nCliente: {$ticket['client']}\n\n{$ticket['description']}", $author);
         } catch (RuntimeException $exception) {
             report($exception);

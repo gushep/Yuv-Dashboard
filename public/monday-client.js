@@ -147,6 +147,27 @@ async function saveMonday() {
   }
 }
 
+/** Quadros das abas Roadmap e Backlog da tela Tarefas; o servidor confere que o token consegue lê-los antes de gravar. */
+async function saveBoardTabs() {
+  const button = document.getElementById('board-tabs-save');
+  button.disabled = true;
+  mondayMessage('board-tabs-status', 'Conferindo os quadros no Monday...');
+  // Aceita o ID ou o link do quadro.
+  const boardId = id => { const value = document.getElementById(id).value.trim(); return value.match(/(?:\/boards\/)?(\d+)(?:\/|$)/)?.[1] || value; };
+  try {
+    const result = await mondayRequest('/api/board-tabs', { roadmapBoardId: boardId('roadmap-board'), backlogBoardId: boardId('backlog-board') });
+    document.getElementById('roadmap-board').value = result.roadmapBoardId || '';
+    document.getElementById('backlog-board').value = result.backlogBoardId || '';
+    const describe = (label, name) => name ? `${label}: “${name}”` : `${label}: desligado`;
+    mondayMessage('board-tabs-status', `Salvo. ${describe('Roadmap', result.boardNames.roadmap)} · ${describe('Backlog', result.boardNames.backlog)}.`, 'success');
+    Object.values(window.RAW_BOARDS || {}).forEach(board => Object.assign(board, { loaded: false, rows: [], error: '' }));
+  } catch (error) {
+    mondayMessage('board-tabs-status', error.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function applyMetricSettings(metrics = {}) {
   SprintRules.applySettings(metrics);
   document.getElementById('metric-capacity').value = String(SprintRules.settings.capacityHours);
@@ -217,7 +238,6 @@ function useMondayRows(rows) {
   devSelect.length = 1;
   sprintSelect.length = 1;
   timeInited = false;
-  rawPage = 0;
   // Telas montadas com estes dados são redesenhadas onde estão; as demais buscam os próprios dados.
   if (['dashboard', 'sprint', 'epicos', 'time', 'raw'].includes(currentPage)) navigate(currentPage, currentSprint, { history: 'replace' });
   else document.getElementById('tb-right').textContent = sprintRangeLabel();
@@ -240,6 +260,8 @@ async function syncMonday(force = true) {
     window.Capacity?.onDataUpdated(result);
     // As datas das sprints chegam com o Capacity; com elas a tela Tarefas descobre a sprint ativa.
     if (currentPage === 'raw') renderRaw();
+    // As abas Roadmap e Backlog acompanham o mesmo ciclo de atualização (o servidor decide se busca de novo no Monday).
+    if (currentPage === 'raw' && isBoardTab()) loadBoardTab(rawTab, false);
     window.Forecast?.onDataUpdated(result);
     window.Consumption?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);
@@ -271,6 +293,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const config = await mondayRequest('/api/config');
     applyMetricSettings(config.metrics);
     document.getElementById('monday-board').value = config.boardId || '';
+    document.getElementById('roadmap-board').value = config.roadmapBoardId || '';
+    document.getElementById('backlog-board').value = config.backlogBoardId || '';
     mondayRefreshMinutes = config.refreshMinutes ?? 5;
     document.getElementById('monday-refresh').value = String(mondayRefreshMinutes);
     mondaySavedMap = config.map || {};

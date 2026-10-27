@@ -503,9 +503,18 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 
     <!-- RAW -->
     <div class="page" id="page-raw">
-      <div class="tcard">
+      <div class="raw-tabs" id="raw-tabs" role="tablist" aria-label="Listas de tarefas">
+        <button type="button" role="tab" data-tab="roadmap" aria-selected="false" onclick="chooseRawTab('roadmap')">Roadmap <span class="raw-tab-count" id="raw-tab-count-roadmap"></span></button>
+        <button type="button" role="tab" data-tab="backlog" aria-selected="false" onclick="chooseRawTab('backlog')">Backlog <span class="raw-tab-count" id="raw-tab-count-backlog"></span></button>
+        <button type="button" role="tab" data-tab="tarefas" aria-selected="true" onclick="chooseRawTab('tarefas')">Sprint atual <span class="raw-tab-count" id="raw-tab-count-tarefas"></span></button>
+        <button type="button" role="tab" data-tab="suporte" aria-selected="false" onclick="chooseRawTab('suporte')">Suporte <span class="raw-tab-count" id="raw-tab-count-suporte"></span></button>
+      </div>
+      <div class="tcard raw-roadmap" id="raw-roadmap" hidden>
+        <div class="raw-roadmap-empty"><strong id="raw-roadmap-title">Roadmap</strong><p id="raw-roadmap-msg"></p></div>
+      </div>
+      <div class="tcard" id="raw-list-card">
         <div class="tbar">
-          <span class="tbar-title">Tarefas</span>
+          <span class="tbar-title" id="raw-title">Tarefas</span>
           <span class="tcnt" id="raw-cnt"></span>
           <div class="tfilters" id="raw-filters">
             <button class="tfbtn" id="rfbug" onclick="toggleRawFilter('bug')">🐛 Bug prod.</button>
@@ -524,15 +533,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
             <button type="button" data-view="list" aria-pressed="false" onclick="chooseRawView('list')">≡ Lista agrupada</button>
           </div>
           <label class="raw-group" hidden>Agrupar por
-            <select id="rawGroupSel" onchange="chooseRawGroup(this.value)">
-              <option value="status">Etapa (Backlog → Concluído)</option>
-              <option value="responsavel">Responsável</option>
-              <option value="cliente">Cliente</option>
-              <option value="prioridade">Prioridade</option>
-              <option value="tipo">Tipo</option>
-              <option value="epico">Épico</option>
-              <option value="sprint">Sprint</option>
-            </select>
+            <select id="rawGroupSel" onchange="chooseRawGroup(this.value)"></select>
           </label>
         </div>
         <div class="tbar" style="border-top:none;padding-top:0;gap:8px;flex-wrap:wrap">
@@ -540,38 +541,23 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           <details class="msel" id="rawDevMs"></details>
           <details class="msel" id="rawStatusMs"></details>
           <details class="msel" id="rawClientMs"></details>
-          <select id="rawTipoSel" onchange="renderRaw()" style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;cursor:pointer"><option value="all">Todos os tipos</option></select>
-          <input class="tsrch" type="text" id="rawSearch" placeholder="Buscar..." oninput="renderRaw()">
+          <details class="msel" id="rawImpactMs" hidden></details>
+          <details class="msel" id="rawOriginMs" hidden></details>
+          <details class="msel" id="rawModuleMs" hidden></details>
+          <details class="msel" id="rawEffortMs" hidden></details>
+          <select id="rawTipoSel" onchange="rawState().tipo=this.value;renderRaw()" style="font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;cursor:pointer"><option value="all">Todos os tipos</option></select>
+          <input class="tsrch" type="text" id="rawSearch" placeholder="Buscar..." oninput="rawState().q=this.value;renderRaw()">
           <button type="button" class="raw-clear" id="rawClear" onclick="clearRawFilters()" hidden>Limpar filtros</button>
         </div>
         <div id="raw-table-view">
         <div class="tscroll">
           <table>
-            <thead><tr>
-              <th onclick="sortRaw('Nome')">Item</th>
-              <th onclick="sortRaw('Responsavel')">Responsável</th>
-              <th onclick="sortRaw('Cliente')">Cliente</th>
-              <th onclick="sortRaw('Sprint')">Sprint</th>
-              <th onclick="sortRaw('Status')">Status</th>
-              <th onclick="sortRaw('Prioridade')">Prioridade</th>
-              <th onclick="sortRaw('Tipo')">Tipo</th>
-              <th onclick="sortRaw('Epico')">Épico</th>
-              <th onclick="sortRaw('EstH')">Est(h)</th>
-              <th onclick="sortRaw('RealH')">Real(h)</th>
-              <th onclick="sortRaw('Planejada')">Planejado</th>
-              <th onclick="sortRaw('Retrabalho')">Retrab.</th>
-              <th onclick="sortRaw('BugProducao')">Bug Prod.</th>
-              <th onclick="sortRaw('ValorAgregado')">Melhorias</th>
-            </tr></thead>
+            <thead id="raw-head"></thead>
             <tbody id="raw-body"></tbody>
           </table>
         </div>
         <div class="tfoot">
           <span class="pgr" id="raw-pgr"></span>
-          <div class="pbtns">
-            <button class="pbtn" id="rawPrev" onclick="rawPg(-1)">← Anterior</button>
-            <button class="pbtn" id="rawNext" onclick="rawPg(1)">Próximo →</button>
-          </div>
         </div>
         </div>
         <div id="raw-board-view" class="raw-board-view" hidden></div>
@@ -702,6 +688,18 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
         </div>
         <div class="settings-message" id="monday-connection">Configure a integração com o Monday para carregar dados atuais.</div>
         <div class="settings-message" id="monday-refresh-status" aria-live="polite"></div>
+      </div>
+      <div class="settings-card">
+        <h2>Abas Roadmap e Backlog</h2>
+        <p>Quadros do Monday exibidos nas abas Roadmap e Backlog da tela Tarefas (por exemplo, o Funil de Demandas e o Product Backlog). As colunas Status, Impacto ou Severidade, Tipo, Origem, Módulo, Esforço, Pessoas, Cliente e Solicitante são reconhecidas pelo título. Deixe vazio para desligar a aba.</p>
+        <div class="settings-grid">
+          <label class="settings-field">ID do quadro do Roadmap<input id="roadmap-board" inputmode="numeric" autocomplete="off" placeholder="Ex.: 18401224089"></label>
+          <label class="settings-field">ID do quadro do Backlog<input id="backlog-board" inputmode="numeric" autocomplete="off" placeholder="Ex.: 18432927592"></label>
+        </div>
+        <div class="settings-actions">
+          <button type="button" id="board-tabs-save" onclick="saveBoardTabs()">Salvar quadros das abas</button>
+        </div>
+        <div class="settings-message" id="board-tabs-status" aria-live="polite"></div>
       </div>
       <div class="settings-card" id="monday-mapping-card" style="display:none">
         <h2>Colunas do quadro</h2>
@@ -898,7 +896,7 @@ function stBadge(s){
   const m={'Implementado':'bd','Aguardando Deploy':'bw','QA - Testes':'bq','QA - Reprovado':'bs','QA - Aprovado':'bval','Em progresso':'bn','Pronto para começar':'bo','Parado':'bs','Próx. Sprint':'bo','Limitação Externa':'bs','Descontinuado':'bs','Despriorizado':'bo'};
   return `<span class="b ${m[s]||'bo'}">${esc(s)}</span>`;
 }
-function prioBadge(p){const m={'Crítica':'bs','Alta':'bn','Média':'bw','Baixa':'bo'};return `<span class="b ${m[p]||'bo'}">${esc(p)}</span>`;}
+function prioBadge(p){const m={'Crítica':'bs','Crítico':'bs','Alta':'bn','Média':'bw','Baixa':'bo'};return `<span class="b ${m[p]||'bo'}">${esc(p)}</span>`;}
 function epicBadge(e){return e?`<span class="b bep">${esc(e)}</span>`:'-';}
 function boolBadge(v,yes='✓'){return v?`<span class="b bval">${yes}</span>`:`<span style="color:var(--muted);font-size:11px">—</span>`;}
 function bugBadge(v){return v?`<span class="b bbug">🐛 bug</span>`:`<span style="color:var(--muted);font-size:11px">—</span>`;}
@@ -984,7 +982,7 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   else if(page==='sprint'&&SPRINTS.includes(sp)) renderSprint(sp);
   else if(page==='epicos') renderEpicos();
   else if(page==='time'){if(!timeInited)initTime();renderTime();}
-  else if(page==='raw'){if(hint) rawSprintChoice=String(hint);rawPage=0;renderRaw();}
+  else if(page==='raw'){if(hint) rawState(isBoardTab()?'tarefas':rawTab).sprint=String(hint);renderRaw();}
   else if(page==='bombeiro') window.Bombeiro?.enter(hint);
   else if(page==='sprint-panel') window.SprintPanel?.enter(hint);
   else if(page==='carousel') window.PanelCarousel?.enter(previousPage==='sprint-panel'?1:0,hint);
@@ -1025,17 +1023,7 @@ function initSprintNav(){
   const rsp=document.getElementById('rawSpSel');
   rsp.length=1;
   [...SPRINTS].reverse().forEach(s=>rsp.appendChild(new Option(`Sprint ${s}`,String(s))));
-  const people=[...new Set([...DEVS,...SprintRules.settings.excludedPeople])].sort((a,b)=>a.localeCompare(b));
-  renderMultiSelect('rawDevMs',{label:'Responsáveis',all:'Todos os responsáveis',search:true,selected:rawDevs,options:people.map(d=>({value:d,label:d}))});
-  const statuses=[...new Set(DATA.map(x=>x.Status).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  renderMultiSelect('rawStatusMs',{label:'Status',all:'Todos os status',selected:rawStatuses,options:statuses.map(s=>({value:s,label:s}))});
-  const clients=[...new Set(DATA.filter(x=>x.Sprint).map(x=>clean(x.Cliente)).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  renderMultiSelect('rawClientMs',{label:'Clientes',all:'Todos os clientes',search:true,selected:rawClients,
-    options:[...clients.map(c=>({value:c,label:c})),{value:RAW_NO_CLIENT,label:'Sem cliente'}]});
-  const rtipo=document.getElementById('rawTipoSel'),tipo=rtipo.value;
-  rtipo.length=1;
-  [...new Set(DATA.map(x=>x.Tipo))].filter(Boolean).forEach(t=>rtipo.appendChild(new Option(t,t)));
-  rtipo.value=[...rtipo.options].some(o=>o.value===tipo)?tipo:'all';
+  buildRawFilters();
 }
 /** Filtro com várias opções marcáveis; o resumo mostra o que está selecionado. */
 function renderMultiSelect(id,{label,all,search=false,selected,options}){
@@ -1059,9 +1047,9 @@ function renderMultiSelect(id,{label,all,search=false,selected,options}){
   });
   box.querySelector('.msel-list').addEventListener('change',e=>{
     if(e.target.checked) selected.add(e.target.value); else selected.delete(e.target.value);
-    summary(); rawPage=0; renderRaw();
+    summary(); renderRaw();
   });
-  box.querySelector('[data-clear]').onclick=()=>{selected.clear();box.querySelectorAll('.msel-list input').forEach(i=>{i.checked=false;});summary();rawPage=0;renderRaw();};
+  box.querySelector('[data-clear]').onclick=()=>{selected.clear();box.querySelectorAll('.msel-list input').forEach(i=>{i.checked=false;});summary();renderRaw();};
   box.querySelector('[data-done]').onclick=()=>{box.open=false;};
 }
 document.addEventListener('click',e=>{document.querySelectorAll('details.msel[open]').forEach(d=>{if(!d.contains(e.target)) d.open=false;});});
@@ -1585,106 +1573,234 @@ function renderTimeIndividual(dev,rows,spFilter){
 }
 
 // ── RAW PAGE ──────────────────────────────────────────────────────────────────
-let rawPage=0,rawSort={col:'Sprint',asc:true},rawActiveFilters=new Set();
-// Sem escolha (null), a tela segue a sprint ativa; os filtros de responsáveis e status aceitam várias opções.
-let rawSprintChoice=null;
-const rawDevs=new Set(),rawStatuses=new Set(),rawClients=new Set();
-/** Opção do filtro de clientes para tarefas com a coluna Cliente vazia. */
+// Abas da tela, na ordem do fluxo: Roadmap e Backlog (quadros do Monday configurados em Configurações),
+// Sprint atual (todas as tarefas da sprint) e Suporte (Tipo = Suporte). Cada aba guarda os próprios filtros,
+// sprint, ordenação e agrupamento; visualizações e filtros são os mesmos. Sem paginação: a lista mostra tudo.
+const RAW_TABS=['roadmap','backlog','tarefas','suporte'];
+const BOARD_TABS=['roadmap','backlog'];
+/** Opção do filtro de clientes para itens com a coluna Cliente vazia. */
 const RAW_NO_CLIENT='__sem_cliente__';
-const RAW_PER=30;
 const CAN_UPDATE_ITEMS=@json(auth()->user()->can('update-items'));
 // A mesma lista filtrada em tabela, quadro Kanban ou lista agrupada; a escolha fica guardada no navegador.
 const RAW_VIEWS=['table','board','list'];
 const rawPref=key=>{try{return localStorage.getItem('yuv.tarefas.'+key);}catch{return null;}};
 const rawSavePref=(key,value)=>{try{localStorage.setItem('yuv.tarefas.'+key,value);}catch{}};
+const isSupportTask=x=>SprintRules.normalize(x.Tipo)==='suporte';
+const isBoardTab=(tab=rawTab)=>BOARD_TABS.includes(tab);
 let rawView=RAW_VIEWS.includes(rawPref('view'))?rawPref('view'):'table';
-let rawGroup=rawPref('group')||'status';
-function chooseRawView(view){
-  rawView=view; rawSavePref('view',view);
-  document.querySelectorAll('#raw-views [data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
-  renderRaw();
+let rawTab=RAW_TABS.includes(rawPref('tab'))?rawPref('tab'):'tarefas';
+const rawTabState={};
+function rawState(tab=rawTab){
+  return rawTabState[tab]||=({sprint:null,devs:new Set(),statuses:new Set(),clients:new Set(),impacts:new Set(),origins:new Set(),modules:new Set(),efforts:new Set(),
+    flags:new Set(),tipo:'all',q:'',sort:isBoardTab(tab)?{col:'Nome',asc:true}:{col:'Sprint',asc:true},group:rawPref('group.'+tab)||'status'});
 }
-function chooseRawGroup(group){rawGroup=group;rawSavePref('group',group);renderRaw();}
+/** Ordem de fluxo dos status de cada quadro (o Monday guarda os status em outra ordem); status desconhecidos vão para o fim. */
+const BOARD_FUNNELS={
+  roadmap:['aguardando revisao','informacoes ausentes','dependencia externa','adicionado ao backlog','action to sprint','em validacao','implementado','descontinuado'],
+  backlog:['falta escopo','refinamento tecnico','mockup','preparado','adicionado ao backlog'],
+};
+const BOARD_TITLES={roadmap:'Roadmap',backlog:'Backlog'};
+/** Dados de cada aba de quadro, lidos de /api/board-tabs/{aba}. */
+const RAW_BOARDS=Object.fromEntries(BOARD_TABS.map(tab=>[tab,{loaded:false,loading:false,configured:true,rows:[],statusOptions:[],fields:[],titles:{},boardName:'',error:''}]));
+window.RAW_BOARDS=RAW_BOARDS;
+function boardStatuses(tab=rawTab){
+  const funnel=BOARD_FUNNELS[tab]||[];
+  const rank=label=>{const i=funnel.indexOf(SprintRules.normalize(label));return i<0?funnel.length:i;};
+  return [...RAW_BOARDS[tab].statusOptions].sort((a,b)=>rank(a.label)-rank(b.label));
+}
+/** Lê o quadro da aba; o servidor reaproveita o cache dentro do intervalo de atualização. */
+async function loadBoardTab(tab,force=false){
+  const board=RAW_BOARDS[tab];
+  if(!board||board.loading) return;
+  board.loading=true;
+  try{
+    const result=await mondayRequest(`/api/board-tabs/${tab}${force?'?force=1':''}`);
+    Object.assign(board,{configured:result.configured,rows:result.rows||[],statusOptions:result.statusOptions||[],fields:result.fields||[],titles:result.titles||{},boardName:result.boardName||'',error:''});
+  }catch(error){board.error=error.message;}
+  finally{board.loading=false;board.loaded=true;}
+  if(currentPage==='raw'){if(rawTab===tab) buildRawFilters();renderRaw();}
+}
+const rawLink=x=>x.Id?`<button type="button" class="raw-link" onclick="ItemDetail.open('${esc(x.Id)}')">${esc(x.Nome)}</button>`:esc(x.Nome);
+const boardStatusChip=(tab,label)=>label?`<span class="tv-status" style="--st:${esc(RAW_BOARDS[tab].statusOptions.find(o=>o.label===label)?.color||'#94a3b8')}">${esc(label)}</span>`:'—';
+/** Rótulo de um campo nas abas de quadro: o título real da coluna no Monday (ex.: Impacto, Severidade). */
+const boardLabel=(field,fallback,tab=rawTab)=>RAW_BOARDS[tab]?.titles?.[field]||fallback;
+const TASK_COLUMNS=[
+  {key:'Nome',label:'Item',title:true,cell:rawLink},
+  {key:'Responsavel',label:'Responsável',cls:'cm',cell:x=>esc(devPeople(x).filter(p=>!SprintRules.isExcludedPerson(p))[0]?.split(' ')[0]||'—')},
+  {key:'Cliente',label:'Cliente',cell:x=>esc(x.Cliente)||'—'},
+  {key:'Sprint',label:'Sprint',cls:'cm',cell:x=>`Sprint ${x.Sprint}`},
+  {key:'Status',label:'Status',cell:x=>stBadge(x.Status)},
+  {key:'Prioridade',label:'Prioridade',cell:x=>prioBadge(x.Prioridade)},
+  {key:'Tipo',label:'Tipo',cell:x=>`<span class="b bo">${esc(x.Tipo)}</span>`},
+  {key:'Epico',label:'Épico',cell:x=>epicBadge(x.Epico)},
+  {key:'EstH',label:'Est(h)',cls:'cm',cell:x=>x.EstH||'—'},
+  {key:'RealH',label:'Real(h)',cls:'cm',cell:x=>x.RealH||'—'},
+  {key:'Planejada',label:'Planejado',cell:x=>x.Planejada==='Planejada'?'<span class="b bval">Sim</span>':x.Planejada==='Não Planejado'?'<span class="b bs">Não</span>':'—'},
+  {key:'Retrabalho',label:'Retrab.',cell:x=>boolBadge(x.Retrabalho)},
+  {key:'BugProducao',label:'Bug Prod.',cell:x=>bugBadge(x.BugProducao)},
+  {key:'ValorAgregado',label:'Melhorias',cell:x=>boolBadge(x.ValorAgregado,'★')},
+];
+/** Colunas das abas de quadro: só as que o quadro tem, com o título real de cada uma. */
+function boardColumns(tab=rawTab){
+  const has=field=>RAW_BOARDS[tab].fields.includes(field);
+  return [
+    {key:'Nome',label:'Item',title:true,cell:rawLink},
+    {key:'Status',label:boardLabel('Status','Status',tab),cell:x=>boardStatusChip(tab,x.Status)},
+    has('Prioridade')&&{key:'Prioridade',label:boardLabel('Prioridade','Prioridade',tab),cell:x=>x.Prioridade?prioBadge(x.Prioridade):'—'},
+    has('Tipo')&&{key:'Tipo',label:boardLabel('Tipo','Tipo',tab),cell:x=>x.Tipo?`<span class="b bo">${esc(x.Tipo)}</span>`:'—'},
+    has('Responsavel')&&{key:'Responsavel',label:boardLabel('Responsavel','Responsável',tab),cell:x=>esc(x.Responsavel)||'—'},
+    has('Origem')&&{key:'Origem',label:boardLabel('Origem','Origem',tab),cell:x=>esc(x.Origem)||'—'},
+    has('Modulo')&&{key:'Modulo',label:boardLabel('Modulo','Módulo',tab),cell:x=>esc(x.Modulo)||'—'},
+    has('Esforco')&&{key:'Esforco',label:boardLabel('Esforco','Esforço',tab),cell:x=>esc(x.Esforco)||'—'},
+    has('Cliente')&&{key:'Cliente',label:boardLabel('Cliente','Cliente',tab),cell:x=>esc(x.Cliente)||'—'},
+    has('Solicitante')&&{key:'Solicitante',label:boardLabel('Solicitante','Solicitante',tab),cell:x=>esc(x.Solicitante)||'—'},
+    has('EstH')&&{key:'EstH',label:'Est(h)',cls:'cm',cell:x=>x.EstH??'—'},
+    has('DataRegistro')&&{key:'DataRegistro',label:boardLabel('DataRegistro','Registro',tab),cls:'cm',cell:x=>esc(x.DataRegistro)||'—'},
+  ].filter(Boolean);
+}
+/** Agrupamentos do Kanban e da lista: por etapa nas tarefas; pelo fluxo de status e pelos campos do quadro nas abas de quadro. */
+function rawGroups(tab=rawTab){
+  if(!isBoardTab(tab)) return [['status','Etapa (Backlog → Concluído)'],['responsavel','Responsável'],['cliente','Cliente'],['prioridade','Prioridade'],['tipo','Tipo'],['epico','Épico'],['sprint','Sprint']];
+  const has=field=>RAW_BOARDS[tab].fields.includes(field);
+  return [['status','Status (fluxo)',true],['prioridade',boardLabel('Prioridade','Prioridade',tab),has('Prioridade')],['tipo','Tipo',has('Tipo')],
+    ['responsavel',boardLabel('Responsavel','Responsável',tab),has('Responsavel')],['origem','Origem',has('Origem')],['modulo','Módulo',has('Modulo')],
+    ['esforco','Esforço',has('Esforco')],['cliente','Cliente',has('Cliente')]].filter(group=>group[2]).map(([value,label])=>[value,label]);
+}
+function rawDataset(tab=rawTab){
+  if(isBoardTab(tab)) return RAW_BOARDS[tab].rows;
+  const rows=DATA.filter(x=>x.Sprint);
+  return tab==='suporte'?rows.filter(isSupportTask):rows;
+}
+function chooseRawTab(tab){rawTab=tab;rawSavePref('tab',tab);buildRawFilters();renderRaw();}
+function chooseRawView(view){rawView=view;rawSavePref('view',view);renderRaw();}
+function chooseRawGroup(group){rawState().group=group;rawSavePref('group.'+rawTab,group);renderRaw();}
 function chooseRawSprint(value){
-  rawSprintChoice=value;
+  rawState().sprint=value;
   currentSprint=value==='all'?null:Number(value);
   if(currentPage==='raw') history.replaceState({page:'raw',sp:currentSprint},'',screenUrl('raw',currentSprint));
-  rawPage=0; renderRaw();
+  renderRaw();
+}
+/** Opções dos filtros a partir dos itens da aba atual, mantendo o que já estava marcado nela. */
+function buildRawFilters(){
+  const s=rawState(),rows=rawDataset(),board=isBoardTab();
+  const has=field=>!board||RAW_BOARDS[rawTab].fields.includes(field);
+  const uniq=field=>[...new Set(rows.map(x=>clean(x[field])).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const opts=values=>values.map(v=>({value:v,label:v}));
+  const people=[...new Set(rows.flatMap(x=>devPeople(x)))].sort((a,b)=>a.localeCompare(b));
+  document.getElementById('rawDevMs').hidden=!people.length;
+  renderMultiSelect('rawDevMs',{label:'Responsáveis',all:'Todos os responsáveis',search:true,selected:s.devs,options:opts(people)});
+  const statuses=board?boardStatuses().map(o=>o.label).filter(l=>rows.some(x=>x.Status===l)):uniq('Status');
+  renderMultiSelect('rawStatusMs',{label:'Status',all:'Todos os status',selected:s.statuses,options:opts(statuses)});
+  document.getElementById('rawClientMs').hidden=!has('Cliente');
+  renderMultiSelect('rawClientMs',{label:'Clientes',all:'Todos os clientes',search:true,selected:s.clients,options:[...opts(uniq('Cliente')),{value:RAW_NO_CLIENT,label:'Sem cliente'}]});
+  for(const [id,field,label,set] of [['rawImpactMs','Prioridade',boardLabel('Prioridade','Prioridade'),s.impacts],['rawOriginMs','Origem','Origem',s.origins],
+    ['rawModuleMs','Modulo','Módulo',s.modules],['rawEffortMs','Esforco','Esforço',s.efforts]]){
+    const show=board&&has(field);
+    document.getElementById(id).hidden=!show;
+    if(show) renderMultiSelect(id,{label,all:`${label}: todos`,selected:set,options:opts(uniq(field))});
+  }
+  const tipoSel=document.getElementById('rawTipoSel');
+  tipoSel.length=1;
+  uniq('Tipo').forEach(t=>tipoSel.appendChild(new Option(t,t)));
+  if(![...tipoSel.options].some(o=>o.value===s.tipo)) s.tipo='all';
+  tipoSel.value=s.tipo;
+  tipoSel.hidden=rawTab==='suporte'||!has('Tipo');
+  document.getElementById('rawSearch').value=s.q;
+  document.getElementById('raw-filters').hidden=board;
+  document.querySelectorAll('#raw-filters .tfbtn').forEach(b=>b.classList.toggle('active',s.flags.has(b.id.slice(2))));
+  const groupSel=document.getElementById('rawGroupSel'),groups=rawGroups();
+  groupSel.replaceChildren(...groups.map(([value,label])=>new Option(label,value)));
+  if(!groups.some(([value])=>value===s.group)) s.group='status';
+  groupSel.value=s.group;
 }
 function clearRawFilters(){
-  rawDevs.clear(); rawStatuses.clear(); rawClients.clear(); rawActiveFilters.clear();
-  document.querySelectorAll('#raw-filters .tfbtn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('rawTipoSel').value='all';
-  document.getElementById('rawSearch').value='';
-  initSprintNav();
-  rawPage=0; renderRaw();
+  const s=rawState();
+  [s.devs,s.statuses,s.clients,s.impacts,s.origins,s.modules,s.efforts,s.flags].forEach(set=>set.clear());
+  s.tipo='all'; s.q='';
+  buildRawFilters(); renderRaw();
 }
 function toggleRawFilter(f){
-  if(rawActiveFilters.has(f)) rawActiveFilters.delete(f); else rawActiveFilters.add(f);
-  document.getElementById('rf'+f)?.classList.toggle('active',rawActiveFilters.has(f));
-  rawPage=0; renderRaw();
+  const flags=rawState().flags;
+  if(flags.has(f)) flags.delete(f); else flags.add(f);
+  document.getElementById('rf'+f)?.classList.toggle('active',flags.has(f));
+  renderRaw();
 }
-function sortRaw(col){rawSort=rawSort.col===col?{col,asc:!rawSort.asc}:{col,asc:true};rawPage=0;renderRaw();}
-function rawPg(d){rawPage+=d;renderRaw();}
+function sortRaw(col){const s=rawState();s.sort=s.sort.col===col?{col,asc:!s.sort.asc}:{col,asc:true};renderRaw();}
+function showBoardMessage(title,message){
+  document.getElementById('raw-list-card').hidden=true;
+  document.getElementById('raw-roadmap').hidden=false;
+  document.getElementById('raw-roadmap-title').textContent=title;
+  document.getElementById('raw-roadmap-msg').innerHTML=message;
+}
 function renderRaw(){
+  document.querySelectorAll('#raw-tabs [data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===rawTab)));
   const spSel=document.getElementById('rawSpSel');
   const active=defaultSprint();
   [...spSel.options].forEach(o=>{if(o.value!=='all') o.textContent=`Sprint ${o.value}${Number(o.value)===active?' (ativa)':''}`;});
-  const wanted=rawSprintChoice??(active===null?'all':String(active));
-  spSel.value=[...spSel.options].some(o=>o.value===wanted)?wanted:'all';
-  const sp=spSel.value;
-  const tipo=document.getElementById('rawTipoSel').value;
-  const q=document.getElementById('rawSearch').value.toLowerCase();
-  let rows=DATA.filter(x=>x.Sprint);
-  if(sp!=='all') rows=rows.filter(x=>x.Sprint===parseInt(sp));
-  if(rawDevs.size) rows=rows.filter(x=>devPeople(x).some(p=>rawDevs.has(p)));
-  if(rawStatuses.size) rows=rows.filter(x=>rawStatuses.has(x.Status));
-  if(rawClients.size) rows=rows.filter(x=>rawClients.has(clean(x.Cliente)||RAW_NO_CLIENT));
+  const sprintOf=tab=>{const wanted=rawState(tab).sprint??(active===null?'all':String(active));return [...spSel.options].some(o=>o.value===wanted)?wanted:'all';};
+  const inSprint=(tab,rows)=>{const v=sprintOf(tab);return rows.filter(x=>v==='all'||x.Sprint===parseInt(v));};
+  document.getElementById('raw-tab-count-tarefas').textContent=inSprint('tarefas',rawDataset('tarefas')).length;
+  document.getElementById('raw-tab-count-suporte').textContent=inSprint('suporte',rawDataset('suporte')).length;
+  BOARD_TABS.forEach(tab=>{const b=RAW_BOARDS[tab];document.getElementById(`raw-tab-count-${tab}`).textContent=b.loaded&&b.configured&&!b.error?b.rows.length:'';});
+  const board=isBoardTab(),boardData=RAW_BOARDS[rawTab];
+  if(board&&!boardData.loaded){
+    showBoardMessage(BOARD_TITLES[rawTab],'Carregando os itens do Monday...');
+    loadBoardTab(rawTab);
+    return;
+  }
+  if(board&&!boardData.configured){
+    showBoardMessage(`${BOARD_TITLES[rawTab]} não configurado`,`Informe o quadro da aba em <b>Configurações → Abas Roadmap e Backlog</b>.${canAccessScreen('settings')?' <a href="#" onclick="navigate(\'settings\');return false">Abrir Configurações</a>':' Peça a quem administra as configurações.'}`);
+    return;
+  }
+  if(board&&boardData.error){
+    showBoardMessage(`Não foi possível carregar o ${BOARD_TITLES[rawTab]}`,`${esc(boardData.error)} <a href="#" onclick="loadBoardTab(rawTab,true);return false">Tentar de novo</a>`);
+    return;
+  }
+  document.getElementById('raw-list-card').hidden=false;
+  document.getElementById('raw-roadmap').hidden=true;
+  const s=rawState();
+  const support=rawTab==='suporte';
+  document.getElementById('raw-title').textContent=board?(boardData.boardName||BOARD_TITLES[rawTab]):support?'Suporte da sprint':'Sprint atual';
+  spSel.hidden=board;
+  const sp=board?'all':(spSel.value=sprintOf(rawTab));
+  const tipo=support?'all':s.tipo;
+  const q=s.q.toLowerCase();
+  let rows=board?rawDataset():inSprint(rawTab,rawDataset());
+  if(s.devs.size) rows=rows.filter(x=>devPeople(x).some(p=>s.devs.has(p)));
+  if(s.statuses.size) rows=rows.filter(x=>s.statuses.has(x.Status));
+  if(s.clients.size) rows=rows.filter(x=>s.clients.has(clean(x.Cliente)||RAW_NO_CLIENT));
+  if(s.impacts.size) rows=rows.filter(x=>s.impacts.has(clean(x.Prioridade)));
+  if(s.origins.size) rows=rows.filter(x=>s.origins.has(clean(x.Origem)));
+  if(s.modules.size) rows=rows.filter(x=>s.modules.has(clean(x.Modulo)));
+  if(s.efforts.size) rows=rows.filter(x=>s.efforts.has(clean(x.Esforco)));
   if(tipo!=='all') rows=rows.filter(x=>x.Tipo===tipo);
-  document.getElementById('rawClear').hidden=!(rawDevs.size||rawStatuses.size||rawClients.size||rawActiveFilters.size||tipo!=='all'||q);
-  if(rawActiveFilters.has('bug')) rows=rows.filter(x=>x.BugProducao);
-  if(rawActiveFilters.has('val')) rows=rows.filter(x=>x.ValorAgregado);
-  if(rawActiveFilters.has('rework')) rows=rows.filter(x=>x.Retrabalho);
-  if(rawActiveFilters.has('epic')) rows=rows.filter(x=>x.Epico);
-  if(q) rows=rows.filter(x=>[x.Nome,x.Responsavel,x.Status,x.Cliente].some(v=>clean(v).toLowerCase().includes(q)));
+  if(s.flags.has('bug')) rows=rows.filter(x=>x.BugProducao);
+  if(s.flags.has('val')) rows=rows.filter(x=>x.ValorAgregado);
+  if(s.flags.has('rework')) rows=rows.filter(x=>x.Retrabalho);
+  if(s.flags.has('epic')) rows=rows.filter(x=>x.Epico);
+  if(q) rows=rows.filter(x=>[x.Nome,x.Responsavel,x.Status,x.Cliente,x.Solicitante].some(v=>clean(v).toLowerCase().includes(q)));
+  document.getElementById('rawClear').hidden=![s.devs,s.statuses,s.clients,s.impacts,s.origins,s.modules,s.efforts,s.flags].some(set=>set.size)&&tipo==='all'&&!q;
   rows=[...rows].sort((a,b)=>{
-    const av=a[rawSort.col]??'',bv=b[rawSort.col]??'';
-    if(typeof av==='number') return rawSort.asc?av-bv:bv-av;
-    return rawSort.asc?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
+    const av=a[s.sort.col]??'',bv=b[s.sort.col]??'';
+    if(typeof av==='number'||typeof bv==='number') return s.sort.asc?(Number(av)||0)-(Number(bv)||0):(Number(bv)||0)-(Number(av)||0);
+    return s.sort.asc?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
   });
-  document.getElementById('raw-cnt').textContent=`${rows.length} itens`;
+  const count=`${rows.length} ${rows.length===1?'item':'itens'}`;
+  document.getElementById('raw-cnt').textContent=count;
   document.querySelectorAll('#raw-views [data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===rawView)));
-  const groupSel=document.getElementById('rawGroupSel');
-  groupSel.value=rawGroup; if(!groupSel.value){rawGroup='status';groupSel.value='status';}
-  groupSel.closest('label').hidden=rawView==='table';
+  document.getElementById('rawGroupSel').closest('label').hidden=rawView==='table';
   document.getElementById('raw-table-view').hidden=rawView!=='table';
   document.getElementById('raw-board-view').hidden=rawView==='table';
   if(rawView!=='table'){
-    TaskViews.render(document.getElementById('raw-board-view'),rows,{view:rawView,groupBy:rawGroup,showSprint:sp==='all',canMove:CAN_UPDATE_ITEMS});
+    TaskViews.render(document.getElementById('raw-board-view'),rows,{view:rawView,groupBy:s.group,showSprint:!board&&sp==='all',canMove:CAN_UPDATE_ITEMS,
+      mode:board?'board':'tasks',statusOptions:board?boardStatuses():null,source:board?boardData.rows:DATA});
     return;
   }
-  const total=rows.length,pages=Math.ceil(total/RAW_PER)||1;
-  rawPage=Math.max(0,Math.min(rawPage,pages-1));
-  const slice=rows.slice(rawPage*RAW_PER,(rawPage+1)*RAW_PER);
-  document.getElementById('raw-body').innerHTML=slice.map(x=>`<tr>
-    <td title="${esc(x.Nome)}">${x.Id?`<button type="button" class="raw-link" onclick="ItemDetail.open('${esc(x.Id)}')">${esc(x.Nome)}</button>`:esc(x.Nome)}</td>
-    <td class="cm">${esc(devPeople(x).filter(p=>!SprintRules.isExcludedPerson(p))[0]?.split(' ')[0]||'—')}</td>
-    <td title="${esc(x.Cliente)}">${esc(x.Cliente)||'—'}</td>
-    <td class="cm">Sprint ${x.Sprint}</td>
-    <td>${stBadge(x.Status)}</td>
-    <td>${prioBadge(x.Prioridade)}</td>
-    <td><span class="b bo">${esc(x.Tipo)}</span></td>
-    <td>${epicBadge(x.Epico)}</td>
-    <td class="cm">${x.EstH||'—'}</td>
-    <td class="cm">${x.RealH||'—'}</td>
-    <td>${x.Planejada==='Planejada'?'<span class="b bval">Sim</span>':x.Planejada==='Não Planejado'?'<span class="b bs">Não</span>':'—'}</td>
-    <td>${boolBadge(x.Retrabalho)}</td>
-    <td>${bugBadge(x.BugProducao)}</td>
-    <td>${boolBadge(x.ValorAgregado,'★')}</td>
-  </tr>`).join('');
-  document.getElementById('raw-pgr').textContent=`${rawPage+1} / ${pages} · ${total} itens`;
-  document.getElementById('rawPrev').disabled=rawPage===0;
-  document.getElementById('rawNext').disabled=rawPage>=pages-1;
+  const columns=board?boardColumns():TASK_COLUMNS;
+  document.getElementById('raw-head').innerHTML=`<tr>${columns.map(c=>`<th onclick="sortRaw('${c.key}')">${esc(c.label)}${s.sort.col===c.key?(s.sort.asc?' ▲':' ▼'):''}</th>`).join('')}</tr>`;
+  document.getElementById('raw-body').innerHTML=rows.map(x=>`<tr>${columns.map(c=>`<td${c.cls?` class="${c.cls}"`:''}${c.title?` title="${esc(x.Nome)}"`:''}>${c.cell(x)}</td>`).join('')}</tr>`).join('')
+    ||`<tr><td colspan="${columns.length}" class="nd">Nenhum item com esses filtros.</td></tr>`;
+  document.getElementById('raw-pgr').textContent=count;
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
