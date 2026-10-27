@@ -31,7 +31,7 @@ class MondayController extends Controller
     private const BOARD_TABS = ['roadmap' => 'roadmap_board_id', 'backlog' => 'backlog_board_id'];
 
     /** Prefixo do cache de cada aba; descartado quando o status de um card muda pelo dashboard. */
-    private const BOARD_TAB_CACHE = 'monday-board-tab-';
+    public const BOARD_TAB_CACHE = 'monday-board-tab-';
 
     private const FIELDS = [
         'Responsavel', 'Status', 'Prioridade', 'Tipo', 'EstH', 'RealH',

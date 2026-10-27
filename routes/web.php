@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FeatureRequestController;
 use App\Http\Controllers\MondayController;
 use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\UserController;
@@ -78,6 +79,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/api/tickets', [SupportTicketController::class, 'store'])->name('tickets.store');
         Route::post('/api/tickets/{item}/comments/{comment}/files', [SupportTicketController::class, 'attachFile'])
             ->whereNumber(['item', 'comment'])->name('tickets.files.store');
+        Route::get('/api/feature-requests/options', [FeatureRequestController::class, 'options'])->name('feature-requests.options');
+        Route::post('/api/feature-requests', [FeatureRequestController::class, 'store'])->name('feature-requests.store');
+        Route::post('/api/feature-requests/{item}/files', [FeatureRequestController::class, 'attachFile'])
+            ->whereNumber('item')->name('feature-requests.files.store');
     });
 
     Route::apiResource('/api/users', UserController::class)->except('show')->middleware('screen:users');
