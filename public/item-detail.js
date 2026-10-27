@@ -16,6 +16,9 @@ window.ItemDetail = (() => {
   /** Campos que o dashboard já destaca no topo, na ordem do ClickUp. */
   const HIGHLIGHT_TYPES = ['status', 'people', 'date', 'timeline', 'numbers', 'time_tracking'];
 
+  /** Linhas já carregadas na tela: tarefas das sprints e demandas do Roadmap. */
+  function knownRows() { return [...DATA, ...(window.RAW_ROADMAP?.rows || [])]; }
+
   function initials(name) { return String(name).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?'; }
   function avatarColor(name) { let hash = 0; for (const char of String(name)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0; return AVATAR_COLORS[hash % AVATAR_COLORS.length]; }
   function avatar(name, size = '') { return `<span class="td-avatar ${size}" style="background:${avatarColor(name)}" title="${escape(name)}">${escape(initials(name))}</span>`; }
@@ -283,7 +286,7 @@ window.ItemDetail = (() => {
 
   function render() {
     const modal = el('item-modal');
-    const row = DATA.find(entry => entry.Id === state.id) || {};
+    const row = knownRows().find(entry => entry.Id === state.id) || {};
     const item = state.item;
     const group = item?.group;
     modal.innerHTML = `<div class="td-head">
@@ -348,7 +351,7 @@ window.ItemDetail = (() => {
       column.text = label;
       column.color = item.statusOptions.find(option => option.label === label)?.color || null;
       // Atualiza a tabela na hora; a próxima sincronização traz o card já com o novo status.
-      DATA.filter(row => row.Id === state.id).forEach(row => { row.Status = label; });
+      knownRows().filter(row => row.Id === state.id).forEach(row => { row.Status = label; });
       if (currentPage === 'raw') renderRaw();
       render();
       message(`Status alterado para “${label}”.`, 'success');

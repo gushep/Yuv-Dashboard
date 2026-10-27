@@ -74,7 +74,7 @@ class SupportTicketController extends Controller
 
         return $this->attempt(function () use ($request, $monday, $item, $comment): array {
             $connection = $this->connection();
-            $monday->attachFile((string) $connection->token, (string) $connection->board_id, $item, $comment, $request->file('file'));
+            $monday->attachFile((string) $connection->token, [(string) $connection->board_id], $item, $comment, $request->file('file'));
 
             return ['saved' => true];
         });

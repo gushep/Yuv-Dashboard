@@ -13,6 +13,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -26,6 +27,9 @@ class MondayController extends Controller
     /** Trava que limita a cópia do log de atividades a uma vez por hora. */
     private const ACTIVITY_IMPORT_KEY = 'monday-activity-import';
 
+    /** Cache do quadro do Roadmap; descartado quando o status de um card muda pelo dashboard. */
+    private const ROADMAP_CACHE_KEY = 'monday-roadmap-1';
+
     private const FIELDS = [
         'Responsavel', 'Status', 'Prioridade', 'Tipo', 'EstH', 'RealH',
         'Epico', 'Sprint', 'Planejada', 'Retrabalho', 'BugProducao', 'ValorAgregado', 'RemainingH', 'Impedimento',
@@ -37,6 +41,7 @@ class MondayController extends Controller
 
         return response()->json([
             'boardId' => $connection->board_id,
+            'roadmapBoardId' => $connection->roadmap_board_id,
             'map' => $connection->column_map ?? [],
             'refreshMinutes' => $connection->refresh_minutes,
             'hasToken' => filled($connection->token),
@@ -258,7 +263,7 @@ class MondayController extends Controller
             $connection = $this->configuredConnection();
 
             return [
-                ...$monday->itemDetails($connection->token, (string) $connection->board_id, $item, $connection->column_map['Status'] ?? null),
+                ...$monday->itemDetails($connection->token, $this->itemBoards($connection), $item),
                 'canUpdateItems' => $request->user()->can('update-items'),
                 // O limite real de cada anexo é o menor entre o do PHP (upload e POST) e os 50 MB aceitos pela rota.
                 'maxUploadBytes' => (int) min(UploadedFile::getMaxFilesize(), 50 * 1024 * 1024),
@@ -274,7 +279,7 @@ class MondayController extends Controller
         return $this->attempt(function () use ($monday, $item) {
             $connection = $this->configuredConnection();
 
-            return ['activity' => $monday->itemActivity($connection->token, (string) $connection->board_id, $item)];
+            return ['activity' => $monday->itemActivity($connection->token, array_keys($this->itemBoards($connection)), $item)];
         });
     }
 
@@ -287,12 +292,9 @@ class MondayController extends Controller
 
         return $this->attempt(function () use ($request, $monday, $item, $data) {
             $connection = $this->configuredConnection();
-            $columnId = $connection->column_map['Status'] ?? '';
-            if ($columnId === '') {
-                throw new RuntimeException('Mapeie a coluna Status nas Configurações antes de alterar status.');
-            }
-            $monday->changeStatus($connection->token, (string) $connection->board_id, $item, $columnId, $data['status']);
+            $monday->changeStatus($connection->token, $this->itemBoards($connection), $item, $data['status']);
             Cache::forget(MondaySnapshotService::CACHE_KEY);
+            Cache::forget(self::ROADMAP_CACHE_KEY);
             Log::info('Status de card alterado pelo dashboard.', ['item' => $item, 'status' => $data['status'], 'user' => $request->user()->email]);
 
             return ['saved' => true, 'status' => $data['status']];
@@ -314,7 +316,7 @@ class MondayController extends Controller
 
         return $this->attempt(function () use ($request, $monday, $item) {
             $connection = $this->configuredConnection();
-            $updateId = $monday->postComment($connection->token, (string) $connection->board_id, $item, trim((string) $request->input('text')), $request->user()->name);
+            $updateId = $monday->postComment($connection->token, array_keys($this->itemBoards($connection)), $item, trim((string) $request->input('text')), $request->user()->name);
             Log::info('Comentário publicado pelo dashboard.', ['item' => $item, 'update' => $updateId, 'user' => $request->user()->email]);
 
             return ['saved' => true, 'updateId' => $updateId];
@@ -336,7 +338,7 @@ class MondayController extends Controller
         return $this->attempt(function () use ($request, $monday, $item, $update) {
             $connection = $this->configuredConnection();
             try {
-                $monday->attachFile($connection->token, (string) $connection->board_id, $item, $update, $request->file('file'));
+                $monday->attachFile($connection->token, array_keys($this->itemBoards($connection)), $item, $update, $request->file('file'));
             } catch (RuntimeException $exception) {
                 Log::warning('Anexo recusado ao enviar pelo dashboard.', ['item' => $item, 'update' => $update, 'file' => $request->file('file')->getClientOriginalName(), 'error' => $exception->getMessage()]);
 
@@ -345,6 +347,67 @@ class MondayController extends Controller
 
             return ['saved' => true];
         });
+    }
+
+    /**
+     * Quadro do Roadmap (aba Roadmap da tela Tarefas). Lido com o mesmo intervalo de cache das tarefas.
+     */
+    public function roadmap(Request $request, MondayService $monday): JsonResponse
+    {
+        $data = $request->validate(['force' => ['nullable', 'boolean']]);
+
+        return $this->attempt(function () use ($monday, $data): array {
+            $connection = $this->configuredConnection();
+            if (blank($connection->roadmap_board_id)) {
+                return ['configured' => false];
+            }
+            $ttl = $connection->refresh_minutes === 0 ? 60 : $connection->refresh_minutes * 60;
+            $cached = Cache::get(self::ROADMAP_CACHE_KEY);
+            $fresh = $cached && ($cached['boardId'] ?? null) === $connection->roadmap_board_id
+                && Carbon::parse($cached['syncedAt'])->diffInSeconds(now(), false) < $ttl;
+            if (! $fresh || ! empty($data['force'])) {
+                $cached = ['boardId' => (string) $connection->roadmap_board_id, ...$monday->roadmap($connection->token, (string) $connection->roadmap_board_id)];
+                Cache::put(self::ROADMAP_CACHE_KEY, $cached, 3600);
+            }
+
+            return ['configured' => true, ...$cached];
+        });
+    }
+
+    /**
+     * Grava o quadro do Roadmap, conferindo antes que o token consegue lê-lo. Vazio desliga a aba.
+     */
+    public function saveRoadmapBoard(Request $request, MondayService $monday): JsonResponse
+    {
+        $data = $request->validate(['roadmapBoardId' => ['nullable', 'regex:/^\d+$/']], [
+            'roadmapBoardId.regex' => 'Informe o ID numérico do quadro (o número no link do quadro).',
+        ]);
+
+        return $this->attempt(function () use ($monday, $data): array {
+            $connection = $this->configuredConnection();
+            $boardId = (string) ($data['roadmapBoardId'] ?? '');
+            $name = $boardId === '' ? null : $monday->board($connection->token, $boardId)['name'];
+            $connection->roadmap_board_id = $boardId === '' ? null : $boardId;
+            $connection->save();
+            Cache::forget(self::ROADMAP_CACHE_KEY);
+
+            return ['saved' => true, 'roadmapBoardId' => $connection->roadmap_board_id, 'boardName' => $name];
+        });
+    }
+
+    /**
+     * Quadros cujos cards o dashboard lê e atualiza, com a coluna de status mapeada (null: detectada pelo título).
+     *
+     * @return array<string, ?string>
+     */
+    private function itemBoards(MondayConnection $connection): array
+    {
+        $boards = [(string) $connection->board_id => $connection->column_map['Status'] ?? null];
+        if (filled($connection->roadmap_board_id)) {
+            $boards[(string) $connection->roadmap_board_id] = null;
+        }
+
+        return $boards;
     }
 
     private function configuredConnection(): MondayConnection

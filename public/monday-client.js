@@ -147,6 +147,25 @@ async function saveMonday() {
   }
 }
 
+/** Quadro da aba Roadmap da tela Tarefas; o servidor confere que o token consegue lê-lo antes de gravar. */
+async function saveRoadmapBoard() {
+  const button = document.getElementById('roadmap-save');
+  button.disabled = true;
+  mondayMessage('roadmap-status', 'Conferindo o quadro no Monday...');
+  try {
+    const value = document.getElementById('roadmap-board').value.trim();
+    const roadmapBoardId = value.match(/(?:\/boards\/)?(\d+)(?:\/|$)/)?.[1] || value;
+    const result = await mondayRequest('/api/roadmap-board', { roadmapBoardId });
+    document.getElementById('roadmap-board').value = result.roadmapBoardId || '';
+    mondayMessage('roadmap-status', result.boardName ? `Roadmap configurado com o quadro “${result.boardName}”.` : 'Aba Roadmap desligada.', 'success');
+    Object.assign(window.RAW_ROADMAP || {}, { loaded: false, rows: [], error: '' });
+  } catch (error) {
+    mondayMessage('roadmap-status', error.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function applyMetricSettings(metrics = {}) {
   SprintRules.applySettings(metrics);
   document.getElementById('metric-capacity').value = String(SprintRules.settings.capacityHours);
@@ -217,7 +236,7 @@ function useMondayRows(rows) {
   devSelect.length = 1;
   sprintSelect.length = 1;
   timeInited = false;
-  rawPage = 0;
+  if (typeof rawState === 'function') rawState().page = 0;
   // Telas montadas com estes dados são redesenhadas onde estão; as demais buscam os próprios dados.
   if (['dashboard', 'sprint', 'epicos', 'time', 'raw'].includes(currentPage)) navigate(currentPage, currentSprint, { history: 'replace' });
   else document.getElementById('tb-right').textContent = sprintRangeLabel();
@@ -240,6 +259,8 @@ async function syncMonday(force = true) {
     window.Capacity?.onDataUpdated(result);
     // As datas das sprints chegam com o Capacity; com elas a tela Tarefas descobre a sprint ativa.
     if (currentPage === 'raw') renderRaw();
+    // A aba Roadmap acompanha o mesmo ciclo de atualização (o servidor decide se busca de novo no Monday).
+    if (currentPage === 'raw' && rawTab === 'roadmap') loadRoadmap(false);
     window.Forecast?.onDataUpdated(result);
     window.Consumption?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);
@@ -271,6 +292,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const config = await mondayRequest('/api/config');
     applyMetricSettings(config.metrics);
     document.getElementById('monday-board').value = config.boardId || '';
+    document.getElementById('roadmap-board').value = config.roadmapBoardId || '';
     mondayRefreshMinutes = config.refreshMinutes ?? 5;
     document.getElementById('monday-refresh').value = String(mondayRefreshMinutes);
     mondaySavedMap = config.map || {};

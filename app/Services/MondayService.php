@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class MondayService
@@ -280,15 +281,15 @@ GRAPHQL;
      *     attachments: list<array{id: string, name: string, url: string, extension: string, size: int, image: bool}>,
      *     updates: list<array{id: string, author: string, createdAt: string, text: string, images: list<array<string, mixed>>, assets: list<array<string, mixed>>, replies: list<array<string, mixed>>}>}
      */
-    public function itemDetails(string $token, string $boardId, string $itemId, ?string $statusColumnId): array
+    public function itemDetails(string $token, array $boards, string $itemId): array
     {
         $query = <<<'GRAPHQL'
-query ($ids: [ID!]!, $columns: [String!]) {
+query ($ids: [ID!]!) {
   items(ids: $ids) {
     id name url created_at updated_at
     creator { name }
     group { title color }
-    board { id name columns(ids: $columns) { id settings_str } }
+    board { id name columns { id title type settings_str } }
     assets { id name file_extension file_size public_url url }
     column_values {
       id text type column { title }
@@ -305,7 +306,8 @@ query ($ids: [ID!]!, $columns: [String!]) {
   }
 }
 GRAPHQL;
-        $item = $this->boardItem($token, $boardId, $query, ['ids' => [$itemId], 'columns' => $statusColumnId ? [$statusColumnId] : null]);
+        $item = $this->boardItem($token, array_keys($boards), $query, ['ids' => [$itemId]]);
+        $statusColumnId = $this->statusColumnId($item['board']['columns'] ?? [], $boards[(string) $item['board']['id']] ?? null);
         $assets = $this->itemAssets($token, $item);
 
         $columns = [];
@@ -445,10 +447,12 @@ GRAPHQL;
      *
      * @return list<array{id: string, event: string, author: string, createdAt: string, column: ?string, from: string, to: string}>
      */
-    public function itemActivity(string $token, string $boardId, string $itemId): array
+    public function itemActivity(string $token, array $boardIds, string $itemId): array
     {
+        // O card está num dos quadros permitidos (Tarefas ou Roadmap); nos demais, o log volta vazio.
         $query = 'query ($board: [ID!]!, $items: [ID!]) { boards(ids: $board) { activity_logs(item_ids: $items, limit: 100) { id event user_id created_at data } } }';
-        $logs = $this->query($token, $query, ['board' => [$boardId], 'items' => [$itemId]])['boards'][0]['activity_logs'] ?? [];
+        $logs = collect($this->query($token, $query, ['board' => array_values($boardIds), 'items' => [$itemId]])['boards'] ?? [])
+            ->flatMap(fn (array $board): array => $board['activity_logs'] ?? [])->sortByDesc('created_at')->values()->all();
         $logs = array_values(array_filter($logs, fn (array $log): bool => ! in_array($log['event'] ?? '', ['create_update', 'edit_update', 'delete_update', 'create_reply'], true)));
 
         $decoded = array_map(fn (array $log): array => json_decode($log['data'] ?? '', true) ?: [], $logs);
@@ -483,10 +487,13 @@ GRAPHQL;
     /**
      * Troca o status do card pelo rótulo informado, que precisa existir na coluna de status do quadro.
      */
-    public function changeStatus(string $token, string $boardId, string $itemId, string $statusColumnId, string $label): void
+    public function changeStatus(string $token, array $boards, string $itemId, string $label): void
     {
-        $query = 'query ($ids: [ID!]!, $columns: [String!]) { items(ids: $ids) { id board { id columns(ids: $columns) { id settings_str } } } }';
-        $item = $this->boardItem($token, $boardId, $query, ['ids' => [$itemId], 'columns' => [$statusColumnId]]);
+        $query = 'query ($ids: [ID!]!) { items(ids: $ids) { id board { id columns { id title type settings_str } } } }';
+        $item = $this->boardItem($token, array_keys($boards), $query, ['ids' => [$itemId]]);
+        $boardId = (string) $item['board']['id'];
+        $statusColumnId = $this->statusColumnId($item['board']['columns'] ?? [], $boards[$boardId] ?? null)
+            ?? throw new RuntimeException('Este quadro não tem coluna de status.');
         $labels = array_column($this->statusOptions(collect($item['board']['columns'] ?? [])->firstWhere('id', $statusColumnId) ?? []), 'label');
         if (! in_array($label, $labels, true)) {
             throw new RuntimeException('Status inválido para este quadro.');
@@ -499,9 +506,9 @@ GRAPHQL;
      * Publica um comentário no card. O Monday registra o dono do token como autor, por isso o texto leva quem enviou pelo dashboard.
      * Os anexos seguem depois, um por requisição (attachFile), para cada envio caber no limite de upload do servidor.
      */
-    public function postComment(string $token, string $boardId, string $itemId, string $text, string $author): string
+    public function postComment(string $token, array $boardIds, string $itemId, string $text, string $author): string
     {
-        $this->boardItem($token, $boardId, 'query ($ids: [ID!]!) { items(ids: $ids) { id board { id } } }', ['ids' => [$itemId]]);
+        $this->boardItem($token, $boardIds, 'query ($ids: [ID!]!) { items(ids: $ids) { id board { id } } }', ['ids' => [$itemId]]);
         $paragraphs = $text === '' ? '<p>Evidências anexadas.</p>' : '<p>'.nl2br(e($text), false).'</p>';
         $body = $paragraphs.'<p><em>Enviado por '.e($author).' pelo Yuv Sprint Metrics</em></p>';
         $update = $this->query($token, 'mutation ($item: ID!, $body: String!) { create_update(item_id: $item, body: $body) { id } }', ['item' => $itemId, 'body' => $body]);
@@ -516,11 +523,11 @@ GRAPHQL;
     /**
      * Anexa um arquivo a um comentário do card. O comentário precisa ser desse card e o card, do quadro configurado.
      */
-    public function attachFile(string $token, string $boardId, string $itemId, string $updateId, UploadedFile $file): void
+    public function attachFile(string $token, array $boardIds, string $itemId, string $updateId, UploadedFile $file): void
     {
         $query = 'query ($ids: [ID!]!, $updates: [ID!]) { items(ids: $ids) { id board { id } } updates(ids: $updates) { id item_id } }';
         $data = $this->query($token, $query, ['ids' => [$itemId], 'updates' => [$updateId]]);
-        if ((string) ($data['items'][0]['board']['id'] ?? '') !== $boardId) {
+        if (! in_array((string) ($data['items'][0]['board']['id'] ?? ''), array_map('strval', $boardIds), true)) {
             throw new RuntimeException('Card não encontrado no quadro configurado.');
         }
         if ((string) ($data['updates'][0]['item_id'] ?? '') !== $itemId) {
@@ -542,14 +549,92 @@ GRAPHQL;
      * @param  array<string, mixed>  $variables
      * @return array<string, mixed>
      */
-    private function boardItem(string $token, string $boardId, string $query, array $variables): array
+    private function boardItem(string $token, array $boardIds, string $query, array $variables): array
     {
         $item = $this->query($token, $query, $variables)['items'][0] ?? null;
-        if ($item === null || (string) ($item['board']['id'] ?? '') !== $boardId) {
+        if ($item === null || ! in_array((string) ($item['board']['id'] ?? ''), array_map('strval', $boardIds), true)) {
             throw new RuntimeException('Card não encontrado no quadro configurado.');
         }
 
         return $item;
+    }
+
+    /**
+     * Coluna de status do quadro: a mapeada nas Configurações (quadro de Tarefas) ou, sem mapeamento
+     * (quadro do Roadmap), a coluna de status chamada "Status".
+     *
+     * @param  list<array<string, mixed>>  $columns
+     */
+    private function statusColumnId(array $columns, ?string $mapped): ?string
+    {
+        if ($mapped !== null && $mapped !== '') {
+            return $mapped;
+        }
+        $column = collect($columns)->first(fn (array $column): bool => ($column['type'] ?? '') === 'status' && $this->normalizedTitle((string) ($column['title'] ?? '')) === 'status');
+
+        return $column ? (string) $column['id'] : null;
+    }
+
+    private function normalizedTitle(string $title): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/', ' ', Str::ascii($title))));
+    }
+
+    /**
+     * Itens do quadro do Roadmap (ex.: Funil de Demandas), com as colunas reconhecidas pelo título,
+     * sem mapeamento manual. Mesmo formato de linha das tarefas onde os campos coincidem.
+     *
+     * @return array{boardName: string, rows: list<array<string, mixed>>, statusOptions: list<array{label: string, color: ?string}>, fields: list<string>, syncedAt: string}
+     */
+    public function roadmap(string $token, string $boardId): array
+    {
+        $items = 'items { id name url created_at group { title } column_values { id text type ... on BoardRelationValue { display_value } ... on MirrorValue { display_value } } }';
+        $data = $this->query($token, 'query ($board: [ID!]!) { boards(ids: $board) { name columns { id title type settings_str } items_page(limit: 500) { cursor '.$items.' } } }', ['board' => [$boardId]]);
+        $board = $data['boards'][0] ?? throw new RuntimeException('Quadro do Roadmap não encontrado ou sem permissão de leitura.');
+        $all = $board['items_page']['items'] ?? [];
+        for ($cursor = $board['items_page']['cursor'] ?? null, $page = 1; $cursor && $page < 20; $page++) {
+            $next = $this->query($token, 'query ($cursor: String!) { next_items_page(limit: 500, cursor: $cursor) { cursor '.$items.' } }', ['cursor' => $cursor])['next_items_page'] ?? [];
+            array_push($all, ...($next['items'] ?? []));
+            $cursor = $next['cursor'] ?? null;
+        }
+
+        $byTitle = [
+            'status' => 'Status', 'impacto' => 'Prioridade', 'prioridade' => 'Prioridade', 'priority' => 'Prioridade',
+            'tipo' => 'Tipo', 'origem' => 'Origem', 'modulo' => 'Modulo', 'esforco' => 'Esforco', 'cliente' => 'Cliente',
+            'estimativa (h)' => 'EstH', 'estimativa' => 'EstH', 'nome solicitante' => 'Solicitante', 'solicitante' => 'Solicitante',
+            'data do registro' => 'DataRegistro',
+        ];
+        $map = [];
+        foreach ($board['columns'] ?? [] as $column) {
+            $field = $byTitle[$this->normalizedTitle((string) $column['title'])] ?? (($column['type'] ?? '') === 'people' ? 'Responsavel' : null);
+            if ($field !== null && ! isset($map[$field]) && ($field !== 'Status' || $column['type'] === 'status')) {
+                $map[$field] = (string) $column['id'];
+            }
+        }
+
+        $rows = array_map(fn (array $item): array => [
+            'Id' => (string) $item['id'], 'Url' => (string) ($item['url'] ?? ''), 'Nome' => (string) $item['name'],
+            'Grupo' => (string) ($item['group']['title'] ?? ''), 'CriadoEm' => $item['created_at'] ?? null,
+            'Status' => $this->text($item, $map['Status'] ?? null),
+            'Prioridade' => $this->text($item, $map['Prioridade'] ?? null),
+            'Tipo' => $this->text($item, $map['Tipo'] ?? null),
+            'Origem' => $this->text($item, $map['Origem'] ?? null),
+            'Modulo' => $this->text($item, $map['Modulo'] ?? null),
+            'Esforco' => $this->text($item, $map['Esforco'] ?? null),
+            'Cliente' => trim($this->text($item, $map['Cliente'] ?? null)),
+            'EstH' => $this->hours($item, $map['EstH'] ?? null),
+            'Solicitante' => trim($this->text($item, $map['Solicitante'] ?? null)),
+            'DataRegistro' => $this->text($item, $map['DataRegistro'] ?? null),
+            'Responsavel' => $this->text($item, $map['Responsavel'] ?? null),
+        ], $all);
+
+        return [
+            'boardName' => (string) $board['name'],
+            'rows' => $rows,
+            'statusOptions' => $this->statusOptions(collect($board['columns'] ?? [])->firstWhere('id', $map['Status'] ?? null) ?? []),
+            'fields' => array_keys($map),
+            'syncedAt' => now()->toIso8601String(),
+        ];
     }
 
     /**
