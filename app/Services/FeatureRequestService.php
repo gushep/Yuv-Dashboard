@@ -45,6 +45,9 @@ class FeatureRequestService
     /** Campos de escolha e o nome usado nas mensagens. */
     private const CHOICES = ['origin' => 'Origem', 'type' => 'Tipo', 'module' => 'Módulo', 'motivation' => 'Motivação', 'mrr' => 'Possível MRR', 'severity' => 'Severidade'];
 
+    /** Campos opcionais, como no formulário de demandas do Monday: vazios, a coluna fica em branco. */
+    private const OPTIONAL = ['solution', 'requirements', 'mrr'];
+
     public function __construct(private MondayService $monday) {}
 
     /**
@@ -70,7 +73,7 @@ class FeatureRequestService
     {
         ['name' => $name, 'columns' => $columns] = $this->board($connection);
         foreach (self::CHOICES as $field => $label) {
-            if (! in_array($request[$field], $this->labels($columns[$field], $field), true)) {
+            if (! ($request[$field] === '' && in_array($field, self::OPTIONAL, true)) && ! in_array($request[$field], $this->labels($columns[$field], $field), true)) {
                 throw new RuntimeException("{$label} inválido(a) para o Funil de Demandas.");
             }
         }
@@ -85,13 +88,18 @@ class FeatureRequestService
         $values = [
             $columns['requester']['id'] => $request['requester'],
             $columns['description']['id'] => $text($columns['description'], $request['description']),
-            $columns['solution']['id'] => $text($columns['solution'], $request['solution']),
-            $columns['requirements']['id'] => $text($columns['requirements'], $request['requirements']),
             $columns['affected']['id'] => ['labels' => array_values($request['affected'])],
             $columns['status']['id'] => ['label' => self::STATUS],
         ];
+        foreach (['solution', 'requirements'] as $field) {
+            if ($request[$field] !== '') {
+                $values[$columns[$field]['id']] = $text($columns[$field], $request[$field]);
+            }
+        }
         foreach (array_keys(self::CHOICES) as $field) {
-            $values[$columns[$field]['id']] = ['label' => $request[$field]];
+            if ($request[$field] !== '') {
+                $values[$columns[$field]['id']] = ['label' => $request[$field]];
+            }
         }
         if ($columns['date'] !== null) {
             $values[$columns['date']['id']] = ['date' => now()->toDateString()];
@@ -121,7 +129,7 @@ class FeatureRequestService
     }
 
     /**
-     * Nome e colunas do Funil de Demandas usadas pelo formulário; todas são obrigatórias, menos a Data do registro.
+     * Nome e colunas do Funil de Demandas usadas pelo formulário; o quadro precisa ter todas, menos a Data do registro.
      *
      * @return array{name: string, columns: array<string, ?array{id: string, type: string, settings_str: string}>}
      */

@@ -73,18 +73,18 @@ window.NewTicket = (() => {
     'Média':'ganho importante, mas existe alternativa hoje',
     'Baixa':'conveniência ou ajuste de baixo impacto',
   };
-  /** Campos de escolha da demanda de melhoria: nome do campo, rótulo e orientação, na ordem do formulário de demandas. */
+  /** Campos de escolha da demanda de melhoria: nome do campo, rótulo, orientação e se é opcional, na ordem do formulário de demandas. */
   const FEATURE_SELECTS = [
     ['origin', 'Origem', 'De onde vem essa demanda?'],
     ['type', 'Tipo', 'Qual o tipo da demanda? Bug é Sustentação.'],
     ['module', 'Módulo', 'Qual módulo da plataforma?'],
     ['motivation', 'Motivação da demanda para o negócio', 'Qual a motivação da demanda para a Yuv?'],
-    ['mrr', 'Possível MRR', 'Existe receita dependendo desta demanda?'],
+    ['mrr', 'Possível MRR', 'Existe receita dependendo desta demanda?', true],
   ];
   const FEATURE_TEXTS = {
     description:['Descrição da demanda', 'Qual é o problema ou a necessidade? Quanto mais claro o problema, melhor a priorização e a solução.'],
-    solution:['Solução proposta', 'Você já imagina uma solução? Como resolver?'],
-    requirements:['Requisitos', 'Quais são os requisitos solicitados? Se não houver, escreva “Sem requisitos específicos”.'],
+    solution:['Solução proposta', 'Você já imagina uma solução? Como resolver?', true],
+    requirements:['Requisitos', 'Quais são os requisitos solicitados? (se houver)', true],
   };
   /** A descrição só conta como preenchida quando o modelo foi ajustado. */
   function descriptionChanged(text) { return text.trim() !== '' && text.trim() !== DESCRIPTION_TEMPLATE; }
@@ -212,18 +212,22 @@ window.NewTicket = (() => {
   function renderFeatureForm() {
     const options = state.featureOptions;
     const required = '<span class="nt-req">*</span>';
-    const select = ([name, label, hint]) => `<label class="nt-field"><span>${escape(label)} ${required}</span><span class="nt-hint">${escape(hint)}</span>
-        <select name="${name}" required ${options ? '' : 'disabled'}><option value="">${options ? 'Selecione' : state.featureLoading ? 'Carregando...' : 'Indisponível'}</option>
+    const mark = optional => optional ? '<span class="nt-optional">opcional</span>' : required;
+    const select = ([name, label, hint, optional]) => `<label class="nt-field"><span>${escape(label)} ${mark(optional)}</span><span class="nt-hint">${escape(hint)}</span>
+        <select name="${name}" ${optional ? '' : 'required'} ${options ? '' : 'disabled'}><option value="">${options ? (optional ? 'Não informado' : 'Selecione') : state.featureLoading ? 'Carregando...' : 'Indisponível'}</option>
           ${(options?.[name] || []).map(option => `<option>${escape(option)}</option>`).join('')}</select></label>`;
-    const text = name => `<label class="nt-field"><span>${escape(FEATURE_TEXTS[name][0])} ${required}</span><span class="nt-hint">${escape(FEATURE_TEXTS[name][1])}</span>
-        <textarea name="${name}" rows="4" maxlength="2000" required></textarea></label>`;
+    const text = name => {
+      const [label, hint, optional] = FEATURE_TEXTS[name];
+      return `<label class="nt-field"><span>${escape(label)} ${mark(optional)}</span><span class="nt-hint">${escape(hint)}</span>
+        <textarea name="${name}" rows="4" maxlength="2000" ${optional ? '' : 'required'}></textarea></label>`;
+    };
     return `<div class="nt-head"><div class="nt-title">Novo Ticket · Melhoria / Feature</div><button type="button" class="kpi-modal-close" aria-label="Fechar" data-close>✕</button></div>
       <form class="nt-form" novalidate>
         <div class="nt-fixed" aria-label="Valores definidos automaticamente">
           <span class="nt-chip">Quadro: <b>${escape(options?.boardName || 'Funil de Demandas')}</b></span><span class="nt-chip">Status: <b>Aguardando revisão</b></span>
           <button type="button" class="nt-link nt-change-kind" data-change-kind>← Trocar tipo</button>
         </div>
-        <p class="nt-feature-intro">Canal oficial para demandas, ideias e melhorias de produto. Descreva o problema ou a necessidade com detalhes: quanto mais claro o problema, melhor conseguimos priorizar e melhor será a solução. Todos os campos são obrigatórios.</p>
+        <p class="nt-feature-intro">Canal oficial para demandas, ideias e melhorias de produto. Descreva o problema ou a necessidade com detalhes: quanto mais claro o problema, melhor conseguimos priorizar e melhor será a solução. Campos com <span class="nt-req">*</span> são obrigatórios.</p>
         <label class="nt-field"><span>Título ${required}</span><span class="nt-hint">Resuma em uma linha a solicitação.</span>
           <input name="title" maxlength="255" required autocomplete="off" placeholder="Ex.: Filtro por modelo de equipamento na tela de alarmes">
         </label>
@@ -237,7 +241,7 @@ window.NewTicket = (() => {
             : `<span class="nt-muted">${state.featureLoading ? 'Carregando opções do Monday...' : 'Opções indisponíveis.'}</span>`}</div>
         </fieldset>
         ${text('solution')}
-        <div class="nt-field"><span>Evidências ${required}</span><span class="nt-hint">Prints, vídeos, documentos ou e-mails que sustentam a solicitação. Pelo menos um arquivo.</span>
+        <div class="nt-field"><span>Evidências ${mark(true)}</span><span class="nt-hint">Prints, vídeos, documentos ou e-mails que sustentam a solicitação.</span>
           <div class="nt-editor nt-evidence" data-drop>${renderAttach('📎 Cole (Ctrl+V), arraste ou <u>clique para adicionar evidências</u>')}</div>
         </div>
         ${text('requirements')}
@@ -335,9 +339,8 @@ window.NewTicket = (() => {
       solution:value('solution'), requirements:value('requirements'), motivation:value('motivation'), mrr:value('mrr'), severity:checked('severity'),
     };
     const labels = [['title', 'título'], ['requester', 'nome solicitante'], ['origin', 'origem'], ['type', 'tipo'], ['module', 'módulo'],
-      ['description', 'descrição'], ['affected', 'quem é afetado'], ['solution', 'solução proposta'], ['evidence', 'evidências (anexe pelo menos um arquivo)'],
-      ['requirements', 'requisitos'], ['motivation', 'motivação'], ['mrr', 'possível MRR'], ['severity', 'severidade']];
-    const missing = labels.filter(([name]) => name === 'evidence' ? !state.files.length : name === 'affected' ? !request.affected.length : !request[name]);
+      ['description', 'descrição'], ['affected', 'quem é afetado'], ['motivation', 'motivação'], ['severity', 'severidade']];
+    const missing = labels.filter(([name]) => name === 'affected' ? !request.affected.length : !request[name]);
     return {url:'/api/feature-requests', payload:request, missing};
   }
 
@@ -347,8 +350,7 @@ window.NewTicket = (() => {
     const {url, payload, missing} = collect();
     if (missing.length) {
       message(`Preencha: ${missing.map(([, label]) => label).join(', ')}.`);
-      const name = missing[0][0];
-      (name === 'evidence' ? current.querySelector('[data-file-input]')?.closest('label') : current.querySelector(`[name=${name}]`))?.focus();
+      current.querySelector(`[name=${missing[0][0]}]`)?.focus();
       return;
     }
     const tooBig = state.files.map(entry => entry.file).filter(file => file.size > uploadLimit());

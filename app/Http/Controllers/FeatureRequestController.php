@@ -30,6 +30,7 @@ class FeatureRequestController extends Controller
     public function store(Request $request, FeatureRequestService $requests): JsonResponse
     {
         $long = ['required', 'string', 'max:2000'];
+        $optionalLong = ['nullable', 'string', 'max:2000'];
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'requester' => ['required', 'string', 'max:255'],
@@ -39,10 +40,10 @@ class FeatureRequestController extends Controller
             'description' => $long,
             'affected' => ['required', 'array', 'min:1'],
             'affected.*' => ['string', 'max:255'],
-            'solution' => $long,
-            'requirements' => $long,
+            'solution' => $optionalLong,
+            'requirements' => $optionalLong,
             'motivation' => ['required', 'string', 'max:255'],
-            'mrr' => ['required', 'string', 'max:255'],
+            'mrr' => ['nullable', 'string', 'max:255'],
             'severity' => ['required', 'string', 'max:255'],
         ], [
             'title.required' => 'Informe o título.',
@@ -53,10 +54,7 @@ class FeatureRequestController extends Controller
             'module.required' => 'Selecione o módulo.',
             'description.required' => 'Descreva a demanda.',
             'affected.required' => 'Selecione quem é afetado.',
-            'solution.required' => 'Informe a solução proposta.',
-            'requirements.required' => 'Informe os requisitos.',
             'motivation.required' => 'Selecione a motivação para o negócio.',
-            'mrr.required' => 'Selecione o possível MRR.',
             'severity.required' => 'Selecione a severidade.',
             'description.max' => 'A descrição deve ter no máximo 2.000 caracteres.',
             'solution.max' => 'A solução proposta deve ter no máximo 2.000 caracteres.',
@@ -65,7 +63,11 @@ class FeatureRequestController extends Controller
 
         return $this->attempt(function () use ($requests, $data, $request): array {
             $trimmed = array_map(fn (mixed $value): mixed => is_string($value) ? trim($value) : $value, $data);
-            $created = $requests->create($this->connection(), [...$trimmed, 'affected' => array_values(array_unique($data['affected']))]);
+            $created = $requests->create($this->connection(), [
+                ...$trimmed,
+                'solution' => $trimmed['solution'] ?? '', 'requirements' => $trimmed['requirements'] ?? '', 'mrr' => $trimmed['mrr'] ?? '',
+                'affected' => array_values(array_unique($data['affected'])),
+            ]);
             Log::info('Demanda aberta pelo dashboard.', ['item' => $created['id'], 'user' => $request->user()->email]);
             $request->session()->push(self::OPENED_REQUESTS, $created['id']);
 

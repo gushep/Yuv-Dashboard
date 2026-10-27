@@ -63,7 +63,7 @@ class FeatureRequestTest extends TestCase
                 return false;
             }
             $this->assertSame(['board' => '999', 'name' => 'Filtro por modelo de equipamento'], array_intersect_key($request['variables'], ['board' => 1, 'name' => 1]));
-            $this->assertSame([
+            $this->assertEqualsCanonicalizing([
                 'text_req' => 'Joana CS',
                 'long_desc' => ['text' => 'Clientes não conseguem filtrar alarmes por modelo.'],
                 'long_sol' => ['text' => 'Adicionar o filtro na tela de alarmes.'],
@@ -83,14 +83,29 @@ class FeatureRequestTest extends TestCase
         });
     }
 
-    public function test_every_field_is_required_and_choices_must_exist_in_the_funnel(): void
+    public function test_solution_requirements_and_mrr_are_optional_and_left_blank_in_the_funnel(): void
+    {
+        Http::fakeSequence('api.monday.com/v2')
+            ->push($this->boardResponse())
+            ->push(['data' => ['create_item' => ['id' => '702', 'url' => '']]]);
+
+        $this->actingAs(User::factory()->withScreens(Screen::RawData)->canCreateTickets()->create())
+            ->postJson('/api/feature-requests', $this->request(['solution' => null, 'requirements' => '', 'mrr' => null]))->assertOk();
+
+        Http::assertSent(fn (Request $request): bool => str_starts_with((string) $request['query'], 'mutation')
+            && array_intersect_key(json_decode($request['variables']['values'], true), array_flip(['long_sol', 'long_req', 'mrr'])) === []);
+    }
+
+    public function test_required_fields_and_choices_must_exist_in_the_funnel(): void
     {
         Http::fake(['api.monday.com/v2' => Http::response($this->boardResponse())]);
         $this->actingAs(User::factory()->withScreens(Screen::RawData)->canCreateTickets()->create());
 
-        $this->postJson('/api/feature-requests', [])->assertUnprocessable()->assertJsonValidationErrors([
-            'title', 'requester', 'origin', 'type', 'module', 'description', 'affected', 'solution', 'requirements', 'motivation', 'mrr', 'severity',
-        ]);
+        $this->postJson('/api/feature-requests', [])->assertUnprocessable()
+            ->assertJsonValidationErrors(['title', 'requester', 'origin', 'type', 'module', 'description', 'affected', 'motivation', 'severity'])
+            ->assertJsonMissingValidationErrors(['solution', 'requirements', 'mrr']);
+        $this->postJson('/api/feature-requests', $this->request(['mrr' => 'Milhões']))
+            ->assertUnprocessable()->assertJsonPath('error', 'Possível MRR inválido(a) para o Funil de Demandas.');
         $this->postJson('/api/feature-requests', $this->request(['type' => 'Bug']))
             ->assertUnprocessable()->assertJsonPath('error', 'Tipo inválido(a) para o Funil de Demandas.');
         $this->postJson('/api/feature-requests', $this->request(['affected' => ['Todo mundo']]))
