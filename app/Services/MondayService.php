@@ -544,6 +544,23 @@ GRAPHQL;
     }
 
     /**
+     * Anexa um arquivo numa coluna de arquivos do card. O card precisa ser do quadro informado.
+     */
+    public function attachFileToColumn(string $token, string $boardId, string $itemId, string $columnId, UploadedFile $file): void
+    {
+        $this->boardItem($token, [$boardId], 'query ($ids: [ID!]!) { items(ids: $ids) { id board { id } } }', ['ids' => [$itemId]]);
+        $response = Http::timeout(120)
+            ->withHeaders(['Authorization' => $token, 'API-Version' => '2026-07'])
+            ->attach('variables[file]', fopen($file->getRealPath(), 'r'), $file->getClientOriginalName())
+            ->post('https://api.monday.com/v2/file', [
+                'query' => 'mutation ($file: File!) { add_file_to_column(item_id: '.$itemId.', column_id: '.json_encode($columnId).', file: $file) { id } }',
+            ]);
+        if (! $response->successful() || ! empty($response->json('errors')) || empty($response->json('data.add_file_to_column.id'))) {
+            throw new RuntimeException('Monday recusou o arquivo: '.($response->json('errors.0.message') ?? $response->json('error_message') ?? 'HTTP '.$response->status()).'.');
+        }
+    }
+
+    /**
      * Card buscado pela consulta informada, recusando cards de outros quadros que o token também enxerga.
      *
      * @param  array<string, mixed>  $variables

@@ -3,7 +3,7 @@
 .ticket-btn:hover{filter:brightness(.92)}
 .fire-toolbar .ticket-btn{margin-left:0;background:#7c3aed;border:1px solid #7c3aed;color:#fff}
 .fire-toolbar .ticket-btn:hover:not(:disabled){background:#6d28d9}
-.nt-modal{width:min(640px,calc(100vw - 32px))}
+.nt-modal{width:min(760px,calc(100vw - 32px))}
 .nt-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
 .nt-title{font-size:16px;font-weight:700}
 .nt-form{display:flex;flex-direction:column;gap:14px;padding:16px 18px 18px;overflow:auto}
@@ -61,4 +61,43 @@
 .nt-success{display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 22px 24px;text-align:center;font-size:13px;line-height:1.5}
 .nt-success-icon{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--green-bg);color:var(--green);font-size:22px;font-weight:800}
 .nt-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:4px}
-@media(max-width:620px){.nt-foot{flex-wrap:wrap}.nt-message{flex-basis:100%}}
+.nt-change-kind{margin-left:auto}
+.nt-field>.nt-hint{flex:none;line-height:1.4}
+.nt-prio-guide{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:8px 0 0;font-size:11.5px;font-weight:400;color:var(--text2)}
+.nt-prio-guide dt{font-weight:700;color:var(--text)}
+.nt-prio-guide dd{margin:0}
+.nt-choose{display:flex;flex-direction:column;gap:14px;padding:16px 18px 18px;overflow:auto}
+.nt-choose-intro{margin:0;font-size:12.5px;line-height:1.55;color:var(--text2);background:var(--blue-bg);border:1px solid var(--blue-bg2);border-radius:9px;padding:10px 12px}
+.nt-choose-intro b{color:var(--text)}
+.nt-kinds{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.nt-kind{display:flex;flex-direction:column;gap:10px;padding:14px;border:1.5px solid var(--border);border-radius:11px;background:var(--card);font-size:12px;line-height:1.45}
+.nt-kind[data-kind]{cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.nt-kind[data-kind]:hover{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-bg2)}
+.nt-kind-head{display:flex;align-items:center;gap:10px}
+.nt-kind-icon{font-size:22px}
+.nt-kind-name{font-size:14px;font-weight:700;color:var(--text)}
+.nt-kind-sub{font-size:11px;color:var(--muted)}
+.nt-kind-text{margin:0;color:var(--text2)}
+.nt-kind-list{border-radius:8px;padding:7px 10px}
+.nt-kind-list b{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+.nt-kind-list ul{margin:4px 0 0;padding-left:16px;color:var(--text)}
+.nt-kind-list.yes{background:#f0fdf4;border:1px solid #bbf7d0}
+.nt-kind-list.yes b{color:#15803d}
+.nt-kind-list.no{background:#fef2f2;border:1px solid #fecaca}
+.nt-kind-list.no b{color:#b91c1c}
+.nt-kind>button{margin-top:auto}
+.nt-feature-intro{margin:0;font-size:12px;line-height:1.5;color:var(--text2);background:var(--blue-bg);border:1px solid var(--blue-bg2);border-radius:9px;padding:9px 12px}
+.nt-field select{font:inherit;font-weight:400;font-size:13px;padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);outline:none;cursor:pointer}
+.nt-field select:focus{border-color:var(--blue);background:var(--card)}
+.nt-field textarea[name=description],.nt-field textarea[name=solution],.nt-field textarea[name=requirements]{line-height:1.5}
+.nt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.nt-grid .nt-hint{min-height:2.8em}
+.nt-checks{display:flex;flex-wrap:wrap;gap:8px}
+.nt-check{position:relative;cursor:pointer}
+.nt-check input{position:absolute;opacity:0;pointer-events:none}
+.nt-check span{display:inline-block;padding:6px 12px;border-radius:7px;border:1.5px solid var(--border);font-size:12px;font-weight:600;color:var(--text2);background:var(--card)}
+.nt-check input:checked+span{background:var(--blue-bg);border-color:var(--blue);color:var(--blue)}
+.nt-check input:focus-visible+span{outline:2px solid var(--blue);outline-offset:2px}
+.nt-evidence .nt-attach{border-top:0}
+.nt-evidence .nt-files:not(:empty)+.nt-attach{border-top:1px dashed var(--border)}
+@media(max-width:620px){.nt-foot{flex-wrap:wrap}.nt-message{flex-basis:100%}.nt-kinds{grid-template-columns:1fr}.nt-grid .nt-hint{min-height:0}}
