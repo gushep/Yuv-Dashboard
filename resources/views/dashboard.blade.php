@@ -549,6 +549,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           <input class="tsrch" type="text" id="rawSearch" placeholder="Buscar..." oninput="rawState().q=this.value;renderRaw()">
           <button type="button" class="raw-clear" id="rawClear" onclick="clearRawFilters()" hidden>Limpar filtros</button>
         </div>
+        <div class="bulk-bar" id="raw-bulk" role="region" aria-label="Alteração em massa" hidden></div>
         <div id="raw-table-view">
         <div class="tscroll">
           <table>
@@ -1622,7 +1623,7 @@ async function loadBoardTab(tab,force=false){
   board.loading=true;
   try{
     const result=await mondayRequest(`/api/board-tabs/${tab}${force?'?force=1':''}`);
-    Object.assign(board,{configured:result.configured,rows:result.rows||[],statusOptions:result.statusOptions||[],fields:result.fields||[],titles:result.titles||{},boardName:result.boardName||'',error:''});
+    Object.assign(board,{configured:result.configured,rows:result.rows||[],statusOptions:result.statusOptions||[],priorityOptions:result.priorityOptions||[],fields:result.fields||[],titles:result.titles||{},boardName:result.boardName||'',error:''});
   }catch(error){board.error=error.message;}
   finally{board.loading=false;board.loaded=true;}
   if(currentPage==='raw'){if(rawTab===tab) buildRawFilters();renderRaw();}
@@ -1739,6 +1740,27 @@ function showBoardMessage(title,message){
   document.getElementById('raw-roadmap-title').textContent=title;
   document.getElementById('raw-roadmap-msg').innerHTML=message;
 }
+/**
+ * Alteração em massa (tabela e lista): campos que o quadro da aba tem e as opções de cada um. Status e Prioridade
+ * usam os rótulos do Monday (sem eles, os valores presentes na aba); Cliente aceita texto livre com sugestões.
+ */
+function rawBulkContext(board,boardData){
+  const has=field=>!board||boardData.fields.includes(field);
+  const present=field=>[...new Set(rawDataset().map(x=>clean(x[field])).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const labels=(options,field)=>options?.length?options.map(o=>o.label):present(field);
+  return {
+    key:rawTab,
+    enabled:CAN_UPDATE_ITEMS&&rawView!=='board',
+    fields:[['Status','Status'],['Prioridade','Prioridade'],['Cliente','Cliente']].filter(([key])=>key==='Status'||has(key)).map(([key,label])=>({key,label:board?boardLabel(key,label):label})),
+    options:{
+      Status:board?boardStatuses().map(o=>o.label):labels(window.MONDAY_STATUS_OPTIONS,'Status'),
+      Prioridade:labels(board?boardData.priorityOptions:window.MONDAY_PRIORITY_OPTIONS,'Prioridade'),
+      Cliente:present('Cliente'),
+    },
+    source:board?boardData.rows:DATA,
+    onChange:()=>{buildRawFilters();renderRaw();},
+  };
+}
 function renderRaw(){
   document.querySelectorAll('#raw-tabs [data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===rawTab)));
   const spSel=document.getElementById('rawSpSel');
@@ -1798,15 +1820,17 @@ function renderRaw(){
   document.getElementById('rawGroupSel').closest('label').hidden=rawView==='table';
   document.getElementById('raw-table-view').hidden=rawView!=='table';
   document.getElementById('raw-board-view').hidden=rawView==='table';
+  BulkEdit.update(rawBulkContext(board,boardData),rows);
   if(rawView!=='table'){
     TaskViews.render(document.getElementById('raw-board-view'),rows,{view:rawView,groupBy:s.group,showSprint:!board&&sp==='all',canMove:CAN_UPDATE_ITEMS,
       mode:board?'board':'tasks',statusOptions:board?boardStatuses():null,source:board?boardData.rows:DATA});
     return;
   }
   const columns=board?boardColumns():TASK_COLUMNS;
-  document.getElementById('raw-head').innerHTML=`<tr>${columns.map(c=>`<th onclick="sortRaw('${c.key}')">${esc(c.label)}${s.sort.col===c.key?(s.sort.asc?' ▲':' ▼'):''}</th>`).join('')}</tr>`;
-  document.getElementById('raw-body').innerHTML=rows.map(x=>`<tr>${columns.map(c=>`<td${c.cls?` class="${c.cls}"`:''}${c.title?` title="${esc(x.Nome)}"`:''}>${c.cell(x)}</td>`).join('')}</tr>`).join('')
-    ||`<tr><td colspan="${columns.length}" class="nd">Nenhum item com esses filtros.</td></tr>`;
+  const bulk=BulkEdit.enabled();
+  document.getElementById('raw-head').innerHTML=`<tr>${bulk?'<th class="bulk-cell"></th>':''}${columns.map(c=>`<th onclick="sortRaw('${c.key}')">${esc(c.label)}${s.sort.col===c.key?(s.sort.asc?' ▲':' ▼'):''}</th>`).join('')}</tr>`;
+  document.getElementById('raw-body').innerHTML=rows.map(x=>`<tr>${bulk?`<td class="bulk-cell">${BulkEdit.checkbox(x)}</td>`:''}${columns.map(c=>`<td${c.cls?` class="${c.cls}"`:''}${c.title?` title="${esc(x.Nome)}"`:''}>${c.cell(x)}</td>`).join('')}</tr>`).join('')
+    ||`<tr><td colspan="${columns.length+(bulk?1:0)}" class="nd">Nenhum item com esses filtros.</td></tr>`;
   document.getElementById('raw-pgr').textContent=count;
 }
 
@@ -1834,6 +1858,7 @@ window.addEventListener('popstate',()=>{
 <script src="{{ URL::versioned('users.js') }}"></script>
 <script src="{{ URL::versioned('attachments.js') }}"></script>
 <script src="{{ URL::versioned('item-detail.js') }}"></script>
+<script src="{{ URL::versioned('bulk-edit.js') }}"></script>
 <script src="{{ URL::versioned('task-views.js') }}"></script>
 @can('create-tickets')
 <button type="button" id="nt-fab" class="nt-fab" aria-label="Nova solicitação" aria-expanded="false" title="Nova solicitação" data-user="{{ auth()->user()->name }}" onclick="NewTicket.toggleChat()">

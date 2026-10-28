@@ -67,6 +67,21 @@
 .tv-row-title{border:0;background:none;padding:0;font:inherit;font-weight:600;color:var(--text);text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tv-row-title:hover{color:var(--blue);text-decoration:underline}
 .tv-cell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)}
+.tv-row.tv-row-sel{grid-template-columns:18px minmax(0,2.4fr) minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr) 80px minmax(0,.8fr)}
+/* Alteração em massa: barra acima da tabela e da lista; ganha destaque quando há itens marcados. */
+.bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 14px 10px;padding:8px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);font-size:12px}
+.bulk-bar[hidden]{display:none}
+.bulk-bar.active{border-color:var(--blue-bg2);background:var(--blue-bg)}
+.bulk-all{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--text2);cursor:pointer;white-space:nowrap}
+.bulk-bar input[type="checkbox"],.bulk-sel{accent-color:var(--blue);cursor:pointer}
+.bulk-count{color:var(--blue);white-space:nowrap}
+.bulk-input{font:inherit;font-size:12px;background:var(--card);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--text);outline:none;min-width:150px}
+.bulk-input:focus{border-color:var(--blue)}
+.bulk-apply{border:0;border-radius:7px;background:var(--blue);color:#fff;font:inherit;font-size:12px;font-weight:600;padding:6px 14px;cursor:pointer}
+.bulk-apply:disabled{opacity:.55;cursor:default}
+.bulk-link{border:0;background:none;font:inherit;font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline}
+.bulk-warn{color:var(--red);font-weight:600}
+th.bulk-cell,td.bulk-cell{width:28px;padding-right:0}
 .tv-toast{position:fixed;left:50%;bottom:24px;z-index:80;transform:translate(-50%,20px);opacity:0;pointer-events:none;padding:10px 16px;border-radius:9px;background:var(--text);color:#fff;font-size:12.5px;box-shadow:var(--shadow-md);transition:opacity .2s,transform .2s}
 .tv-toast.show{opacity:1;transform:translate(-50%,0)}
 .tv-toast.success{background:var(--green)}
@@ -75,5 +90,8 @@
   .raw-board-view{padding:0 10px 10px}
   .tv-column{flex-basis:84vw;max-height:70vh}
   .tv-row{grid-template-columns:1fr auto;row-gap:4px}
+  .tv-row.tv-row-sel{grid-template-columns:18px 1fr auto}
+  .bulk-bar{margin:0 10px 10px}
+  .bulk-input{flex:1 1 140px}
   .tv-row .tv-cell,.tv-row>span:empty{display:none}
 }

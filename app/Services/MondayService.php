@@ -136,6 +136,8 @@ GRAPHQL;
             'labels' => $this->statusLabels($board['columns'] ?? []),
             // Rótulos da coluna Status na ordem e cor do Monday: colunas do Kanban da tela Tarefas.
             'statusOptions' => $this->statusOptions(collect($board['columns'] ?? [])->firstWhere('id', $map['Status'] ?? null) ?? []),
+            // Rótulos da Prioridade: opções da alteração em massa da tela Tarefas.
+            'priorityOptions' => $this->statusOptions(collect($board['columns'] ?? [])->firstWhere('id', $map['Prioridade'] ?? null) ?? []),
             'syncedAt' => now()->toIso8601String(),
         ];
     }
@@ -517,6 +519,125 @@ GRAPHQL;
     }
 
     /**
+     * Aplica o mesmo valor de Status, Prioridade ou Cliente a vários cards (alteração em massa da tela Tarefas).
+     * Cada quadro resolve a própria coluna; um card que falha não impede os demais.
+     *
+     * @param  array<string, array<string, string>>  $boards  quadro => colunas mapeadas nas Configurações (sem mapeamento: reconhecida pelo título)
+     * @param  list<string>  $itemIds
+     * @return array{updated: list<string>, failed: array<string, string>}
+     */
+    public function changeItemsField(string $token, array $boards, array $itemIds, string $field, string $value): array
+    {
+        $failed = [];
+        $changes = [];
+        $byBoard = [];
+        $query = 'query ($ids: [ID!]!) { items(ids: $ids, limit: 100) { id board { id columns { id title type settings_str } } } }';
+        foreach (array_chunk($itemIds, 100) as $chunk) {
+            $found = collect($this->query($token, $query, ['ids' => $chunk])['items'] ?? [])->keyBy(fn (array $item): string => (string) $item['id']);
+            foreach ($chunk as $itemId) {
+                $boardId = (string) ($found[$itemId]['board']['id'] ?? '');
+                if (! array_key_exists($boardId, $boards)) {
+                    $failed[$itemId] = 'Card não encontrado no quadro configurado.';
+
+                    continue;
+                }
+                $byBoard[$boardId] ??= $found[$itemId]['board']['columns'] ?? [];
+                $changes[$itemId] = $boardId;
+            }
+        }
+
+        $targets = [];
+        foreach ($byBoard as $boardId => $columns) {
+            try {
+                $targets[$boardId] = $this->fieldChange($columns, $boards[$boardId], $field, $value);
+            } catch (RuntimeException $exception) {
+                // Chaves numéricas viram inteiros no PHP; os valores de $changes continuam texto.
+                foreach (array_keys($changes, (string) $boardId, true) as $itemId) {
+                    $failed[(string) $itemId] = $exception->getMessage();
+                    unset($changes[$itemId]);
+                }
+            }
+        }
+
+        $updated = [];
+        foreach (array_chunk($changes, 25, true) as $chunk) {
+            try {
+                $this->changeColumnValues($token, $chunk, $targets);
+                array_push($updated, ...array_map('strval', array_keys($chunk)));
+            } catch (RuntimeException) {
+                // Com um card recusado o lote inteiro falha; refeito um a um, só o card com problema fica de fora.
+                foreach ($chunk as $itemId => $boardId) {
+                    try {
+                        $this->changeColumnValues($token, [$itemId => $boardId], $targets);
+                        $updated[] = (string) $itemId;
+                    } catch (RuntimeException $exception) {
+                        $failed[(string) $itemId] = $exception->getMessage();
+                    }
+                }
+            }
+        }
+
+        return ['updated' => $updated, 'failed' => $failed];
+    }
+
+    /**
+     * Coluna do quadro que guarda o campo e o valor no formato que o Monday espera para o tipo dela.
+     *
+     * @param  list<array<string, mixed>>  $columns
+     * @param  array<string, string>  $mapped
+     * @return array{column: string, value: string}
+     */
+    private function fieldChange(array $columns, array $mapped, string $field, string $value): array
+    {
+        $titles = ['Prioridade' => ['prioridade', 'impacto', 'priority', 'severidade'], 'Cliente' => ['cliente']][$field] ?? [];
+        $columnId = $field === 'Status' ? $this->statusColumnId($columns, $mapped['Status'] ?? null) : ($mapped[$field] ?? null);
+        $column = $columnId !== null
+            ? collect($columns)->firstWhere('id', $columnId)
+            : collect($columns)->first(fn (array $column): bool => in_array($this->normalizedTitle((string) ($column['title'] ?? '')), $titles, true));
+        if ($column === null) {
+            throw new RuntimeException("Este quadro não tem a coluna {$field}.");
+        }
+
+        $type = (string) ($column['type'] ?? '');
+        $labels = match ($type) {
+            'status' => array_column($this->statusOptions($column), 'label'),
+            'dropdown' => array_column(json_decode($column['settings_str'] ?? '', true)['labels'] ?? [], 'name'),
+            default => null,
+        };
+        if ($labels !== null && ! in_array($value, $labels, true)) {
+            throw new RuntimeException("Valor inválido para {$field} neste quadro.");
+        }
+
+        return ['column' => (string) $column['id'], 'value' => json_encode(match ($type) {
+            'status' => ['label' => $value],
+            'dropdown' => ['labels' => [$value]],
+            'long_text' => ['text' => $value],
+            'text' => $value,
+            default => throw new RuntimeException("A coluna {$field} deste quadro não pode ser alterada pelo dashboard."),
+        }, JSON_UNESCAPED_UNICODE)];
+    }
+
+    /**
+     * Grava várias colunas numa só chamada ao Monday, uma mutação com apelido por card.
+     *
+     * @param  array<string, string>  $items  card => quadro
+     * @param  array<string, array{column: string, value: string}>  $targets  quadro => coluna e valor
+     */
+    private function changeColumnValues(string $token, array $items, array $targets): void
+    {
+        $declarations = [];
+        $mutations = [];
+        $variables = [];
+        foreach (array_keys($items) as $index => $itemId) {
+            $target = $targets[$items[$itemId]];
+            $declarations[] = "\$b{$index}: ID!, \$i{$index}: ID!, \$c{$index}: String!, \$v{$index}: JSON!";
+            $mutations[] = "m{$index}: change_column_value(board_id: \$b{$index}, item_id: \$i{$index}, column_id: \$c{$index}, value: \$v{$index}) { id }";
+            $variables += ["b{$index}" => $items[$itemId], "i{$index}" => (string) $itemId, "c{$index}" => $target['column'], "v{$index}" => $target['value']];
+        }
+        $this->query($token, 'mutation ('.implode(', ', $declarations).') { '.implode(' ', $mutations).' }', $variables);
+    }
+
+    /**
      * Publica um comentário no card. O Monday registra o dono do token como autor, por isso o texto leva quem enviou pelo dashboard.
      * Os anexos seguem depois, um por requisição (attachFile), para cada envio caber no limite de upload do servidor.
      */
@@ -616,7 +737,7 @@ GRAPHQL;
      * com as colunas reconhecidas pelo título, sem mapeamento manual. Mesmo formato de linha das tarefas onde
      * os campos coincidem; `titles` guarda o nome real de cada coluna no quadro (ex.: Prioridade = "Severidade").
      *
-     * @return array{boardName: string, rows: list<array<string, mixed>>, statusOptions: list<array{label: string, color: ?string}>, fields: list<string>, titles: array<string, string>, syncedAt: string}
+     * @return array{boardName: string, rows: list<array<string, mixed>>, statusOptions: list<array{label: string, color: ?string}>, priorityOptions: list<array{label: string, color: ?string}>, fields: list<string>, titles: array<string, string>, syncedAt: string}
      */
     public function boardTab(string $token, string $boardId): array
     {
@@ -666,6 +787,7 @@ GRAPHQL;
             'boardName' => (string) $board['name'],
             'rows' => $rows,
             'statusOptions' => $this->statusOptions(collect($board['columns'] ?? [])->firstWhere('id', $map['Status'] ?? null) ?? []),
+            'priorityOptions' => $this->statusOptions(collect($board['columns'] ?? [])->firstWhere('id', $map['Prioridade'] ?? null) ?? []),
             'fields' => array_keys($map),
             'titles' => $titles,
             'syncedAt' => now()->toIso8601String(),

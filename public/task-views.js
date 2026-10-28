@@ -115,8 +115,10 @@ window.TaskViews = (() => {
 
   function renderList(container, rows, options) {
     const groups = group(rows, options.groupBy);
+    // Com a alteração em massa disponível, cada linha começa pela caixa de seleção.
+    const rowStart = item => BulkEdit.enabled() ? `<div class="tv-row tv-row-sel"><span>${BulkEdit.checkbox(item)}</span>` : '<div class="tv-row">';
     const row = item => boardMode()
-      ? `<div class="tv-row">
+      ? `${rowStart(item)}
           <button type="button" class="tv-row-title" ${item.Id ? `data-open="${escape(item.Id)}"` : 'disabled'} title="${escape(item.Nome)}">${escape(item.Nome)}</button>
           ${statusChip(item)}
           <span class="tv-cell" title="Cliente">${escape(item.Cliente || '—')}</span>
@@ -124,7 +126,7 @@ window.TaskViews = (() => {
           <span>${item.Prioridade ? prioBadge(item.Prioridade) : ''}</span>
           <span class="tv-cell tv-muted" title="Solicitante">${escape(item.Solicitante || item.Tipo || '')}</span>
         </div>`
-      : `<div class="tv-row">
+      : `${rowStart(item)}
           <button type="button" class="tv-row-title" ${item.Id ? `data-open="${escape(item.Id)}"` : 'disabled'} title="${escape(item.Nome)}">${escape(item.Nome)}</button>
           ${statusChip(item)}
           <span class="tv-cell" title="Responsável">${escape(devPeople(item).filter(person => !SprintRules.isExcludedPerson(person)).join(', ') || '—')}</span>
@@ -253,5 +255,5 @@ window.TaskViews = (() => {
     });
   });
 
-  return {render};
+  return {render, toast};
 })();

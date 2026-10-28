@@ -308,6 +308,43 @@ class MondayController extends Controller
     }
 
     /**
+     * Alteração em massa da tela Tarefas: o mesmo Status, Prioridade ou Cliente em vários cards. Responde quais foram
+     * alterados e o motivo de cada recusa; a ação fica no log da aplicação com o usuário do dashboard.
+     */
+    public function changeItems(Request $request, MondayService $monday): JsonResponse
+    {
+        $data = $request->validate([
+            'items' => ['required', 'array', 'min:1', 'max:200'],
+            'items.*' => ['required', 'string', 'regex:/^\d+$/', 'distinct'],
+            'field' => ['required', Rule::in(['Status', 'Prioridade', 'Cliente'])],
+            'value' => ['required', 'string', 'max:255'],
+        ], [
+            'items.required' => 'Selecione pelo menos um item.',
+            'items.max' => 'Altere no máximo 200 itens por vez.',
+            'value.required' => 'Informe o novo valor.',
+        ]);
+
+        return $this->attempt(function () use ($request, $monday, $data) {
+            $connection = $this->configuredConnection();
+            // Só o quadro de tarefas tem colunas mapeadas; nos quadros do Roadmap e do Backlog elas são reconhecidas pelo título.
+            $boards = array_fill_keys(array_keys($this->itemBoards($connection)), []);
+            $boards[(string) $connection->board_id] = array_filter(array_intersect_key($connection->column_map ?? [], array_flip(['Status', 'Prioridade', 'Cliente'])));
+            $result = $monday->changeItemsField($connection->token, $boards, $data['items'], $data['field'], $data['value']);
+            if ($result['updated']) {
+                Cache::forget(MondaySnapshotService::CACHE_KEY);
+                foreach (array_keys(self::BOARD_TABS) as $tab) {
+                    Cache::forget(self::BOARD_TAB_CACHE.$tab);
+                }
+            }
+            Log::info('Alteração em massa pelo dashboard.', [
+                'field' => $data['field'], 'value' => $data['value'], 'updated' => $result['updated'], 'failed' => $result['failed'], 'user' => $request->user()->email,
+            ]);
+
+            return ['field' => $data['field'], 'value' => $data['value'], ...$result];
+        });
+    }
+
+    /**
      * Comenta no card do Monday (ex.: resultado de QA). Sem texto, só é aceito quando há anexos a enviar em seguida.
      */
     public function postItemComment(Request $request, string $item, MondayService $monday): JsonResponse

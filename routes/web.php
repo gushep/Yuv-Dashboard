@@ -65,6 +65,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/control-tower', [MondayController::class, 'controlTower'])->middleware('screen:control-tower')->name('control-tower.show');
     Route::get('/api/burndown', [MondayController::class, 'burndown'])->middleware('screen:burndown')->name('burndown.show');
     Route::get('/api/board-tabs/{tab}', [MondayController::class, 'boardTab'])->whereIn('tab', ['roadmap', 'backlog'])->middleware('screen:raw')->name('board-tabs.show');
+    Route::post('/api/items/bulk', [MondayController::class, 'changeItems'])->middleware(['screen:raw', 'can:update-items'])->name('items.bulk');
     Route::middleware('screen:raw')->whereNumber('item')->group(function () {
         Route::get('/api/items/{item}', [MondayController::class, 'item'])->name('items.show');
         Route::get('/api/items/{item}/activity', [MondayController::class, 'itemActivity'])->name('items.activity');
