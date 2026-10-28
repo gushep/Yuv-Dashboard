@@ -1,0 +1,30 @@
+name: Pull request
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+  image:
+    uses: jimibrasil/yuv-ci-workflows/.github/workflows/image.yml@v2
+    secrets: inherit
+  pr-meta:
+    uses: jimibrasil/yuv-ci-workflows/.github/workflows/pr-meta.yml@v2
+  gate:
+    if: always()
+    needs: [tests, image, pr-meta]
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Require every check to pass
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1

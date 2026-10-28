@@ -82,8 +82,8 @@ Tenha PHP compatível com `composer.lock`, Composer e MySQL disponíveis. Para c
 1. Clone o repositório e instale as dependências:
 
    ```bash
-   git clone https://github.com/gushep/Yuv-Dashboard.git
-   cd Yuv-Dashboard
+   git clone git@github.com:jimibrasil/yuv-sprint-metrics.git
+   cd yuv-sprint-metrics
    composer install
    ```
 
@@ -124,22 +124,21 @@ O `.env` contém a configuração do ambiente e não deve ser versionado. No ser
 
 Atualmente, a configuração do quadro é compartilhada entre os usuários. O projeto não implementa organizações independentes, gestão de papéis ou OAuth da Monday.
 
-## Publicação (deploy)
+## Produção
 
-A produção (`https://yuvmetrics.novaconquista.org`, hospedagem Hostinger) acompanha a `main`. O workflow `.github/workflows/deploy.yml` roda os testes em todo PR e, a cada push na `main` com testes passando, entra no servidor por SSH e executa o `deploy.sh` da própria `main`:
+A imagem é construída a partir do `Dockerfile`, sobre `serversideup/php` com nginx e PHP-FPM, e serve `public/` na porta `8080`. O workflow `pipeline.yaml` roda os testes a cada push na `main`, publica a imagem com a tag do commit e cria a versão; o `pr.yaml` roda os testes e constrói a imagem em todo PR.
 
-1. Coloca o site em manutenção e atualiza o código para a `main` (`git reset --hard`; `.env`, `storage/` e `vendor/` não são versionados e ficam intactos).
-2. Roda `composer install --no-dev` somente quando o `composer.lock` mudou.
-3. Havendo migration pendente, faz backup do banco (`~/backups/yuv-metrics`, fora da pasta pública, mantendo os 15 mais recentes) e roda `php artisan migrate --force`.
-4. Limpa os caches do Laravel e tira o site da manutenção, mesmo se algum passo falhar.
+Para rodar em produção, a aplicação precisa de:
 
-A Hostinger entrega `.js` e `.css` por um CDN com cache de 7 dias. Por isso as páginas referenciam esses arquivos com `URL::versioned('arquivo.js')` (macro em `AppServiceProvider`), que acrescenta `?v=` com a data de modificação: a cada deploy, arquivos alterados ganham endereço novo e o navegador não fica com a versão antiga. Novos `.js`/`.css` devem ser incluídos da mesma forma.
+- **Processos:** a mesma imagem em três papéis. O web, com o comando padrão da imagem. O agendador, com `php artisan schedule:work`, sempre um só, porque ele dispara o `monday:refresh` a cada 15 minutos. E as migrations, com `php artisan migrate --force`, antes de o web subir em cada versão nova.
+- **Réplicas:** uma. A aplicação é de uso interno e o agendador não pode rodar duplicado.
+- **Estado:** todo no MySQL 8.4: usuários, sessões, cache, configuração da Monday e o histórico de atividades copiado. O histórico não se recupera da Monday depois de alguns meses, então o banco precisa de volume persistente e backup. O disco do container não guarda nada que precise sobreviver a um restart.
+- **Segredos:** `APP_KEY` e `DB_PASSWORD`. A `APP_KEY` precisa ser a mesma do banco que se restaura: é com ela que o token da Monday foi cifrado.
+- **Configuração:** `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL` com o endereço público em `https`, `LOG_CHANNEL=stderr`, `SESSION_SECURE_COOKIE=true` e as variáveis `DB_*`.
+- **Rede:** o TLS termina no proxy de entrada. A aplicação confia no `X-Forwarded-Proto` de qualquer origem, por isso o container não pode ser alcançado sem passar pelo proxy. A saída precisa alcançar `api.monday.com`.
+- **Saúde:** `GET /up` responde 200 quando a aplicação sobe.
 
-O nome do produto é **Yuv Sprint Metrics**. Endereço (`yuvmetrics.novaconquista.org`), pasta no servidor (`yuv-metrics`), backups, repositório (`Yuv-Dashboard`) e pacote Android (`br.com.yuv.metrics`) mantêm os identificadores técnicos antigos: trocá-los exige mudar DNS, a pipeline ou reinstalar o app.
-
-O código fica em dois repositórios. O principal é `gushep/Yuv-Dashboard`: nele são abertos os PRs e só ele publica em produção. `jimibrasil/yuv-sprint-metrics` (da Yuv) é uma cópia da `main`, atualizada a cada merge com `git push yuv main`; lá o workflow apenas roda os testes.
-
-O servidor usa o PHP 8.4 em `/opt/alt/php84/usr/bin/php` (o `php` padrão do terminal é mais antigo). A chave SSH do deploy fica no secret `SSH_PRIVATE_KEY` do ambiente `producao` no GitHub; host, porta, usuário, pasta e a identidade verificada do servidor (`SSH_KNOWN_HOSTS`) ficam nas variáveis do mesmo ambiente. Para publicar de novo sem um push, use **Run workflow** na aba Actions.
+As páginas referenciam `.js` e `.css` com `URL::versioned('arquivo.js')` (macro em `AppServiceProvider`), que acrescenta `?v=` com a data de modificação: a cada versão, arquivos alterados ganham endereço novo e o navegador não fica com a versão antiga. Novos `.js`/`.css` devem ser incluídos da mesma forma.
 
 ## Verificação
 
