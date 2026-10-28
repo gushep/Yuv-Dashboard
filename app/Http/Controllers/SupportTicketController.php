@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MondayConnection;
+use App\Services\BombeiroNotifier;
 use App\Services\MondayService;
 use App\Services\SupportTicketService;
 use Illuminate\Http\JsonResponse;
@@ -28,7 +29,7 @@ class SupportTicketController extends Controller
         ]);
     }
 
-    public function store(Request $request, SupportTicketService $tickets): JsonResponse
+    public function store(Request $request, SupportTicketService $tickets, BombeiroNotifier $notifier): JsonResponse
     {
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -45,12 +46,16 @@ class SupportTicketController extends Controller
             'priority.required' => 'Selecione a prioridade.',
         ]);
 
-        return $this->attempt(function () use ($tickets, $data, $request): array {
-            $ticket = $tickets->create($this->connection(), [
+        return $this->attempt(function () use ($tickets, $notifier, $data, $request): array {
+            $fields = [
                 'title' => trim($data['title']), 'description' => trim($data['description']), 'priority' => $data['priority'],
                 'client' => trim($data['client']),
-            ], $request->user()->name);
+            ];
+            $author = $request->user()->name;
+            $ticket = $tickets->create($this->connection(), $fields, $author);
             Log::info('Ticket aberto pelo dashboard.', ['item' => $ticket['id'], 'sprint' => $ticket['sprint']['number'], 'user' => $request->user()->email]);
+            // O aviso sai depois da resposta: quem abriu o ticket não espera pelo Teams.
+            defer(fn () => $notifier->ticketCreated($fields, $ticket, $author));
             if ($ticket['commentId'] !== null) {
                 $request->session()->push(self::OPENED_TICKETS, "{$ticket['id']}:{$ticket['commentId']}");
             }

@@ -107,6 +107,35 @@ class SupportTicketTest extends TestCase
         $this->assertNull(Cache::get(MondaySnapshotService::CACHE_KEY));
     }
 
+    public function test_new_ticket_is_announced_in_the_firefighter_channel_mentioning_its_group(): void
+    {
+        config(['services.notifier.url' => 'http://notifier.test', 'services.notifier.destination' => 'bombeiro']);
+        $this->today('2026-10-01');
+        Http::fake(['notifier.test/*' => Http::response(['key' => 'monday.card.901'], 201)]);
+        Http::fakeSequence('api.monday.com/v2')
+            ->push($this->columnsResponse())
+            ->push(['data' => ['create_item' => ['id' => '901', 'url' => 'https://monday.com/boards/123/pulses/901']]])
+            ->push(['data' => ['items' => [['id' => '901', 'board' => ['id' => '123']]]]])
+            ->push(['data' => ['create_update' => ['id' => '9901']]]);
+
+        $this->actingAs(User::factory()->withScreens(Screen::Firefighter)->canCreateTickets()->create(['name' => 'Davi Suporte']))
+            ->postJson('/api/tickets', $this->ticket())->assertOk();
+
+        Http::assertSent(fn (Request $request): bool => $request->method() === 'PUT'
+            && $request->url() === 'http://notifier.test/v1/messages/bombeiro/monday.card.901'
+            && $request['title'] === 'Novo ticket: Erro ao emitir relatório'
+            && $request['severity'] === 'warning'
+            && $request['mention'] === true
+            && $request['link'] === ['label' => 'Abrir no Monday', 'url' => 'https://monday.com/boards/123/pulses/901']
+            && $request['facts'] === [
+                ['name' => 'Cliente', 'value' => 'Transportadora Alfa'],
+                ['name' => 'Prioridade', 'value' => 'Alta'],
+                ['name' => 'Status', 'value' => 'Backlog'],
+                ['name' => 'Sprint', 'value' => 'Sprint 17'],
+                ['name' => 'Aberto por', 'value' => 'Davi Suporte'],
+            ]);
+    }
+
     public function test_description_images_are_attached_only_to_the_comment_of_a_ticket_opened_in_this_session(): void
     {
         $this->today('2026-10-01');

@@ -3,6 +3,7 @@
 use App\Models\MondayConnection;
 use App\Models\ReleaseSummary;
 use App\Models\User;
+use App\Services\BombeiroNotifier;
 use App\Services\MondayActivityImporter;
 use App\Services\MondaySnapshotService;
 use App\Services\SprintReleaseService;
@@ -56,7 +57,7 @@ Artisan::command('monday:import-activity', function (MondayActivityImporter $imp
     return 0;
 })->purpose('Copia o log de atividades do Monday para preservar o histórico das sprints');
 
-Artisan::command('monday:refresh', function (MondaySnapshotService $snapshots, MondayActivityImporter $importer) {
+Artisan::command('monday:refresh', function (MondaySnapshotService $snapshots, MondayActivityImporter $importer, BombeiroNotifier $notifier) {
     $connection = MondayConnection::current();
     if ($connection->board_id === '' || ! $connection->token) {
         $this->warn('Monday não configurado: nada a atualizar.');
@@ -74,9 +75,14 @@ Artisan::command('monday:refresh', function (MondaySnapshotService $snapshots, M
         return 1;
     }
     $this->info(count($snapshot['rows'])." registro(s) atualizados e {$imported['imported']} evento(s) novo(s) copiado(s).");
+    // Com o log em dia, as mudanças de status dos cards de Suporte vão para o canal do Bombeiro.
+    $notified = $notifier->statusChanges($connection, $snapshot);
+    if ($notified > 0) {
+        $this->info("{$notified} mudança(s) de status avisada(s) no canal do Bombeiro.");
+    }
 
     return 0;
-})->purpose('Atualiza os cards do Monday e copia o log de atividades, sem depender do dashboard aberto');
+})->purpose('Atualiza os cards do Monday, copia o log de atividades e avisa o canal do Bombeiro, sem depender do dashboard aberto');
 
 Schedule::command('monday:refresh')->everyFifteenMinutes()->withoutOverlapping(30);
 

@@ -28,6 +28,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // yuv-internal-notifier: avisos no Teams. Só alcançável de dentro do cluster (ou pela VPN); sem os dois valores, não avisa.
+    'notifier' => [
+        'url' => env('NOTIFIER_URL'),
+        'destination' => env('NOTIFIER_DESTINATION'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

@@ -442,6 +442,25 @@ GRAPHQL;
     }
 
     /**
+     * Nome de cada usuário do Monday pelo id.
+     *
+     * @param  list<string>  $userIds
+     * @return array<string, string>
+     */
+    public function userNames(string $token, array $userIds): array
+    {
+        if ($userIds === []) {
+            return [];
+        }
+        $names = [];
+        foreach ($this->query($token, 'query ($ids: [ID!]) { users(ids: $ids) { id name } }', ['ids' => $userIds])['users'] ?? [] as $user) {
+            $names[(string) $user['id']] = (string) $user['name'];
+        }
+
+        return $names;
+    }
+
+    /**
      * Histórico de alterações do card (log de atividades do Monday), do mais recente para o mais antigo.
      * Comentários ficam de fora: já aparecem com o texto completo em itemDetails().
      *
@@ -459,12 +478,7 @@ GRAPHQL;
         $userIds = collect($logs)->pluck('user_id')->merge(collect($decoded)->flatMap(fn (array $data): array => [
             ...$this->personIds($data['value'] ?? null), ...$this->personIds($data['previous_value'] ?? null),
         ]))->filter()->map(fn (mixed $id): string => (string) $id)->unique()->values()->all();
-        $names = [];
-        if ($userIds !== []) {
-            foreach ($this->query($token, 'query ($ids: [ID!]) { users(ids: $ids) { id name } }', ['ids' => $userIds])['users'] ?? [] as $user) {
-                $names[(string) $user['id']] = (string) $user['name'];
-            }
-        }
+        $names = $this->userNames($token, $userIds);
 
         $activity = [];
         foreach ($logs as $index => $log) {

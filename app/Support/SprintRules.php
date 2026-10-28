@@ -62,6 +62,27 @@ class SprintRules
         return in_array(self::normalize($status), self::NOT_STARTED, true);
     }
 
+    /** Status de QA (QA - Testes, QA - Reprovado, QA - Aprovado). */
+    public static function isInTest(?string $status): bool
+    {
+        return (bool) preg_match('/^qa\b/', self::normalize($status));
+    }
+
+    /**
+     * Etapa dos painéis do Bombeiro e da Sprint, espelho de SprintPanel.statusBucket.
+     *
+     * @return 'backlog'|'progress'|'test'|'done'
+     */
+    public static function stage(?string $status): string
+    {
+        return match (true) {
+            self::isDone($status) || self::isRemoved($status) => 'done',
+            self::isNotStarted($status) => 'backlog',
+            self::isInTest($status) => 'test',
+            default => 'progress',
+        };
+    }
+
     /**
      * Origem do card na sprint: suporte prevalece sobre a coluna Planejada, pois é medido pela reserva de suporte.
      *
