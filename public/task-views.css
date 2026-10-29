@@ -97,6 +97,13 @@ th.bulk-cell,td.bulk-cell{width:28px;padding-right:0}
 .pl-title:hover{color:var(--blue);text-decoration:underline}
 .pl-title:disabled{cursor:default;text-decoration:none;color:var(--text)}
 .pl-desc{margin:0;font-size:11.5px;line-height:1.45;color:var(--text2);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
+/* Exportar imagem (Visão 360° com um cliente no filtro). */
+.raw-export-btn{margin-left:auto;border:1px solid var(--blue);border-radius:7px;background:var(--card);color:var(--blue);font:inherit;font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer;white-space:nowrap}
+.raw-export-btn:hover{background:var(--blue-bg)}
+.raw-export-btn:disabled{opacity:.6;cursor:default}
+.raw-export-btn[hidden]{display:none}
+/* Com o botão visível, ele e o Novo Ticket ficam juntos à direita. */
+.raw-export-btn:not([hidden])~.ticket-btn{margin-left:0}
 .tv-toast{position:fixed;left:50%;bottom:24px;z-index:80;transform:translate(-50%,20px);opacity:0;pointer-events:none;padding:10px 16px;border-radius:9px;background:var(--text);color:#fff;font-size:12.5px;box-shadow:var(--shadow-md);transition:opacity .2s,transform .2s}
 .tv-toast.show{opacity:1;transform:translate(-50%,0)}
 .tv-toast.success{background:var(--green)}

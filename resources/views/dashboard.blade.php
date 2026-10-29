@@ -151,6 +151,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 18px 14px;box-shadow:var(--shadow);transition:box-shadow .2s}
 .card:hover{box-shadow:var(--shadow-md)}
 .card-head{margin-bottom:14px}
+.card-head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.g2>.card.full{grid-column:1/-1}
 .card-title{font-size:12.5px;font-weight:700;color:var(--text);letter-spacing:-.01em}
 .card-sub{font-size:11px;color:var(--muted);margin-top:3px}
 .cw{position:relative}
@@ -392,6 +394,13 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <div class="g2">
         <div class="card"><div class="card-head"><div class="card-title">Taxa de Conclusão por Sprint</div><div class="card-sub">% implementados · meta &gt;90%</div></div><div class="cw h200"><canvas id="cConclusion"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Volume por Sprint</div><div class="card-sub">planejados, não planejados e suporte · ao lado, quantos vieram de sprints anteriores</div></div><div class="cw h200"><canvas id="cVolume"></canvas></div></div>
+        <div class="card full"><div class="card-head card-head-row">
+            <div><div class="card-title">Volume por Sprint em horas</div><div class="card-sub" id="volume-hours-sub"></div></div>
+            <div class="raw-views" id="volume-hours-kind" role="group" aria-label="Horas do gráfico">
+              <button type="button" data-kind="RealH" aria-pressed="true" onclick="chooseVolumeHours('RealH')">Reais</button>
+              <button type="button" data-kind="EstH" aria-pressed="false" onclick="chooseVolumeHours('EstH')">Estimadas</button>
+            </div>
+          </div><div class="cw h220"><canvas id="cVolumeHours"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Taxa de Arrastamento</div><div class="card-sub">itens carregados de sprints anteriores · meta &lt;25%</div></div><div class="cw h200"><canvas id="cDrag"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Cobertura de Estimativa</div><div class="card-sub">% itens com estimativa preenchida · meta &gt;90%</div></div><div class="cw h200"><canvas id="cAdher"></canvas></div></div>
       </div>
@@ -515,6 +524,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
         <div class="tbar">
           <span class="tbar-title" id="raw-title">Tarefas</span>
           <span class="tcnt" id="raw-cnt"></span>
+          <button type="button" class="raw-export-btn" id="raw-export" hidden onclick="exportClientPipeline()" title="Baixa a esteira deste cliente como imagem, para enviar a ele">⤓ Exportar imagem</button>
           <div class="tfilters" id="raw-filters">
             <button class="tfbtn" id="rfbug" onclick="toggleRawFilter('bug')">🐛 Bug prod.</button>
             <button class="tfbtn" id="rfval" onclick="toggleRawFilter('val')">★ Melhorias</button>
@@ -1097,6 +1107,7 @@ function renderDashboard(){
   ]},options:{...volumeBase,interaction:{mode:'index',intersect:false},scales:{...volumeBase.scales,x:{...volumeBase.scales.x,stacked:true},y:{...volumeBase.scales.y,stacked:true}},
     plugins:{...volumeBase.plugins,tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y} (${pct(c.parsed.y,spMs[c.dataIndex].tot)}%)`,
       footer:items=>`Total: ${spMs[items[0].dataIndex].tot} itens`}}}}});
+  renderVolumeHours(spMs);
   mk('cDrag',{type:'bar',data:{labels:L,datasets:[
     {label:'Arrastamento (%)',data:spMs.map(m=>m.arrastPct),backgroundColor:spMs.map(m=>m.arrastPct>25?'rgba(220,38,38,.7)':'rgba(124,58,237,.6)'),borderRadius:4},
     {label:'Meta (25%)',data:SPRINTS.map(()=>25),type:'line',borderColor:'#d97706',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
@@ -1133,6 +1144,34 @@ function renderDashboard(){
   const both=all.filter(x=>x.BugProducao&&x.Retrabalho).length;
   const cleanAll=all.filter(x=>!x.BugProducao&&!x.Retrabalho).length;
   mk('cQuality',{type:'doughnut',data:{labels:['Limpos','Retrabalho','Bug produção','Ambos'],datasets:[{data:[cleanAll,onlyRework,onlyBug,both],backgroundColor:['#059669','#d97706','#dc2626','#7c3aed'],borderWidth:2,borderColor:'#fff'}]},options:donutOpts()});
+}
+
+/** Horas do gráfico Volume por Sprint em horas: reais (apontadas) ou estimadas; a escolha fica salva no navegador. */
+let volumeHoursKind=(()=>{try{return localStorage.getItem('yuv.dashboard.volumeHours')==='EstH'?'EstH':'RealH';}catch{return 'RealH';}})();
+function chooseVolumeHours(kind){
+  volumeHoursKind=kind;
+  try{localStorage.setItem('yuv.dashboard.volumeHours',kind);}catch{}
+  renderVolumeHours(SPRINTS.map(s=>spMetrics(s)));
+}
+/** Mesma divisão do Volume por Sprint, somando as horas de cada parte em vez de contar os cards. */
+function renderVolumeHours(spMs){
+  const field=volumeHoursKind,word=field==='RealH'?'reais':'estimadas';
+  document.querySelectorAll('#volume-hours-kind [data-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.kind===field)));
+  document.getElementById('volume-hours-sub').textContent=`horas ${word} de planejados, não planejados e suporte · ao lado, as dos itens vindos de sprints anteriores`;
+  const hours=rows=>f1(rows.reduce((sum,x)=>sum+toNum(x[field]),0));
+  const parts=spMs.map(m=>({planned:hours(m.lists.planned),unplanned:hours(m.lists.unplanned),support:hours(m.lists.support),drag:hours(m.lists.drag),
+    total:hours(m.lists.tot),missing:m.lists.tot.filter(x=>!(toNum(x[field])>0)).length,tot:m.tot}));
+  const base=bOpts('h');
+  const h=v=>`${v.toLocaleString('pt-BR',{maximumFractionDigits:1})}h`;
+  mk('cVolumeHours',{type:'bar',data:{labels:SPRINTS.map(s=>`S${s}`),datasets:[
+    {label:'Planejado',data:parts.map(p=>p.planned),backgroundColor:'rgba(29,110,245,.7)',borderRadius:4,stack:'s'},
+    {label:'Não Planejado',data:parts.map(p=>p.unplanned),backgroundColor:'rgba(220,38,38,.6)',borderRadius:4,stack:'s'},
+    {label:'Suporte',data:parts.map(p=>p.support),backgroundColor:'rgba(8,145,178,.65)',borderRadius:4,stack:'s'},
+    {label:'Vieram de sprints anteriores',data:parts.map(p=>p.drag),backgroundColor:'rgba(124,58,237,.6)',borderRadius:4,stack:'arrastados'},
+  ]},options:{...base,interaction:{mode:'index',intersect:false},scales:{...base.scales,x:{...base.scales.x,stacked:true},y:{...base.scales.y,stacked:true}},
+    plugins:{...base.plugins,tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${h(c.parsed.y)} (${pct(c.parsed.y,parts[c.dataIndex].total)}%)`,
+      // Cards sem horas preenchidas não entram na soma: o rodapé avisa quantos são, para não ler o total como completo.
+      footer:items=>{const p=parts[items[0].dataIndex];return [`Total: ${h(p.total)} ${word}`,p.missing?`${p.missing} de ${p.tot} itens sem horas ${word}`:''].filter(Boolean);}}}}}});
 }
 
 // ── SPRINT PAGE ───────────────────────────────────────────────────────────────
@@ -1660,6 +1699,16 @@ function overviewRows(){
   // Os cards "Adicionado ao Backlog" ainda servem para ligar a demanda à tarefa acima, mas não ficam na coluna Roadmap.
   return [...demands.values()].filter(x=>!(x.Etapa==='roadmap'&&SprintRules.normalize(x.Status)==='adicionado ao backlog'));
 }
+/** Esteira do cliente selecionado na Visão 360°, com os filtros aplicados: o que o botão Exportar imagem baixa. */
+let rawExport=null;
+async function exportClientPipeline(){
+  if(!rawExport) return;
+  const button=document.getElementById('raw-export');
+  button.disabled=true;button.textContent='Gerando imagem...';
+  try{await PipelineExport.download({...rawExport,stages:PIPELINE_STAGES,syncedAt:window.MONDAY_LAST_SYNC});}
+  catch(error){TaskViews.toast(`Não foi possível gerar a imagem: ${error.message}`,'error');}
+  finally{button.disabled=false;button.textContent='⤓ Exportar imagem';}
+}
 /** Cor do status de uma demanda da esteira: a do quadro de onde ela vem. */
 const overviewStatusColor=x=>(x.Quadro==='tarefas'?window.MONDAY_STATUS_OPTIONS||[]:RAW_BOARDS[x.Quadro].statusOptions).find(o=>o.label===x.Status)?.color||'#94a3b8';
 const rawLink=x=>x.Id?`<button type="button" class="raw-link" onclick="ItemDetail.open('${esc(x.Id)}')">${esc(x.Nome)}</button>`:esc(x.Nome);
@@ -1863,9 +1912,13 @@ function renderRaw(){
   document.getElementById('raw-cnt').textContent=missing.length?`${count} · sem ${missing.join(' e ')}`:count;
   // A Visão 360° é sempre a esteira: sem troca de visualização nem agrupamento.
   document.querySelector('.raw-viewbar').style.display=overview?'none':'';
+  // Exportar imagem: só com um cliente no filtro, para o CS enviar a esteira daquele cliente.
+  const exportClient=overview&&s.clients.size===1&&!s.clients.has(RAW_NO_CLIENT)?[...s.clients][0]:null;
+  document.getElementById('raw-export').hidden=!exportClient;
+  rawExport=exportClient?{client:exportClient,rows}:null;
   if(overview){
     // Com um cliente só no filtro, a esteira vira o quadro de demandas daquele cliente.
-    if(s.clients.size===1&&!s.clients.has(RAW_NO_CLIENT)) document.getElementById('raw-title').textContent=`Demandas ${[...s.clients][0]}`;
+    if(exportClient) document.getElementById('raw-title').textContent=`Demandas ${exportClient}`;
     document.getElementById('raw-table-view').hidden=true;
     document.getElementById('raw-board-view').hidden=false;
     BulkEdit.update(rawBulkContext(board,boardData),rows);
@@ -1920,6 +1973,7 @@ window.addEventListener('popstate',()=>{
 <script src="{{ URL::versioned('item-detail.js') }}"></script>
 <script src="{{ URL::versioned('bulk-edit.js') }}"></script>
 <script src="{{ URL::versioned('task-views.js') }}"></script>
+<script src="{{ URL::versioned('pipeline-export.js') }}"></script>
 @can('create-tickets')
 <button type="button" id="nt-fab" class="nt-fab" aria-label="Nova solicitação" aria-expanded="false" title="Nova solicitação" data-user="{{ auth()->user()->name }}" onclick="NewTicket.toggleChat()">
   <svg class="nt-fab-chat" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.2 3.6c-.5.4-1.3.1-1.3-.6V16A2.5 2.5 0 0 1 4 13.5z"/><path d="M12 6.5v6M9 9.5h6" class="nt-fab-plus"/></svg>
