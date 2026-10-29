@@ -391,7 +391,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <div class="sec"><span class="sec-label">entrega</span><div class="sec-line"></div></div>
       <div class="g2">
         <div class="card"><div class="card-head"><div class="card-title">Taxa de Conclusão por Sprint</div><div class="card-sub">% implementados · meta &gt;90%</div></div><div class="cw h200"><canvas id="cConclusion"></canvas></div></div>
-        <div class="card"><div class="card-head"><div class="card-title">Volume por Sprint</div><div class="card-sub">planejados vs não planejados</div></div><div class="cw h200"><canvas id="cVolume"></canvas></div></div>
+        <div class="card"><div class="card-head"><div class="card-title">Volume por Sprint</div><div class="card-sub">planejados, não planejados e suporte · ao lado, quantos vieram de sprints anteriores</div></div><div class="cw h200"><canvas id="cVolume"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Taxa de Arrastamento</div><div class="card-sub">itens carregados de sprints anteriores · meta &lt;25%</div></div><div class="cw h200"><canvas id="cDrag"></canvas></div></div>
         <div class="card"><div class="card-head"><div class="card-title">Cobertura de Estimativa</div><div class="card-sub">% itens com estimativa preenchida · meta &gt;90%</div></div><div class="cw h200"><canvas id="cAdher"></canvas></div></div>
       </div>
@@ -420,8 +420,6 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       </div>
       <div class="sec"><span class="sec-label">indicadores da sprint</span><div class="sec-line"></div></div>
       <div class="kpi-grid" id="sprint-kpis"></div>
-      <div class="kpi-tip" id="kpi-tip" role="tooltip" hidden></div>
-      <dialog class="kpi-modal" id="kpi-modal" aria-label="Tasks do indicador" onclick="if(event.target===this) this.close()"></dialog>
       <div class="sec"><span class="sec-label">composição</span><div class="sec-line"></div></div>
       <div class="g2">
         <div class="card"><div class="card-head"><div class="card-title">Por Status</div><div class="card-sub">distribuição dos itens</div></div><div class="cw h220"><canvas id="sStatus"></canvas></div></div>
@@ -504,6 +502,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <!-- RAW -->
     <div class="page" id="page-raw">
       <div class="raw-tabs" id="raw-tabs" role="tablist" aria-label="Listas de tarefas">
+        <button type="button" role="tab" data-tab="visao360" aria-selected="false" onclick="chooseRawTab('visao360')">Visão 360° <span class="raw-tab-count" id="raw-tab-count-visao360"></span></button>
         <button type="button" role="tab" data-tab="roadmap" aria-selected="false" onclick="chooseRawTab('roadmap')">Roadmap <span class="raw-tab-count" id="raw-tab-count-roadmap"></span></button>
         <button type="button" role="tab" data-tab="backlog" aria-selected="false" onclick="chooseRawTab('backlog')">Backlog <span class="raw-tab-count" id="raw-tab-count-backlog"></span></button>
         <button type="button" role="tab" data-tab="tarefas" aria-selected="true" onclick="chooseRawTab('tarefas')">Sprint atual <span class="raw-tab-count" id="raw-tab-count-tarefas"></span></button>
@@ -563,7 +562,6 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
         </div>
         <div id="raw-board-view" class="raw-board-view" hidden></div>
       </div>
-      <dialog class="kpi-modal task-modal" id="item-modal" aria-label="Detalhe do card"></dialog>
     </div>
 
     @include('forecast')
@@ -775,9 +773,12 @@ function sprintRangeLabel(){return SPRINTS.length?`S${SPRINTS[0]}–S${SPRINTS.a
 function toNum(v){if(!v) return 0; try{return parseFloat(String(v).replace(',','.'))||0;}catch{return 0;}}
 
 // ── METRICS ───────────────────────────────────────────────────────────────────
-/** Itens cancelados, descontinuados ou despriorizados saem do total e são contados como retirados do escopo. */
-function spMetrics(sp){
-  const all=filtSp(sp);
+function spMetrics(sp){return metricsOf(filtSp(sp));}
+/**
+ * Indicadores de um conjunto de cards: os de uma sprint (tela Sprints) ou os de todas (Dashboard).
+ * Itens cancelados, descontinuados ou despriorizados saem do total e são contados como retirados do escopo.
+ */
+function metricsOf(all){
   const d=all.filter(x=>!SprintRules.isRemoved(x.Status));
   const removed=all.length-d.length;
   const tot=d.length;
@@ -823,7 +824,8 @@ function spMetrics(sp){
     drag:d.filter(x=>isArrastado(x)),noEst:d.filter(x=>!(x.EstH>0)),bugs:d.filter(x=>x.BugProducao),
     valor:d.filter(x=>x.ValorAgregado),epic:d.filter(x=>x.Epico),
   };
-  return {lists,tot,done,waiting,inTest,inTestRejected,inTestApproved,open,removed,unplan,rework,bugs,valor,drag,withEst,epicItems,cleanScope,unplanCrit,unplanBug,support,supportDone,
+  const epicDone=d.filter(x=>x.Tipo==='Épico'&&SprintRules.isDone(x.Status)).length;
+  return {lists,tot,done,waiting,inTest,inTestRejected,inTestApproved,open,removed,unplan,rework,bugs,valor,drag,withEst,epicItems,epicDone,cleanScope,unplanCrit,unplanBug,support,supportDone,
     planned,plannedDone,unplanned,unplannedDone,unplannedCrit,unplannedBug,unplannedPct:pct(unplanned,tot),
     conclusao:pct(done,tot),devFinished,devFinishedPct:pct(devFinished,tot),reworkPct:pct(rework,tot),aderencia:pct(withEst,tot),
     arrastPct:pct(drag,tot),cleanPct:pct(cleanScope,sprintItems.length),epicPct:pct(epicItems,tot),
@@ -988,7 +990,7 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   else if(page==='sprint'&&SPRINTS.includes(sp)) renderSprint(sp);
   else if(page==='epicos') renderEpicos();
   else if(page==='time'){if(!timeInited)initTime();renderTime();}
-  else if(page==='raw'){if(hint) rawState(isBoardTab()?'tarefas':rawTab).sprint=String(hint);renderRaw();}
+  else if(page==='raw'){if(hint) rawState(isBoardTab()||isOverviewTab()?'tarefas':rawTab).sprint=String(hint);renderRaw();}
   else if(page==='bombeiro') window.Bombeiro?.enter(hint);
   else if(page==='sprint-panel') window.SprintPanel?.enter(hint);
   else if(page==='carousel') window.PanelCarousel?.enter(previousPage==='sprint-panel'?1:0,hint);
@@ -999,6 +1001,7 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   else if(page==='control-tower') window.ControlTower?.enter(hint);
   else if(page==='burndown') window.Burndown?.enter(hint);
   else if(page==='users') window.Users?.enter();
+  else if(page==='settings') window.enterMondaySettings?.();
   if(page==='carousel') scheduleMondayRefresh();
   if((previousPage==='bombeiro'&&page!=='bombeiro')||(previousPage==='sprint-panel'&&page!=='sprint-panel')||(previousPage==='carousel'&&page!=='carousel')) scheduleMondayRefresh();
 }
@@ -1064,79 +1067,49 @@ document.addEventListener('click',e=>{document.querySelectorAll('details.msel[op
 function renderDashboard(){
   if(!SPRINTS.length){document.getElementById('dash-kpis').innerHTML='<p class="empty-state">Nenhuma sprint carregada ainda. Configure a integração com o Monday em Configurações ou aguarde a atualização dos dados.</p>';return;}
   const all=DATA.filter(x=>x.Sprint&&!SprintRules.isRemoved(x.Status));
-  const allMs=SPRINTS.map(s=>spMetrics(s));
-  function avg(fn){const vs=allMs.map(fn);return vs.reduce((a,b)=>a+b,0)/vs.length;}
-
-  // Averages across all sprints
-  const avgConclusion=Math.round(avg(m=>m.conclusao));
-  const avgRework=Math.round(avg(m=>m.reworkPct));
-  const avgClean=Math.round(avg(m=>m.cleanPct));
-  const avgDrag=Math.round(avg(m=>m.arrastPct));
-  const avgAdher=Math.round(avg(m=>m.aderencia));
-  const avgEpicPct=Math.round(avg(m=>m.epicPct));
-  const avgWaiting=Math.round(avg(m=>m.waiting));
-  const avgOpen=Math.round(avg(m=>m.open));
-  const avgUnplan=Math.round(avg(m=>m.unplan));
-  const avgUnplanCrit=Math.round(avg(m=>m.unplanCrit));
-  const avgUnplanBug=Math.round(avg(m=>m.unplanBug));
-  const avgInterruptPct=Math.round(avg(m=>m.interruptPct));
-  const avgWithEst=Math.round(avg(m=>m.withEst));
-  const avgTot=Math.round(avg(m=>m.tot));
-  const avgEpicItems=Math.round(avg(m=>m.epicItems));
-
-  // Totals
-  const totalBugs=all.filter(x=>x.BugProducao).length;
-  const totalValor=all.filter(x=>x.ValorAgregado).length;
-  const epicDone=DATA.filter(x=>x.Tipo==='Épico'&&SprintRules.isDone(x.Status)).length;
-  const totalWaiting=all.filter(x=>SprintRules.isDoneNotDelivered(x.Status)).length;
-  const totalOpen=all.filter(x=>SprintRules.isOpen(x.Status)).length;
-  const totalUnplan=all.filter(x=>x.Planejada==='Não Planejado').length;
-  const totalUnplanCrit=all.filter(x=>x.Planejada==='Não Planejado'&&x.Prioridade==='Crítica').length;
-  const totalUnplanBug=all.filter(x=>x.Planejada==='Não Planejado'&&x.Tipo==='Bug').length;
-
-  const grid=document.getElementById('dash-kpis');
-  grid.innerHTML='';
-  const kpis=[
-    {lbl:'Total de Itens',val:all.length,sub:`${SPRINTS.length} sprints · média ${avgTot}/sprint`,cls:'neutral'},
-    {lbl:'Taxa de Conclusão',val:`${avgConclusion}%`,sub:`média · meta >90%`,cls:avgConclusion>=90?'green':'red'},
-    {lbl:'Feitos Não Entregues',val:totalWaiting,sub:`total · média ${avgWaiting}/sprint`,cls:avgWaiting<=2?'green':'yellow'},
-    {lbl:'Não Entregues',val:totalOpen,sub:`total · média ${avgOpen}/sprint`,cls:avgOpen<=3?'green':'yellow'},
-    {lbl:'Não Planejados',val:totalUnplan,sub:`total · ${totalUnplanCrit} críticos · ${totalUnplanBug} bugs`,cls:avgInterruptPct<=20?'green':'red'},
-    {lbl:'Retrabalho',val:`${avgRework}%`,sub:`média · meta <10%`,cls:avgRework<=10?'green':'red'},
-    {lbl:'Índice Escopo Limpo',val:`${avgClean}%`,sub:`média · meta >60%`,cls:avgClean>=60?'green':'red'},
-    {lbl:'Taxa de Arrastamento',val:`${avgDrag}%`,sub:`média · meta <25%`,cls:avgDrag<=25?'green':'red'},
-    {lbl:'Cobertura de Estimativa',val:`${avgAdher}%`,sub:`média · meta >90%`,cls:avgAdher>=90?'green':'red'},
-    {lbl:'Carga de Épicos',val:`${avgEpicPct}%`,sub:`média · ${epicDone} épico(s) concluído(s)`,cls:'neutral'},
-  ];
-  kpis.forEach(k=>{
-    const div=document.createElement('div');div.className=`kpi ${k.cls}`;
-    div.innerHTML=`<div class="kpi-accent"></div><div class="kpi-label">${k.lbl}</div><div class="kpi-val">${k.val}</div><div class="kpi-sub">${k.sub}</div>`;
-    grid.appendChild(div);
-  });
+  // Os mesmos indicadores da tela Sprints, sobre os cards de todas as sprints, com descrição e lista de tasks.
+  const m=metricsOf(DATA.filter(x=>x.Sprint));
+  const kpis=sprintKpis(m);
+  kpis[0].sub=`${SPRINTS.length} sprints · média ${Math.round(m.tot/SPRINTS.length)}/sprint · ${m.planned} planejados · ${m.unplanned} não planejados · ${m.support} suporte · ${m.removed} retirados do escopo`;
+  renderKpiGrid(document.getElementById('dash-kpis'),kpis,m,{scope:`Todas as sprints (${sprintRangeLabel()})`,showSprint:true});
   const L=SPRINTS.map(s=>`S${s}`);
   const spMs=SPRINTS.map(s=>spMetrics(s));
+  /** Gráfico em %: ao passar o mouse, o ponto da sprint mostra também a conta (ex.: 12 de 27 implementados). */
+  const pctOpts=(describe,yRange=null)=>{
+    const base=bOpts('%');
+    return {...base,scales:yRange?{...base.scales,y:{...base.scales.y,...yRange}}:base.scales,
+      plugins:{...base.plugins,tooltip:{callbacks:{label:c=>`${c.dataset.label||''}: ${c.parsed.y}%`,
+        afterLabel:c=>c.datasetIndex===0?describe(spMs[c.dataIndex]):''}}}};
+  };
   // Charts entrega
   mk('cConclusion',{type:'line',data:{labels:L,datasets:[
     {label:'Conclusão (%)',data:spMs.map(m=>m.conclusao),borderColor:'#1d6ef5',backgroundColor:'rgba(29,110,245,.07)',fill:true,tension:.4,pointBackgroundColor:'#1d6ef5',pointBorderColor:'#fff',pointRadius:5,pointBorderWidth:2},
     {label:'Meta (90%)',data:SPRINTS.map(()=>90),borderColor:'#dc2626',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
-  ]},options:{...bOpts('%'),scales:{...bOpts('%').scales,y:{...bOpts('%').scales.y,min:0,max:100}}}});
+  ]},options:pctOpts(m=>`${m.done} de ${m.tot} itens implementados`,{min:0,max:100})});
+  // Mesma divisão do indicador Total de Itens: planejados e não planejados fora do suporte, mais o suporte. Ao lado da
+  // pilha, em barra própria, quantos itens da sprint vieram de sprints anteriores (a Taxa de Arrastamento em números).
+  const volumeBase=bOpts();
   mk('cVolume',{type:'bar',data:{labels:L,datasets:[
-    {label:'Planejado',data:spMs.map(m=>m.tot-m.unplan),backgroundColor:'rgba(29,110,245,.7)',borderRadius:4,stack:'s'},
-    {label:'Não Planejado',data:spMs.map(m=>m.unplan),backgroundColor:'rgba(220,38,38,.6)',borderRadius:4,stack:'s'},
-  ]},options:{...bOpts(),scales:{...bOpts().scales,x:{...bOpts().scales.x,stacked:true},y:{...bOpts().scales.y,stacked:true}}}});
+    {label:'Planejado',data:spMs.map(m=>m.planned),backgroundColor:'rgba(29,110,245,.7)',borderRadius:4,stack:'s'},
+    {label:'Não Planejado',data:spMs.map(m=>m.unplanned),backgroundColor:'rgba(220,38,38,.6)',borderRadius:4,stack:'s'},
+    {label:'Suporte',data:spMs.map(m=>m.support),backgroundColor:'rgba(8,145,178,.65)',borderRadius:4,stack:'s'},
+    {label:'Vieram de sprints anteriores',data:spMs.map(m=>m.drag),backgroundColor:'rgba(124,58,237,.6)',borderRadius:4,stack:'arrastados'},
+  ]},options:{...volumeBase,interaction:{mode:'index',intersect:false},scales:{...volumeBase.scales,x:{...volumeBase.scales.x,stacked:true},y:{...volumeBase.scales.y,stacked:true}},
+    plugins:{...volumeBase.plugins,tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y} (${pct(c.parsed.y,spMs[c.dataIndex].tot)}%)`,
+      footer:items=>`Total: ${spMs[items[0].dataIndex].tot} itens`}}}}});
   mk('cDrag',{type:'bar',data:{labels:L,datasets:[
     {label:'Arrastamento (%)',data:spMs.map(m=>m.arrastPct),backgroundColor:spMs.map(m=>m.arrastPct>25?'rgba(220,38,38,.7)':'rgba(124,58,237,.6)'),borderRadius:4},
     {label:'Meta (25%)',data:SPRINTS.map(()=>25),type:'line',borderColor:'#d97706',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
-  ]},options:{...bOpts('%')}});
+  ]},options:pctOpts(m=>`${m.drag} de ${m.tot} itens vieram de sprints anteriores`)});
   mk('cAdher',{type:'line',data:{labels:L,datasets:[
     {label:'Cobertura de estimativa (%)',data:spMs.map(m=>m.aderencia),borderColor:'#0d9488',backgroundColor:'rgba(13,148,136,.07)',fill:true,tension:.4,pointBackgroundColor:'#0d9488',pointBorderColor:'#fff',pointRadius:5,pointBorderWidth:2},
     {label:'Meta (90%)',data:SPRINTS.map(()=>90),borderColor:'#dc2626',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
-  ]},options:{...bOpts('%'),scales:{...bOpts('%').scales,y:{...bOpts('%').scales.y,min:0,max:100}}}});
+  ]},options:pctOpts(m=>`${m.withEst} de ${m.tot} itens com estimativa`,{min:0,max:100})});
   // Charts qualidade
   mk('cRework',{type:'bar',data:{labels:L,datasets:[
     {label:'Retrabalho (%)',data:spMs.map(m=>m.reworkPct),backgroundColor:spMs.map(m=>m.reworkPct>10?'rgba(220,38,38,.7)':'rgba(124,58,237,.6)'),borderRadius:4},
     {label:'Meta (10%)',data:SPRINTS.map(()=>10),type:'line',borderColor:'#d97706',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
-  ]},options:{...bOpts('%')}});
+  ]},options:pctOpts(m=>`${m.rework} de ${m.tot} itens com retrabalho`)});
   mk('cBugs',{type:'bar',data:{labels:L,datasets:[
     {label:'Bugs em produção',data:SPRINTS.map(s=>filtSp(s).filter(x=>x.BugProducao).length),backgroundColor:SPRINTS.map(s=>filtSp(s).filter(x=>x.BugProducao).length>0?'rgba(220,38,38,.7)':'rgba(22,163,74,.5)'),borderRadius:4},
   ]},options:{...bOpts('',0)}});
@@ -1146,10 +1119,10 @@ function renderDashboard(){
   mk('cClean',{type:'line',data:{labels:L,datasets:[
     {label:'Escopo limpo (%)',data:spMs.map(m=>m.cleanPct),borderColor:'#059669',backgroundColor:'rgba(5,150,105,.07)',fill:true,tension:.4,pointBackgroundColor:'#059669',pointBorderColor:'#fff',pointRadius:5,pointBorderWidth:2},
     {label:'Meta (60%)',data:SPRINTS.map(()=>60),borderColor:'#dc2626',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
-  ]},options:{...bOpts('%'),scales:{...bOpts('%').scales,y:{...bOpts('%').scales.y,min:0,max:100}}}});
+  ]},options:pctOpts(m=>`${m.cleanScope} de ${m.planned+m.unplanned} itens planejados (sem suporte)`,{min:0,max:100})});
   mk('cEpicLoad',{type:'bar',data:{labels:L,datasets:[
     {label:'Tasks de épico (%)',data:spMs.map(m=>m.epicPct),backgroundColor:'rgba(217,119,6,.6)',borderRadius:4},
-  ]},options:{...bOpts('%')}});
+  ]},options:pctOpts(m=>`${m.epicItems} de ${m.tot} itens ligados a épicos`)});
   // Composição
   const typeMap={};
   all.forEach(x=>{typeMap[x.Tipo]=(typeMap[x.Tipo]||0)+1;});
@@ -1164,10 +1137,10 @@ function renderDashboard(){
 
 // ── SPRINT PAGE ───────────────────────────────────────────────────────────────
 /**
- * O que cada indicador da sprint apresenta, como é calculado e quais tasks lista ao clicar.
- * Cancelado, Descontinuado e Despriorizado ficam fora de todos os indicadores.
+ * O que cada indicador apresenta, como é calculado e quais tasks lista ao clicar. Valem para uma sprint (tela Sprints)
+ * e para todas (Dashboard). Cancelado, Descontinuado e Despriorizado ficam fora de todos os indicadores.
  */
-const SPRINT_KPI_INFO={
+const KPI_INFO={
   'Total de Itens':{text:'Quantidade de cards da sprint, separada em planejados, não planejados e suporte.',criteria:'Todos os cards com esta sprint no Monday, exceto os retirados do escopo (Cancelado, Descontinuado e Despriorizado).',list:'tot'},
   'Taxa de Conclusão':{text:'Quanto da sprint já foi implementado.',criteria:'Cards com status Implementado ÷ total de itens. Aguardando Deploy e QA - Aprovado ainda não contam. Meta: acima de 90%.',list:'done',listTitle:'Tasks implementadas'},
   'Desenvolvimento Concluído':{text:'Quanto da sprint já saiu do desenvolvimento: entregue ou em QA.',criteria:'Status Implementado, Aguardando Deploy, QA - Testes ou QA - Aprovado ÷ total de itens. QA - Reprovado não conta, porque o card volta ao desenvolvimento.',list:'devFinished',listTitle:'Tasks com desenvolvimento concluído'},
@@ -1196,18 +1169,19 @@ function showKpiTip(card,info){
 }
 function hideKpiTip(){const tip=document.getElementById('kpi-tip');if(tip) tip.hidden=true;}
 window.addEventListener('scroll',hideKpiTip,true);
-function openKpiModal(label,info,items,sp){
+/** Tasks de um indicador. O nome abre o detalhe do card aqui mesmo (ou o Monday, para quem não acessa a tela Tarefas). */
+function openKpiModal(label,info,items,{scope,showSprint=false}){
   const modal=document.getElementById('kpi-modal');
   const title=info.listTitle||label;
-  const name=x=>x.Url?`<a href="${esc(x.Url)}" target="_blank" rel="noopener">${esc(x.Nome)}</a>`:esc(x.Nome);
   modal.innerHTML=`<div class="kpi-modal-head">
-      <div><div class="kpi-modal-title">${esc(title)} <span class="tcnt">${items.length}</span></div><div class="kpi-modal-sub">Sprint ${esc(sp)} · ${esc(info.criteria)}</div></div>
+      <div><div class="kpi-modal-title">${esc(title)} <span class="tcnt">${items.length}</span></div><div class="kpi-modal-sub">${esc(scope)} · ${esc(info.criteria)}</div></div>
       <button type="button" class="kpi-modal-close" aria-label="Fechar" onclick="document.getElementById('kpi-modal').close()">✕</button>
     </div>
     <div class="kpi-modal-body"></div>`;
   const hours=v=>{const n=parseFloat(String(v??'').replace(',','.'));return Number.isFinite(n)&&n>0?n:null;};
   KpiTable.render(modal.querySelector('.kpi-modal-body'),{rows:items,columns:[
-    {label:'Item',html:x=>`<span title="${esc(x.Nome)}">${name(x)}</span>`,value:x=>x.Nome},
+    {label:'Item',html:x=>`<span title="${esc(x.Nome)}">${ItemDetail.link({id:x.Id,name:x.Nome,url:x.Url})}</span>`,value:x=>x.Nome},
+    showSprint&&{label:'Sprint',html:x=>`S${esc(x.Sprint)}`,className:'cm',value:x=>`Sprint ${x.Sprint}`,sort:x=>Number(x.Sprint)||0,filter:true},
     {label:'Responsável',html:x=>esc(x.Responsavel)||'—',className:'cm',value:x=>x.Responsavel,filter:devPeople,empty:'Sem responsável'},
     {label:'Status',html:x=>stBadge(x.Status),value:x=>x.Status,filter:true,empty:'Sem status'},
     {label:'Tipo',html:x=>`<span class="b bo">${esc(x.Tipo)||'—'}</span>`,value:x=>x.Tipo,filter:true,empty:'Sem tipo'},
@@ -1215,18 +1189,15 @@ function openKpiModal(label,info,items,sp){
     {label:'Prioridade',html:x=>prioBadge(x.Prioridade),value:x=>x.Prioridade,sort:x=>KpiTable.priorityRank(x.Prioridade),filter:true,empty:'Sem prioridade'},
     {label:'Est(h)',html:x=>x.EstH||'—',className:'cm',value:x=>x.EstH,sort:x=>hours(x.EstH)},
     {label:'Real(h)',html:x=>x.RealH||'—',className:'cm',value:x=>x.RealH,sort:x=>hours(x.RealH)},
-  ]});
+  ].filter(Boolean)});
   modal.showModal();
 }
-function renderSprint(sp){
-  const d=filtSp(sp);
-  const m=spMetrics(sp);
-  const prevSp=SPRINTS[SPRINTS.indexOf(sp)-1]||null;
-  const prevM=prevSp?spMetrics(prevSp):null;
-  const epicDone=d.filter(x=>x.Tipo==='Épico'&&SprintRules.isDone(x.Status));
-  const grid=document.getElementById('sprint-kpis');
-  grid.innerHTML='';
-  const kpis=[
+/**
+ * Cartões de indicadores, os mesmos na tela Sprints e no Dashboard. Com a sprint anterior (prevM), cada um mostra a
+ * tendência em relação a ela.
+ */
+function sprintKpis(m,prevM=null,prevSp=null){
+  return [
     {lbl:'Total de Itens',val:m.tot,sub:`${m.planned} planejados · ${m.unplanned} não planejados · ${m.support} suporte · ${m.removed} retirados do escopo`,cls:'neutral',trend:null},
     {lbl:'Taxa de Conclusão',val:`${m.conclusao}%`,sub:`${m.done}/${m.tot} · meta >90%`,cls:m.conclusao>=90?'green':'red',trend:prevM?trendHtml(m.conclusao,prevM.conclusao,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Desenvolvimento Concluído',val:`${m.devFinishedPct}%`,sub:`${m.devFinished}/${m.tot} · implementados + em QA`,cls:'blue',trend:prevM?trendHtml(m.devFinishedPct,prevM.devFinishedPct,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
@@ -1242,15 +1213,19 @@ function renderSprint(sp){
     {lbl:'Cobertura de Estimativa',val:`${m.aderencia}%`,sub:`${m.withEst}/${m.tot} itens com estimativa · meta >90%`,cls:m.aderencia>=90?'green':'red',trend:prevM?trendHtml(m.aderencia,prevM.aderencia,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Bugs em Produção',val:m.bugs,sub:m.bugs===0?'nenhum bug registrado':'itens com bug após deploy',cls:m.bugs===0?'green':'red',trend:prevM?trendHtml(m.bugs,prevM.bugs,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
     {lbl:'Melhorias',val:m.valor,sub:`itens de melhoria`,cls:'blue',trend:prevM?trendHtml(m.valor,prevM.valor,true):null,meta:prevSp?`vs sprint ${prevSp}`:null},
-    {lbl:'Carga de Épicos',val:`${m.epicPct}%`,sub:`${m.epicItems} tasks${epicDone.length?` · ${epicDone.length} épico(s) concluído(s)`:''}`,cls:'neutral',trend:prevM?trendHtml(m.epicPct,prevM.epicPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
+    {lbl:'Carga de Épicos',val:`${m.epicPct}%`,sub:`${m.epicItems} tasks${m.epicDone?` · ${m.epicDone} épico(s) concluído(s)`:''}`,cls:'neutral',trend:prevM?trendHtml(m.epicPct,prevM.epicPct,false):null,meta:prevSp?`vs sprint ${prevSp}`:null},
   ];
+}
+/** Desenha os cartões com a descrição no hover e, ao clicar, a lista das tasks de cada indicador. */
+function renderKpiGrid(grid,kpis,m,modalOptions){
+  grid.innerHTML='';
   kpis.forEach(k=>{
-    const info=SPRINT_KPI_INFO[k.lbl];
+    const info=KPI_INFO[k.lbl];
     const div=document.createElement('div');div.className=`kpi ${k.cls}${info?' kpi-clickable':''}`;
     const valFs=String(k.val).length>8?'font-size:18px':'';
     div.innerHTML=`<div class="kpi-accent"></div><div class="kpi-label">${k.lbl}</div><div class="kpi-val" style="${valFs}">${k.val}</div><div class="kpi-sub">${k.sub}</div>${k.trend||''}${k.meta&&k.trend?`<div class="kpi-meta">${k.meta}</div>`:''}`;
     if(info){
-      const open=()=>{hideKpiTip();openKpiModal(k.lbl,info,m.lists[info.list]||[],sp);};
+      const open=()=>{hideKpiTip();openKpiModal(k.lbl,info,m.lists[info.list]||[],modalOptions);};
       div.tabIndex=0;div.setAttribute('role','button');div.setAttribute('aria-label',`${k.lbl}: ${info.text} Clique para ver as tasks.`);
       div.addEventListener('mouseenter',()=>showKpiTip(div,info));
       div.addEventListener('mouseleave',hideKpiTip);
@@ -1259,6 +1234,13 @@ function renderSprint(sp){
     }
     grid.appendChild(div);
   });
+}
+function renderSprint(sp){
+  const d=filtSp(sp);
+  const m=spMetrics(sp);
+  const prevSp=SPRINTS[SPRINTS.indexOf(sp)-1]||null;
+  const prevM=prevSp?spMetrics(prevSp):null;
+  renderKpiGrid(document.getElementById('sprint-kpis'),sprintKpis(m,prevM,prevSp),m,{scope:`Sprint ${sp}`});
   // Charts composição
   const stMap={};d.forEach(x=>{stMap[x.Status]=(stMap[x.Status]||0)+1;});
   const stColors={'Implementado':'#059669','Aguardando Deploy':'#1d6ef5','QA - Testes':'#7c3aed','QA - Reprovado':'#dc2626','Em progresso':'#d97706','Pronto para começar':'#94a3b8','Parado':'#dc2626','Próx. Sprint':'#64748b','Limitação Externa':'#dc2626','Descontinuado':'#ef4444'};
@@ -1581,11 +1563,21 @@ function renderTimeIndividual(dev,rows,spFilter){
 }
 
 // ── RAW PAGE ──────────────────────────────────────────────────────────────────
-// Abas da tela, na ordem do fluxo: Roadmap e Backlog (quadros do Monday configurados em Configurações),
-// Sprint atual (todas as tarefas da sprint) e Suporte (Tipo = Suporte). Cada aba guarda os próprios filtros,
-// sprint, ordenação e agrupamento; visualizações e filtros são os mesmos. Sem paginação: a lista mostra tudo.
-const RAW_TABS=['roadmap','backlog','tarefas','suporte'];
+// Abas da tela: Visão 360° (esteira das demandas, do Roadmap aos Implementados) e, na ordem do fluxo, Roadmap
+// e Backlog (quadros do Monday configurados em Configurações), Sprint atual (todas as tarefas da sprint) e Suporte
+// (Tipo = Suporte). Cada aba guarda os próprios filtros, sprint, ordenação e agrupamento; visualizações e filtros são
+// os mesmos. Sem paginação: a lista mostra tudo.
+const RAW_TABS=['visao360','roadmap','backlog','tarefas','suporte'];
 const BOARD_TABS=['roadmap','backlog'];
+/** Etapas da esteira da Visão 360°, na ordem do fluxo. */
+const PIPELINE_STAGES=[
+  {key:'roadmap',label:'Roadmap',color:'#7c3aed'},
+  {key:'priorizado',label:'Priorizado',color:'#52638e'},
+  {key:'andamento',label:'Em andamento',color:'#fa6423'},
+  {key:'qualidade',label:'Em qualidade',color:'#2563eb'},
+  {key:'suporte',label:'Suporte',color:'#0891b2'},
+  {key:'implementado',label:'Implementados',color:'#06a340'},
+];
 /** Opção do filtro de clientes para itens com a coluna Cliente vazia. */
 const RAW_NO_CLIENT='__sem_cliente__';
 const CAN_UPDATE_ITEMS=@json(auth()->user()->can('update-items'));
@@ -1595,6 +1587,7 @@ const rawPref=key=>{try{return localStorage.getItem('yuv.tarefas.'+key);}catch{r
 const rawSavePref=(key,value)=>{try{localStorage.setItem('yuv.tarefas.'+key,value);}catch{}};
 const isSupportTask=x=>SprintRules.normalize(x.Tipo)==='suporte';
 const isBoardTab=(tab=rawTab)=>BOARD_TABS.includes(tab);
+const isOverviewTab=(tab=rawTab)=>tab==='visao360';
 let rawView=RAW_VIEWS.includes(rawPref('view'))?rawPref('view'):'table';
 let rawTab=RAW_TABS.includes(rawPref('tab'))?rawPref('tab'):'tarefas';
 const rawTabState={};
@@ -1624,10 +1617,51 @@ async function loadBoardTab(tab,force=false){
   try{
     const result=await mondayRequest(`/api/board-tabs/${tab}${force?'?force=1':''}`);
     Object.assign(board,{configured:result.configured,rows:result.rows||[],statusOptions:result.statusOptions||[],priorityOptions:result.priorityOptions||[],fields:result.fields||[],titles:result.titles||{},boardName:result.boardName||'',error:''});
+    // Quadro vencido: a tela já mostra o que estava salvo e o servidor busca o novo; ele chega na consulta seguinte.
+    board.followUps=result.refreshing?(board.followUps||0)+1:0;
+    if(result.refreshing&&board.followUps<=4) setTimeout(()=>loadBoardTab(tab),15000);
   }catch(error){board.error=error.message;}
   finally{board.loading=false;board.loaded=true;}
-  if(currentPage==='raw'){if(rawTab===tab) buildRawFilters();renderRaw();}
+  if(currentPage==='raw'){if(rawTab===tab||isOverviewTab()) buildRawFilters();renderRaw();}
 }
+/** A mesma demanda em quadros diferentes: os cards não têm vínculo preenchido no Monday, então valem os nomes iguais (sem o "(copy)"). */
+const demandKey=x=>SprintRules.normalize(clean(x.Nome).replace(/\s*\(copy\)\s*/gi,' '));
+/**
+ * Etapa de uma tarefa: concluído só em Implementados; Tipo Suporte ainda não implementado em Suporte; status de QA em
+ * qualidade; o resto (inclusive Aguardando Deploy) em andamento.
+ */
+const taskStage=x=>SprintRules.isDone(x.Status)?'implementado':isSupportTask(x)?'suporte':SprintRules.isInTest(x.Status)?'qualidade':'andamento';
+/**
+ * Demandas da esteira da Visão 360°, cada uma numa etapa só, a mais avançada:
+ * - Roadmap: cards do Funil de Demandas; Priorizado: cards do Product Backlog (Implementado no quadro vai para Implementados);
+ * - tarefas da sprint ativa: Em andamento, Em qualidade, Suporte ou Implementados, pelo status e pelo tipo;
+ * - tarefas implementadas de qualquer sprint entram em Implementados;
+ * - tarefa aberta de outra sprint só entra quando é a mesma demanda de um card do Roadmap ou do Backlog, e então substitui o card do quadro.
+ * Retirados (Descontinuado, Despriorizado, Cancelado) ficam de fora, assim como os cards do Roadmap já "Adicionado ao Backlog":
+ * eles seguem nas etapas seguintes pelo card do Backlog ou da tarefa. Cópias recalculadas a cada renderização.
+ */
+function overviewRows(){
+  const active=defaultSprint(),stageRank=key=>PIPELINE_STAGES.findIndex(stage=>stage.key===key);
+  const demands=new Map();
+  BOARD_TABS.forEach(tab=>RAW_BOARDS[tab].rows.filter(x=>!SprintRules.isRemoved(x.Status)).forEach(x=>{
+    const row={...x,Etapa:SprintRules.isDone(x.Status)?'implementado':tab==='roadmap'?'roadmap':'priorizado',Quadro:tab};
+    const current=demands.get(demandKey(x));
+    if(!current||stageRank(row.Etapa)>stageRank(current.Etapa)) demands.set(demandKey(x),row);
+  }));
+  // A linha da sprint mais recente é onde a tarefa está (cards arrastados aparecem em várias sprints), com o status de
+  // hoje: as sprints encerradas chegam congeladas no último dia, e o card pode ter sido implementado depois.
+  const tasks=new Map(),liveStatus=window.MONDAY_LIVE_STATUS||{};
+  DATA.filter(x=>x.Sprint).forEach(x=>{const current=tasks.get(demandKey(x));if(!current||x.Sprint>current.Sprint) tasks.set(demandKey(x),{...x,Status:liveStatus[x.Id]??x.Status});});
+  tasks.forEach((x,key)=>{
+    if(SprintRules.isRemoved(x.Status)||(x.Sprint!==active&&!demands.has(key)&&!SprintRules.isDone(x.Status))) return;
+    const stage=active!==null&&x.Sprint>active&&!SprintRules.isDone(x.Status)?'priorizado':taskStage(x);
+    demands.set(key,{...x,Etapa:stage,Quadro:'tarefas'});
+  });
+  // Os cards "Adicionado ao Backlog" ainda servem para ligar a demanda à tarefa acima, mas não ficam na coluna Roadmap.
+  return [...demands.values()].filter(x=>!(x.Etapa==='roadmap'&&SprintRules.normalize(x.Status)==='adicionado ao backlog'));
+}
+/** Cor do status de uma demanda da esteira: a do quadro de onde ela vem. */
+const overviewStatusColor=x=>(x.Quadro==='tarefas'?window.MONDAY_STATUS_OPTIONS||[]:RAW_BOARDS[x.Quadro].statusOptions).find(o=>o.label===x.Status)?.color||'#94a3b8';
 const rawLink=x=>x.Id?`<button type="button" class="raw-link" onclick="ItemDetail.open('${esc(x.Id)}')">${esc(x.Nome)}</button>`:esc(x.Nome);
 const boardStatusChip=(tab,label)=>label?`<span class="tv-status" style="--st:${esc(RAW_BOARDS[tab].statusOptions.find(o=>o.label===label)?.color||'#94a3b8')}">${esc(label)}</span>`:'—';
 /** Rótulo de um campo nas abas de quadro: o título real da coluna no Monday (ex.: Impacto, Severidade). */
@@ -1675,6 +1709,7 @@ function rawGroups(tab=rawTab){
     ['esforco','Esforço',has('Esforco')],['cliente','Cliente',has('Cliente')]].filter(group=>group[2]).map(([value,label])=>[value,label]);
 }
 function rawDataset(tab=rawTab){
+  if(isOverviewTab(tab)) return overviewRows();
   if(isBoardTab(tab)) return RAW_BOARDS[tab].rows;
   const rows=DATA.filter(x=>x.Sprint);
   return tab==='suporte'?rows.filter(isSupportTask):rows;
@@ -1690,7 +1725,7 @@ function chooseRawSprint(value){
 }
 /** Opções dos filtros a partir dos itens da aba atual, mantendo o que já estava marcado nela. */
 function buildRawFilters(){
-  const s=rawState(),rows=rawDataset(),board=isBoardTab();
+  const s=rawState(),rows=rawDataset(),board=isBoardTab(),overview=isOverviewTab();
   const has=field=>!board||RAW_BOARDS[rawTab].fields.includes(field);
   const uniq=field=>[...new Set(rows.map(x=>clean(x[field])).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const opts=values=>values.map(v=>({value:v,label:v}));
@@ -1703,7 +1738,7 @@ function buildRawFilters(){
   renderMultiSelect('rawClientMs',{label:'Clientes',all:'Todos os clientes',search:true,selected:s.clients,options:[...opts(uniq('Cliente')),{value:RAW_NO_CLIENT,label:'Sem cliente'}]});
   for(const [id,field,label,set] of [['rawImpactMs','Prioridade',boardLabel('Prioridade','Prioridade'),s.impacts],['rawOriginMs','Origem','Origem',s.origins],
     ['rawModuleMs','Modulo','Módulo',s.modules],['rawEffortMs','Esforco','Esforço',s.efforts]]){
-    const show=board&&has(field);
+    const show=board?has(field):overview&&field==='Prioridade';
     document.getElementById(id).hidden=!show;
     if(show) renderMultiSelect(id,{label,all:`${label}: todos`,selected:set,options:opts(uniq(field))});
   }
@@ -1714,7 +1749,7 @@ function buildRawFilters(){
   tipoSel.value=s.tipo;
   tipoSel.hidden=rawTab==='suporte'||!has('Tipo');
   document.getElementById('rawSearch').value=s.q;
-  document.getElementById('raw-filters').hidden=board;
+  document.getElementById('raw-filters').hidden=board||overview;
   document.querySelectorAll('#raw-filters .tfbtn').forEach(b=>b.classList.toggle('active',s.flags.has(b.id.slice(2))));
   const groupSel=document.getElementById('rawGroupSel'),groups=rawGroups();
   groupSel.replaceChildren(...groups.map(([value,label])=>new Option(label,value)));
@@ -1750,7 +1785,8 @@ function rawBulkContext(board,boardData){
   const labels=(options,field)=>options?.length?options.map(o=>o.label):present(field);
   return {
     key:rawTab,
-    enabled:CAN_UPDATE_ITEMS&&rawView!=='board',
+    // Na Visão 360° os cards vêm de quadros com status diferentes: a alteração é feita na aba de cada quadro.
+    enabled:CAN_UPDATE_ITEMS&&rawView!=='board'&&!isOverviewTab(),
     fields:[['Status','Status'],['Prioridade','Prioridade'],['Cliente','Cliente']].filter(([key])=>key==='Status'||has(key)).map(([key,label])=>({key,label:board?boardLabel(key,label):label})),
     options:{
       Status:board?boardStatuses().map(o=>o.label):labels(window.MONDAY_STATUS_OPTIONS,'Status'),
@@ -1771,7 +1807,14 @@ function renderRaw(){
   document.getElementById('raw-tab-count-tarefas').textContent=inSprint('tarefas',rawDataset('tarefas')).length;
   document.getElementById('raw-tab-count-suporte').textContent=inSprint('suporte',rawDataset('suporte')).length;
   BOARD_TABS.forEach(tab=>{const b=RAW_BOARDS[tab];document.getElementById(`raw-tab-count-${tab}`).textContent=b.loaded&&b.configured&&!b.error?b.rows.length:'';});
-  const board=isBoardTab(),boardData=RAW_BOARDS[rawTab];
+  const boardsLoaded=BOARD_TABS.every(tab=>RAW_BOARDS[tab].loaded);
+  document.getElementById('raw-tab-count-visao360').textContent=boardsLoaded?rawDataset('visao360').length:'';
+  const board=isBoardTab(),overview=isOverviewTab(),boardData=RAW_BOARDS[rawTab];
+  if(overview&&!boardsLoaded){
+    showBoardMessage('Visão 360°','Carregando os itens do Roadmap e do Backlog...');
+    BOARD_TABS.forEach(tab=>loadBoardTab(tab));
+    return;
+  }
   if(board&&!boardData.loaded){
     showBoardMessage(BOARD_TITLES[rawTab],'Carregando os itens do Monday...');
     loadBoardTab(rawTab);
@@ -1789,12 +1832,12 @@ function renderRaw(){
   document.getElementById('raw-roadmap').hidden=true;
   const s=rawState();
   const support=rawTab==='suporte';
-  document.getElementById('raw-title').textContent=board?(boardData.boardName||BOARD_TITLES[rawTab]):support?'Suporte da sprint':'Sprint atual';
-  spSel.hidden=board;
-  const sp=board?'all':(spSel.value=sprintOf(rawTab));
+  document.getElementById('raw-title').textContent=overview?'Visão 360°':board?(boardData.boardName||BOARD_TITLES[rawTab]):support?'Suporte da sprint':'Sprint atual';
+  spSel.hidden=board||overview;
+  const sp=board||overview?'all':(spSel.value=sprintOf(rawTab));
   const tipo=support?'all':s.tipo;
   const q=s.q.toLowerCase();
-  let rows=board?rawDataset():inSprint(rawTab,rawDataset());
+  let rows=board||overview?rawDataset():inSprint(rawTab,rawDataset());
   if(s.devs.size) rows=rows.filter(x=>devPeople(x).some(p=>s.devs.has(p)));
   if(s.statuses.size) rows=rows.filter(x=>s.statuses.has(x.Status));
   if(s.clients.size) rows=rows.filter(x=>s.clients.has(clean(x.Cliente)||RAW_NO_CLIENT));
@@ -1815,7 +1858,20 @@ function renderRaw(){
     return s.sort.asc?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
   });
   const count=`${rows.length} ${rows.length===1?'item':'itens'}`;
-  document.getElementById('raw-cnt').textContent=count;
+  // Quadro sem configuração ou com erro fica fora da Visão 360°; o aviso evita achar que o card não existe.
+  const missing=overview?BOARD_TABS.filter(tab=>!RAW_BOARDS[tab].configured||RAW_BOARDS[tab].error).map(tab=>BOARD_TITLES[tab]):[];
+  document.getElementById('raw-cnt').textContent=missing.length?`${count} · sem ${missing.join(' e ')}`:count;
+  // A Visão 360° é sempre a esteira: sem troca de visualização nem agrupamento.
+  document.querySelector('.raw-viewbar').style.display=overview?'none':'';
+  if(overview){
+    // Com um cliente só no filtro, a esteira vira o quadro de demandas daquele cliente.
+    if(s.clients.size===1&&!s.clients.has(RAW_NO_CLIENT)) document.getElementById('raw-title').textContent=`Demandas ${[...s.clients][0]}`;
+    document.getElementById('raw-table-view').hidden=true;
+    document.getElementById('raw-board-view').hidden=false;
+    BulkEdit.update(rawBulkContext(board,boardData),rows);
+    TaskViews.renderPipeline(document.getElementById('raw-board-view'),rows,{stages:PIPELINE_STAGES,statusColor:overviewStatusColor});
+    return;
+  }
   document.querySelectorAll('#raw-views [data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===rawView)));
   document.getElementById('rawGroupSel').closest('label').hidden=rawView==='table';
   document.getElementById('raw-table-view').hidden=rawView!=='table';
@@ -1845,6 +1901,10 @@ window.addEventListener('popstate',()=>{
   navigate(page||'control-tower',sprint,{history:'none'});
 });
 </script>
+<!-- Fora das telas: os indicadores do Dashboard e da tela Sprints e o detalhe do card abrem de qualquer tela. -->
+<div class="kpi-tip" id="kpi-tip" role="tooltip" hidden></div>
+<dialog class="kpi-modal" id="kpi-modal" aria-label="Tasks do indicador" onclick="if(event.target===this) this.close()"></dialog>
+<dialog class="kpi-modal task-modal" id="item-modal" aria-label="Detalhe do card"></dialog>
 <script src="{{ URL::versioned('monday-client.js') }}"></script>
 <script src="{{ URL::versioned('bombeiro.js') }}"></script>
 <script src="{{ URL::versioned('sprint-panel.js') }}"></script>

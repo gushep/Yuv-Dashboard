@@ -57,9 +57,11 @@ class MondayItemDetailsTest extends TestCase
                 ['label' => 'Feito', 'color' => '#00c875'],
             ])
             ->assertJsonPath('columns', [
-                ['id' => 'status', 'title' => 'Status', 'type' => 'status', 'text' => 'Em progresso', 'color' => '#fdab3d'],
-                ['id' => 'epico', 'title' => 'Épico', 'type' => 'board_relation', 'text' => 'Autenticação', 'color' => null],
-                ['id' => 'notas', 'title' => 'Notas', 'type' => 'text', 'text' => '', 'color' => null],
+                ['id' => 'status', 'title' => 'Status', 'type' => 'status', 'text' => 'Em progresso', 'color' => '#fdab3d', 'editable' => true, 'current' => 'Em progresso',
+                    'options' => [['label' => 'Em QA', 'color' => '#a25ddc'], ['label' => 'Em progresso', 'color' => '#fdab3d'], ['label' => 'Feito', 'color' => '#00c875']]],
+                ['id' => 'epico', 'title' => 'Épico', 'type' => 'board_relation', 'text' => 'Autenticação', 'color' => null, 'editable' => true, 'current' => ['700']],
+                ['id' => 'notas', 'title' => 'Notas', 'type' => 'text', 'text' => '', 'color' => null, 'editable' => true, 'current' => ''],
+                ['id' => 'total', 'title' => 'Total', 'type' => 'formula', 'text' => '12', 'color' => null, 'editable' => false],
             ])
             ->assertJsonPath('subitems', [['id' => '60', 'name' => 'Ajustar tela', 'status' => 'Feito', 'color' => '#00c875', 'people' => 'Ana Souza']])
             ->assertJsonPath('updates.0.author', 'Ana Souza')
@@ -83,7 +85,7 @@ class MondayItemDetailsTest extends TestCase
         $this->actingAs(User::factory()->withScreens(Screen::RawData)->create())
             ->getJson('/api/items/55')->assertOk()
             ->assertJsonPath('attachments', [$laudo, self::PRINT, $colado])
-            ->assertJsonPath('columns.3.files', [$laudo])
+            ->assertJsonPath('columns.4.files', [$laudo])
             ->assertJsonPath('updates.0.images', [$colado])
             ->assertJsonPath('updates.0.assets', [self::PRINT])
             ->assertJsonPath('updates.0.text', "Veja o erro:\n\nNo aguardo.");
@@ -141,9 +143,11 @@ class MondayItemDetailsTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_permitted_user_changes_the_status_in_monday_and_the_cached_snapshot_is_discarded(): void
+    public function test_permitted_user_changes_the_status_in_monday_and_the_cached_snapshot_is_marked_stale(): void
     {
-        Cache::put(MondaySnapshotService::CACHE_KEY, ['rows' => []], 3600);
+        $this->freezeTime();
+        $snapshot = ['rows' => [], 'syncedAt' => now()->toIso8601String()];
+        Cache::put(MondaySnapshotService::CACHE_KEY, $snapshot, 3600);
         Http::fakeSequence('api.monday.com/v2')
             ->push(['data' => ['items' => [['id' => '55', 'board' => ['id' => '123', 'columns' => [['id' => 'status', 'settings_str' => self::STATUS_SETTINGS]]]]]]])
             ->push(['data' => ['change_simple_column_value' => ['id' => '55']]]);
@@ -154,7 +158,74 @@ class MondayItemDetailsTest extends TestCase
 
         Http::assertSent(fn (Request $request): bool => str_starts_with($request['query'], 'mutation')
             && $request['variables'] === ['board' => '123', 'item' => '55', 'column' => 'status', 'value' => 'Em QA']);
-        $this->assertNull(Cache::get(MondaySnapshotService::CACHE_KEY));
+        // As telas continuam abrindo com o snapshot salvo, que passa a ser atualizado na próxima leitura.
+        $snapshots = app(MondaySnapshotService::class);
+        $this->assertSame($snapshot, $snapshots->latest(MondayConnection::current(), 3600));
+        $this->assertTrue($snapshots->stale);
+    }
+
+    public function test_changing_a_field_requires_the_permission_to_update_cards(): void
+    {
+        $this->actingAs(User::factory()->withScreens(Screen::RawData)->create());
+        $this->postJson('/api/items/55/columns', ['column' => 'notas', 'value' => 'x'])->assertForbidden();
+        $this->getJson('/api/items/55/columns/epico/options')->assertForbidden();
+        Http::assertNothingSent();
+    }
+
+    public function test_each_field_is_written_in_the_format_of_its_column_type_and_the_snapshot_is_marked_stale(): void
+    {
+        $this->freezeTime();
+        Cache::put(MondaySnapshotService::CACHE_KEY, ['rows' => [], 'syncedAt' => now()->toIso8601String()], 3600);
+        $written = $this->fakeEditableBoard();
+        $this->actingAs(User::factory()->withScreens(Screen::RawData)->canUpdateItems()->create());
+
+        foreach ([
+            ['name', '  Corrigir login no app ', 'Corrigir login no app'],
+            ['tipo', ['Bug', 'Melhoria'], ['labels' => ['Bug', 'Melhoria']]],
+            ['pessoas', ['8', '9'], ['personsAndTeams' => [['id' => 8, 'kind' => 'person'], ['id' => 9, 'kind' => 'person']]]],
+            ['sprint', ['5018'], ['item_ids' => [5018]]],
+            ['entrega', '2026-10-30', ['date' => '2026-10-30']],
+            ['estimativa', '7,5', '7.5'],
+            ['retrabalho', false, null],
+            ['descricao', "Passo 1\nPasso 2", ['text' => "Passo 1\nPasso 2"]],
+            ['prioridade', '', null],
+        ] as [$column, $value, $expected]) {
+            $this->postJson('/api/items/55/columns', ['column' => $column, 'value' => $value])->assertOk();
+            $this->assertSame([$column => $expected], array_pop($written->values), $column);
+        }
+
+        $snapshots = app(MondaySnapshotService::class);
+        $snapshots->latest(MondayConnection::current(), 3600);
+        $this->assertTrue($snapshots->stale);
+    }
+
+    public function test_invalid_field_values_are_refused_with_the_reason_and_nothing_is_written(): void
+    {
+        $written = $this->fakeEditableBoard();
+        $this->actingAs(User::factory()->withScreens(Screen::RawData)->canUpdateItems()->create());
+
+        $this->postJson('/api/items/55/columns', ['column' => 'prioridade', 'value' => 'Urgentíssima'])
+            ->assertUnprocessable()->assertJsonPath('error', 'Prioridade: opção inexistente neste quadro.');
+        $this->postJson('/api/items/55/columns', ['column' => 'entrega', 'value' => '31/10/2026'])
+            ->assertUnprocessable()->assertJsonPath('error', 'Entrega: informe uma data válida.');
+        $this->postJson('/api/items/55/columns', ['column' => 'total', 'value' => '3'])
+            ->assertUnprocessable()->assertJsonPath('error', 'O campo Total é calculado pelo Monday e não pode ser alterado pelo dashboard.');
+        $this->postJson('/api/items/55/columns', ['column' => 'name', 'value' => '  '])
+            ->assertUnprocessable()->assertJsonPath('error', 'Informe um nome de até 255 caracteres.');
+
+        $this->assertSame([], $written->values);
+    }
+
+    public function test_options_of_people_and_connect_boards_fields_come_from_monday(): void
+    {
+        $this->fakeEditableBoard();
+        $this->actingAs(User::factory()->withScreens(Screen::RawData)->canUpdateItems()->create());
+
+        $this->getJson('/api/items/55/columns/sprint/options')->assertOk()
+            ->assertJsonPath('options', [['id' => '5017', 'name' => 'Sprint 17'], ['id' => '5018', 'name' => 'Sprint 18']]);
+        $this->getJson('/api/items/55/columns/pessoas/options')->assertOk()
+            ->assertJsonPath('options', [['id' => '8', 'name' => 'ana Souza'], ['id' => '9', 'name' => 'Bruno Lima']]);
+        Http::assertSent(fn (Request $request): bool => ($request['variables']['ids'] ?? null) === ['777']);
     }
 
     public function test_status_change_rejects_missing_or_unknown_labels(): void
@@ -245,6 +316,50 @@ class MondayItemDetailsTest extends TestCase
     /**
      * @return array<string, mixed>
      */
+    /**
+     * Monday falso com um quadro que tem uma coluna de cada tipo editável. Guarda os valores gravados pelo
+     * change_multiple_column_values, um por alteração.
+     */
+    private function fakeEditableBoard(): object
+    {
+        $written = new class
+        {
+            /** @var list<array<string, mixed>> */
+            public array $values = [];
+        };
+        $columns = [
+            ['id' => 'prioridade', 'title' => 'Prioridade', 'type' => 'status', 'settings_str' => '{"labels":{"0":"Alta","1":"Baixa"}}'],
+            ['id' => 'tipo', 'title' => 'Tipo', 'type' => 'dropdown', 'settings_str' => '{"labels":[{"id":1,"name":"Bug"},{"id":2,"name":"Melhoria"}]}'],
+            ['id' => 'pessoas', 'title' => 'Pessoas', 'type' => 'people', 'settings_str' => '{}'],
+            ['id' => 'sprint', 'title' => 'Sprint', 'type' => 'board_relation', 'settings_str' => '{"boardIds":[777]}'],
+            ['id' => 'entrega', 'title' => 'Entrega', 'type' => 'date', 'settings_str' => '{}'],
+            ['id' => 'estimativa', 'title' => 'Estimativa', 'type' => 'numbers', 'settings_str' => '{}'],
+            ['id' => 'retrabalho', 'title' => 'Retrabalho', 'type' => 'checkbox', 'settings_str' => '{}'],
+            ['id' => 'descricao', 'title' => 'Descrição', 'type' => 'long_text', 'settings_str' => '{}'],
+            ['id' => 'total', 'title' => 'Total', 'type' => 'formula', 'settings_str' => '{}'],
+        ];
+        Http::fake(['api.monday.com/v2' => function (Request $request) use ($written, $columns) {
+            $query = (string) $request['query'];
+            if (str_contains($query, 'change_multiple_column_values')) {
+                $written->values[] = json_decode($request['variables']['values'], true);
+
+                return Http::response(['data' => ['change_multiple_column_values' => ['id' => '55']]]);
+            }
+            if (str_contains($query, 'users(')) {
+                return Http::response(['data' => ['users' => [
+                    ['id' => '9', 'name' => 'Bruno Lima', 'enabled' => true], ['id' => '8', 'name' => 'ana Souza', 'enabled' => true], ['id' => '7', 'name' => 'Ex Funcionário', 'enabled' => false],
+                ]]]);
+            }
+            if (str_contains($query, 'boards(ids')) {
+                return Http::response(['data' => ['boards' => [['items_page' => ['items' => [['id' => '5017', 'name' => 'Sprint 17'], ['id' => '5018', 'name' => 'Sprint 18']]]]]]]);
+            }
+
+            return Http::response(['data' => ['items' => [['id' => '55', 'board' => ['id' => '123', 'columns' => $columns]]]]]);
+        }]);
+
+        return $written;
+    }
+
     private function item(bool $withAttachments = false): array
     {
         $printAsset = ['id' => '100', 'name' => 'print.png', 'file_extension' => '.png', 'file_size' => 2048, 'public_url' => 'https://files.monday.com/public/100', 'url' => 'https://monday.com/files/1'];
@@ -269,8 +384,9 @@ class MondayItemDetailsTest extends TestCase
             'column_values' => [
                 ['id' => 'name', 'text' => 'Corrigir login', 'type' => 'name', 'column' => ['title' => 'Nome']],
                 ['id' => 'status', 'text' => 'Em progresso', 'type' => 'status', 'column' => ['title' => 'Status'], 'label_style' => ['color' => '#fdab3d']],
-                ['id' => 'epico', 'text' => null, 'type' => 'board_relation', 'display_value' => 'Autenticação', 'column' => ['title' => 'Épico']],
+                ['id' => 'epico', 'text' => null, 'type' => 'board_relation', 'display_value' => 'Autenticação', 'value' => null, 'linked_item_ids' => ['700'], 'column' => ['title' => 'Épico']],
                 ['id' => 'notas', 'text' => '', 'type' => 'text', 'column' => ['title' => 'Notas']],
+                ['id' => 'total', 'text' => '12', 'type' => 'formula', 'column' => ['title' => 'Total']],
                 ['id' => 'subitens', 'text' => 'Ajustar tela', 'type' => 'subtasks', 'column' => ['title' => 'Subitens']],
             ],
             'subitems' => [['id' => '60', 'name' => 'Ajustar tela', 'column_values' => [

@@ -2,10 +2,8 @@
 
 namespace App\Services;
 
-use App\Http\Controllers\MondayController;
 use App\Models\MondayConnection;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -48,7 +46,7 @@ class FeatureRequestService
     /** Campos opcionais, como no formulário de demandas do Monday: vazios, a coluna fica em branco. */
     private const OPTIONAL = ['solution', 'requirements', 'mrr'];
 
-    public function __construct(private MondayService $monday) {}
+    public function __construct(private MondayService $monday, private MondaySnapshotService $snapshots) {}
 
     /**
      * Opções de cada campo de escolha, na ordem do Monday.
@@ -114,7 +112,7 @@ class FeatureRequestService
         if (empty($created['id'])) {
             throw new RuntimeException('O Monday não confirmou a criação da demanda.');
         }
-        Cache::forget(MondayController::BOARD_TAB_CACHE.'roadmap');
+        $this->snapshots->markStale();
 
         return ['id' => (string) $created['id'], 'url' => (string) ($created['url'] ?? ''), 'boardName' => $name];
     }

@@ -64,6 +64,18 @@ class ControlTowerTest extends TestCase
         $response->assertDontSee('token-secreto');
     }
 
+    public function test_control_tower_is_rebuilt_when_a_new_snapshot_arrives(): void
+    {
+        $this->prepareScenario();
+        $this->getJson('/api/control-tower')->assertOk()->assertJsonPath('totals.done', 1);
+        $snapshot = $this->scenarioSnapshot();
+        $snapshot['rows'][3]['Status'] = 'Implementado';
+        $snapshot['syncedAt'] = '2026-10-07T15:05:00+00:00';
+        Cache::put('monday-sync-1', $snapshot, 3600);
+
+        $this->getJson('/api/control-tower')->assertOk()->assertJsonPath('totals.done', 2);
+    }
+
     public function test_control_tower_accepts_a_past_sprint_and_rejects_invalid_numbers(): void
     {
         $this->prepareScenario();

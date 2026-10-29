@@ -1,5 +1,9 @@
 /* Detalhe do card (Dado Bruto): layout no estilo ClickUp, com campos e comentários à esquerda; novo comentário e histórico à direita. */
 .task-modal{width:min(1180px,calc(100vw - 32px));height:calc(100vh - 48px);max-height:none}
+/* Nome do card nos modais de indicadores: abre o detalhe; o ↗ ao lado abre no Monday. */
+.td-card-link{border:0;background:none;padding:0;font:inherit;color:var(--blue);text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.td-card-link:hover{text-decoration:underline}
+.td-card-monday{margin-left:6px;font-size:11px;color:var(--muted)!important}
 .td-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border)}
 .td-crumbs{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .td-crumbs>span{color:var(--muted)}
@@ -40,6 +44,31 @@
 .td-status-menu button{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border:0;border-radius:6px;background:none;font:inherit;font-size:12px;color:var(--text);cursor:pointer;text-align:left}
 .td-status-menu button:hover,.td-status-menu button[aria-selected="true"]{background:var(--bg)}
 .td-check{margin-left:auto;color:var(--blue)}
+/* Edição dos campos no detalhe (quem pode atualizar cards): clicar no valor abre o editor do tipo do campo. */
+.td-editable{display:flex;align-items:center;gap:6px;min-height:26px;margin:-3px -6px;padding:3px 6px;border-radius:6px;cursor:pointer}
+.td-editable:hover,.td-editable:focus-visible{background:var(--bg);outline:none}
+.td-edit-icon{margin-left:auto;font-size:11px;color:var(--muted);opacity:0}
+.td-editable:hover .td-edit-icon,.td-editable:focus-visible .td-edit-icon{opacity:1}
+.td-title.td-editable{margin:0 -8px 6px;padding:2px 8px}
+.td-title .td-edit-icon{font-size:14px}
+.td-editor{display:flex;flex-direction:column;gap:6px;padding:4px 0}
+.td-title-editor{margin-bottom:8px}
+.td-input{width:100%;font:inherit;font-size:12.5px;padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--card);color:var(--text);outline:none}
+.td-input:focus{border-color:var(--blue)}
+textarea.td-input{resize:vertical;line-height:1.5}
+.td-title-input{font-size:18px;font-weight:700}
+.td-editor-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)}
+.td-editor-actions{display:flex;align-items:center;gap:12px}
+.td-editor-actions .td-link-btn{margin-top:0}
+.td-editor-actions .td-send{padding:6px 14px}
+.td-clear{color:var(--red)!important;margin-left:auto}
+.td-options{display:flex;flex-direction:column;max-height:220px;overflow:auto;padding:4px;border:1px solid var(--border);border-radius:7px;background:var(--card)}
+.td-options label{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:5px;font-size:12px;cursor:pointer}
+.td-options label:hover{background:var(--bg)}
+.td-options label[hidden]{display:none}
+.td-inline-menu{position:static;box-shadow:none;max-height:240px}
+.td-check-field{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer}
+.td-section-edit{margin:0 0 0 auto;font-weight:600}
 .td-section{margin-top:24px}
 .td-section-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:10px}
 .td-count{font-size:11px;font-weight:600;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 7px}

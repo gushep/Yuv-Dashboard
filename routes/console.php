@@ -80,9 +80,18 @@ Artisan::command('monday:refresh', function (MondaySnapshotService $snapshots, M
     if ($notified > 0) {
         $this->info("{$notified} mudança(s) de status avisada(s) no canal do Bombeiro.");
     }
+    // Os quadros das abas Roadmap e Backlog (e da Visão 360°) também ficam prontos, para as telas não esperarem o Monday.
+    foreach (array_keys(MondaySnapshotService::BOARD_TABS) as $tab) {
+        try {
+            $snapshots->boardTab($connection, $tab, 0, true);
+        } catch (ConnectionException|RuntimeException $exception) {
+            report($exception);
+            $this->error("Falha ao atualizar o quadro da aba {$tab}: ".$exception->getMessage());
+        }
+    }
 
     return 0;
-})->purpose('Atualiza os cards do Monday, copia o log de atividades e avisa o canal do Bombeiro, sem depender do dashboard aberto');
+})->purpose('Atualiza os cards e os quadros das abas do Monday, copia o log de atividades e avisa o canal do Bombeiro, sem depender do dashboard aberto');
 
 Schedule::command('monday:refresh')->everyFifteenMinutes()->withoutOverlapping(30);
 

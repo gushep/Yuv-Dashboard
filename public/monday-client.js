@@ -6,6 +6,10 @@ let mondayReady = false;
 let mondayRefreshMinutes = 5;
 let mondayRefreshTimer = null;
 let mondaySyncInFlight = false;
+/** Consultas seguidas enquanto o servidor ainda atualiza um snapshot vencido (limitadas, caso o Monday esteja fora). */
+let mondayFollowUps = 0;
+const MONDAY_FOLLOW_UP_MS = 15000;
+const MONDAY_MAX_FOLLOW_UPS = 4;
 const mondayFields = [
   ['RemainingH', 'Esforço restante revisado (h)', ['Esforço restante', 'Horas restantes', 'Tempo restante', 'RemainingH']],
   ['Impedimento', 'Impedimento', ['Impedimento', 'Bloqueio']],
@@ -102,6 +106,11 @@ async function findMondayBoards() {
   } finally {
     button.disabled = false;
   }
+}
+
+/** As colunas do quadro só são consultadas no Monday quando a tela Configurações é aberta, não a cada carregamento. */
+function enterMondaySettings() {
+  if (mondayReady && !mondayColumns.length) inspectMonday();
 }
 
 async function inspectMonday() {
@@ -246,6 +255,7 @@ function useMondayRows(rows) {
 async function syncMonday(force = true) {
   if (mondaySyncInFlight) return;
   mondaySyncInFlight = true;
+  let followUp = false;
   window.Capacity?.onLoading();
   window.Consumption?.onLoading();
   window.Forecast?.onLoading();
@@ -258,19 +268,24 @@ async function syncMonday(force = true) {
     if (result.statusOptions?.length) window.MONDAY_STATUS_OPTIONS = result.statusOptions;
     // Rótulos da Prioridade: opções da alteração em massa da tela Tarefas.
     if (result.priorityOptions?.length) window.MONDAY_PRIORITY_OPTIONS = result.priorityOptions;
+    // Status de hoje de cada card (as sprints encerradas chegam congeladas no último dia): usado pela Visão 360°.
+    window.MONDAY_LIVE_STATUS = result.liveStatus || {};
     if (result.rows.length || !['consumption','release'].includes(currentPage)) useMondayRows(result.rows);
     window.Capacity?.onDataUpdated(result);
     // As datas das sprints chegam com o Capacity; com elas a tela Tarefas descobre a sprint ativa.
     if (currentPage === 'raw') renderRaw();
-    // As abas Roadmap e Backlog acompanham o mesmo ciclo de atualização (o servidor decide se busca de novo no Monday).
-    if (currentPage === 'raw' && isBoardTab()) loadBoardTab(rawTab, false);
+    // As abas Roadmap, Backlog e Visão 360° acompanham o mesmo ciclo de atualização (o servidor decide se busca de novo no Monday).
+    if (currentPage === 'raw') (isOverviewTab() ? BOARD_TABS : isBoardTab() ? [rawTab] : []).forEach(tab => loadBoardTab(tab, false));
     window.Forecast?.onDataUpdated(result);
     window.Consumption?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);
     if (canAccessScreen('control-tower')) window.ControlTower?.refreshAlerts();
     window.Burndown?.refresh();
     const time = new Date(result.syncedAt).toLocaleString('pt-BR');
-    mondayMessage('monday-sync-status', `${result.rows.length} registros carregados de ${result.fetched} tarefas · ${result.skipped} sem Sprint reconhecida · ${time}.`, 'success');
+    mondayMessage('monday-sync-status', `${result.rows.length} registros carregados de ${result.fetched} tarefas · ${result.skipped} sem Sprint reconhecida · ${time}${result.refreshing ? ' · atualizando com o Monday em segundo plano' : ''}.`, 'success');
+    // A tela abriu com o último snapshot salvo; o servidor está buscando o novo e ele chega na próxima consulta.
+    followUp = Boolean(result.refreshing) && mondayFollowUps < MONDAY_MAX_FOLLOW_UPS;
+    mondayFollowUps = followUp ? mondayFollowUps + 1 : 0;
   } catch (error) {
     mondayMessage('monday-sync-status', error.message, 'error');
     window.Capacity?.onError(error.message);
@@ -282,6 +297,11 @@ async function syncMonday(force = true) {
     window.Forecast?.onSyncComplete();
     window.Consumption?.onSyncComplete();
     scheduleMondayRefresh();
+    // Os painéis do Bombeiro e da Sprint consultam sozinhos a cada minuto; nas demais telas, a consulta seguinte vem logo.
+    if (followUp && !['bombeiro', 'sprint-panel', 'carousel'].includes(currentPage)) {
+      clearTimeout(mondayRefreshTimer);
+      mondayRefreshTimer = setTimeout(() => syncMonday(false), MONDAY_FOLLOW_UP_MS);
+    }
   }
 }
 
@@ -303,7 +323,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     mondayReady = Boolean(config.boardId && config.hasToken);
     if (mondayReady) {
       mondayMessage('monday-connection', 'Credencial salva. Carregando colunas e dados do quadro...');
-      if (canAccessScreen('settings')) await inspectMonday();
+      if (currentPage === 'settings') enterMondaySettings();
       await syncMonday(false);
     } else {
       mondayMessage('monday-connection', 'Informe o quadro e o token; depois clique em Buscar colunas.');

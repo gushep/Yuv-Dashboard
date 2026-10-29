@@ -17,10 +17,7 @@ window.Burndown = (() => {
     return total < 24 ? `${number(hours)}h` : `${Math.floor(total / 24)}d ${total % 24}h`;
   };
   const dateTime = value => value ? new Date(value).toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—';
-  const link = item => {
-    const url = window.SprintPanel?.safeMondayUrl(item.url) || '';
-    return url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(item.name || 'Sem título')} ↗</a>` : escape(item.name || 'Sem título');
-  };
+  const link = item => window.ItemDetail.link(item);
   const fact = (label, value, detail) => `<div><span>${label}</span><strong>${value}</strong><small>${detail}</small></div>`;
 
   async function load() {

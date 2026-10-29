@@ -205,10 +205,7 @@ window.ControlTower = (() => {
   }
 
   const day = value => value ? value.split('-').reverse().slice(0, 2).join('/') : '—';
-  const link = item => {
-    const url = window.SprintPanel?.safeMondayUrl(item.url) || '';
-    return url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(item.name || 'Sem título')} ↗</a>` : escape(item.name || 'Sem título');
-  };
+  const link = item => window.ItemDetail.link(item);
   const age = item => item.knownSince ? `há ${item.workingDays} dia(s) útil(eis)` : 'desde antes do início do histórico';
 
   async function fetchTower(sprint) {

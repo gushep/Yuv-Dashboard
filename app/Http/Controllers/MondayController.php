@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MondayActivityEvent;
 use App\Models\MondayConnection;
 use App\Services\BurndownService;
 use App\Services\ControlTowerService;
@@ -9,11 +10,11 @@ use App\Services\MondayActivityImporter;
 use App\Services\MondayService;
 use App\Services\MondaySnapshotService;
 use App\Services\SprintReleaseService;
+use App\Support\SprintRules;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -26,12 +27,6 @@ class MondayController extends Controller
 {
     /** Trava que limita a cópia do log de atividades a uma vez por hora. */
     private const ACTIVITY_IMPORT_KEY = 'monday-activity-import';
-
-    /** Abas da tela Tarefas que mostram outros quadros do Monday, e a coluna de configuração de cada uma. */
-    private const BOARD_TABS = ['roadmap' => 'roadmap_board_id', 'backlog' => 'backlog_board_id'];
-
-    /** Prefixo do cache de cada aba; descartado quando o status de um card muda pelo dashboard. */
-    public const BOARD_TAB_CACHE = 'monday-board-tab-';
 
     private const FIELDS = [
         'Responsavel', 'Status', 'Prioridade', 'Tipo', 'EstH', 'RealH',
@@ -188,6 +183,8 @@ class MondayController extends Controller
 
     /**
      * Cards do Monday para o dashboard. Sprints encerradas voltam ao estado do último dia, reconstituído pelo log de atividades.
+     * Responde na hora com o último snapshot salvo; vencido, ele é atualizado depois da resposta e `refreshing` avisa a tela
+     * para consultar de novo em seguida. Só "Atualizar dados agora" (force) espera o Monday.
      */
     public function sync(Request $request, MondaySnapshotService $snapshots, MondayActivityImporter $importer): JsonResponse
     {
@@ -199,14 +196,18 @@ class MondayController extends Controller
 
         return $this->attempt(function () use ($snapshots, $importer, $data) {
             $connection = MondayConnection::current();
-            $ttl = ! empty($data['bombeiro']) || ! empty($data['sprintPanel']) || $connection->refresh_minutes === 0
-                ? 60 : $connection->refresh_minutes * 60;
-            $snapshot = $snapshots->current($connection, $ttl, ! empty($data['force']));
+            $ttl = ! empty($data['bombeiro']) || ! empty($data['sprintPanel']) ? 60 : $this->ttl($connection);
+            $snapshot = ! empty($data['force']) ? $snapshots->current($connection, $ttl, true) : $this->latestSnapshot($snapshots, $importer, $connection, $ttl);
             if ($snapshots->fetchedFresh) {
                 $this->importActivityAfterResponse($importer, $connection);
             }
 
-            return $snapshots->withFrozenSprints($snapshot, $connection);
+            return [
+                ...$snapshots->withFrozenSprints($snapshot, $connection),
+                // Sprints encerradas voltam com o status do último dia; a Visão 360° precisa do status de hoje de cada card.
+                'liveStatus' => array_column(array_filter($snapshot['rows'] ?? [], fn (array $row): bool => ($row['Id'] ?? '') !== ''), 'Status', 'Id'),
+                'refreshing' => $snapshots->stale,
+            ];
         });
     }
 
@@ -231,12 +232,13 @@ class MondayController extends Controller
 
         return $this->attempt(function () use ($snapshots, $importer, $tower, $data) {
             $connection = MondayConnection::current();
-            $snapshot = $snapshots->current($connection, $connection->refresh_minutes === 0 ? 60 : $connection->refresh_minutes * 60);
+            $snapshot = $this->latestSnapshot($snapshots, $importer, $connection, $this->ttl($connection));
             if ($snapshots->fetchedFresh) {
                 $this->importActivityAfterResponse($importer, $connection);
             }
 
-            return $tower->build($snapshot, $connection, isset($data['sprint']) ? (int) $data['sprint'] : null);
+            return $this->cachedBuild('control-tower', $snapshot, $connection, $data['sprint'] ?? null,
+                fn (): array => $tower->build($snapshot, $connection, isset($data['sprint']) ? (int) $data['sprint'] : null));
         });
     }
 
@@ -249,12 +251,13 @@ class MondayController extends Controller
 
         return $this->attempt(function () use ($snapshots, $importer, $burndown, $data) {
             $connection = MondayConnection::current();
-            $snapshot = $snapshots->current($connection, $connection->refresh_minutes === 0 ? 60 : $connection->refresh_minutes * 60);
+            $snapshot = $this->latestSnapshot($snapshots, $importer, $connection, $this->ttl($connection));
             if ($snapshots->fetchedFresh) {
                 $this->importActivityAfterResponse($importer, $connection);
             }
 
-            return $burndown->build($snapshot, $connection, isset($data['sprint']) ? (int) $data['sprint'] : null);
+            return $this->cachedBuild('burndown', $snapshot, $connection, $data['sprint'] ?? null,
+                fn (): array => $burndown->build($snapshot, $connection, isset($data['sprint']) ? (int) $data['sprint'] : null));
         });
     }
 
@@ -290,17 +293,14 @@ class MondayController extends Controller
     /**
      * Altera o status do card no Monday. A ação fica registrada no Monday em nome do dono do token e no log da aplicação com o usuário do dashboard.
      */
-    public function changeItemStatus(Request $request, string $item, MondayService $monday): JsonResponse
+    public function changeItemStatus(Request $request, string $item, MondayService $monday, MondaySnapshotService $snapshots): JsonResponse
     {
         $data = $request->validate(['status' => ['required', 'string', 'max:255']]);
 
-        return $this->attempt(function () use ($request, $monday, $item, $data) {
+        return $this->attempt(function () use ($request, $monday, $snapshots, $item, $data) {
             $connection = $this->configuredConnection();
             $monday->changeStatus($connection->token, $this->itemBoards($connection), $item, $data['status']);
-            Cache::forget(MondaySnapshotService::CACHE_KEY);
-            foreach (array_keys(self::BOARD_TABS) as $tab) {
-                Cache::forget(self::BOARD_TAB_CACHE.$tab);
-            }
+            $snapshots->markStale();
             Log::info('Status de card alterado pelo dashboard.', ['item' => $item, 'status' => $data['status'], 'user' => $request->user()->email]);
 
             return ['saved' => true, 'status' => $data['status']];
@@ -308,10 +308,43 @@ class MondayController extends Controller
     }
 
     /**
+     * Altera um campo do card (ou o nome) pelo detalhe do card. Grava direto no Monday; a ação fica no log da aplicação
+     * com o usuário do dashboard.
+     */
+    public function changeItemColumn(Request $request, string $item, MondayService $monday, MondaySnapshotService $snapshots): JsonResponse
+    {
+        $data = $request->validate([
+            'column' => ['required', 'string', 'regex:/^[A-Za-z0-9_]{1,100}$/'],
+            'value' => ['present'],
+        ], ['column.required' => 'Informe o campo a alterar.']);
+
+        return $this->attempt(function () use ($request, $monday, $snapshots, $item, $data) {
+            $connection = $this->configuredConnection();
+            $monday->changeItemColumn($connection->token, $this->itemBoards($connection), $item, $data['column'], $data['value']);
+            $snapshots->markStale();
+            Log::info('Campo de card alterado pelo dashboard.', ['item' => $item, 'column' => $data['column'], 'user' => $request->user()->email]);
+
+            return ['saved' => true];
+        });
+    }
+
+    /**
+     * Opções de um campo de Pessoas ou de Conectar quadros (Sprint, Épico) do card, para o editor do detalhe.
+     */
+    public function itemColumnOptions(string $item, string $column, MondayService $monday): JsonResponse
+    {
+        return $this->attempt(function () use ($monday, $item, $column) {
+            $connection = $this->configuredConnection();
+
+            return ['options' => $monday->columnOptions($connection->token, $this->itemBoards($connection), $item, $column)];
+        });
+    }
+
+    /**
      * Alteração em massa da tela Tarefas: o mesmo Status, Prioridade ou Cliente em vários cards. Responde quais foram
      * alterados e o motivo de cada recusa; a ação fica no log da aplicação com o usuário do dashboard.
      */
-    public function changeItems(Request $request, MondayService $monday): JsonResponse
+    public function changeItems(Request $request, MondayService $monday, MondaySnapshotService $snapshots): JsonResponse
     {
         $data = $request->validate([
             'items' => ['required', 'array', 'min:1', 'max:200'],
@@ -324,17 +357,14 @@ class MondayController extends Controller
             'value.required' => 'Informe o novo valor.',
         ]);
 
-        return $this->attempt(function () use ($request, $monday, $data) {
+        return $this->attempt(function () use ($request, $monday, $snapshots, $data) {
             $connection = $this->configuredConnection();
             // Só o quadro de tarefas tem colunas mapeadas; nos quadros do Roadmap e do Backlog elas são reconhecidas pelo título.
             $boards = array_fill_keys(array_keys($this->itemBoards($connection)), []);
             $boards[(string) $connection->board_id] = array_filter(array_intersect_key($connection->column_map ?? [], array_flip(['Status', 'Prioridade', 'Cliente'])));
             $result = $monday->changeItemsField($connection->token, $boards, $data['items'], $data['field'], $data['value']);
             if ($result['updated']) {
-                Cache::forget(MondaySnapshotService::CACHE_KEY);
-                foreach (array_keys(self::BOARD_TABS) as $tab) {
-                    Cache::forget(self::BOARD_TAB_CACHE.$tab);
-                }
+                $snapshots->markStale();
             }
             Log::info('Alteração em massa pelo dashboard.', [
                 'field' => $data['field'], 'value' => $data['value'], 'updated' => $result['updated'], 'failed' => $result['failed'], 'user' => $request->user()->email,
@@ -393,27 +423,29 @@ class MondayController extends Controller
     }
 
     /**
-     * Quadro de uma aba da tela Tarefas (Roadmap ou Backlog). Lido com o mesmo intervalo de cache das tarefas.
+     * Quadro de uma aba da tela Tarefas (Roadmap ou Backlog), com a mesma regra das tarefas: o cache salvo na hora e,
+     * vencido, atualizado depois da resposta (`refreshing`). Com force, espera o Monday.
      */
-    public function boardTab(Request $request, string $tab, MondayService $monday): JsonResponse
+    public function boardTab(Request $request, string $tab, MondaySnapshotService $snapshots): JsonResponse
     {
         $data = $request->validate(['force' => ['nullable', 'boolean']]);
 
-        return $this->attempt(function () use ($monday, $data, $tab): array {
+        return $this->attempt(function () use ($snapshots, $data, $tab): array {
             $connection = $this->configuredConnection();
-            $boardId = (string) $connection->{self::BOARD_TABS[$tab]};
-            if ($boardId === '') {
-                return ['configured' => false];
-            }
-            $ttl = $connection->refresh_minutes === 0 ? 60 : $connection->refresh_minutes * 60;
-            $cached = Cache::get(self::BOARD_TAB_CACHE.$tab);
-            $fresh = $cached && ($cached['boardId'] ?? null) === $boardId && Carbon::parse($cached['syncedAt'])->diffInSeconds(now(), false) < $ttl;
-            if (! $fresh || ! empty($data['force'])) {
-                $cached = ['boardId' => $boardId, ...$monday->boardTab($connection->token, $boardId)];
-                Cache::put(self::BOARD_TAB_CACHE.$tab, $cached, 3600);
+            $ttl = $this->ttl($connection);
+            $board = $snapshots->boardTab($connection, $tab, $ttl, ! empty($data['force']));
+            $refreshing = $snapshots->stale;
+            if ($refreshing) {
+                defer(function () use ($snapshots, $connection, $tab, $ttl): void {
+                    try {
+                        $snapshots->refreshBoardTabInBackground($connection, $tab, $ttl);
+                    } catch (ConnectionException|RuntimeException $exception) {
+                        report($exception);
+                    }
+                });
             }
 
-            return ['configured' => true, ...$cached];
+            return $board['configured'] ? [...$board, 'refreshing' => $refreshing] : $board;
         });
     }
 
@@ -433,11 +465,11 @@ class MondayController extends Controller
         return $this->attempt(function () use ($monday, $data): array {
             $connection = $this->configuredConnection();
             $names = [];
-            foreach (self::BOARD_TABS as $tab => $column) {
+            foreach (MondaySnapshotService::BOARD_TABS as $tab => $column) {
                 $boardId = (string) ($data[$tab.'BoardId'] ?? '');
                 $names[$tab] = $boardId === '' ? null : $monday->board($connection->token, $boardId)['name'];
                 $connection->{$column} = $boardId === '' ? null : $boardId;
-                Cache::forget(self::BOARD_TAB_CACHE.$tab);
+                Cache::forget(MondaySnapshotService::BOARD_TAB_CACHE.$tab);
             }
             $connection->save();
 
@@ -453,7 +485,7 @@ class MondayController extends Controller
     private function itemBoards(MondayConnection $connection): array
     {
         $boards = [(string) $connection->board_id => $connection->column_map['Status'] ?? null];
-        foreach (self::BOARD_TABS as $column) {
+        foreach (MondaySnapshotService::BOARD_TABS as $column) {
             if (filled($connection->{$column})) {
                 $boards[(string) $connection->{$column}] ??= null;
             }
@@ -473,22 +505,74 @@ class MondayController extends Controller
     }
 
     /**
+     * Torre de controle e Burndown reconstituem a sprint pelo log de atividades (cerca de 1 segundo). O resultado vale
+     * enquanto não mudam o snapshot, o log copiado e o dia; os 5 minutos de validade limitam o que depende da hora atual
+     * (ex.: idade dos tickets de suporte em aberto).
+     *
+     * @param  callable(): array<string, mixed>  $build
+     * @return array<string, mixed>
+     */
+    private function cachedBuild(string $screen, array $snapshot, MondayConnection $connection, mixed $sprint, callable $build): array
+    {
+        $events = MondayActivityEvent::query()->where('board_id', (string) $connection->board_id)->selectRaw('count(*) as total, max(id) as last')->first();
+        $key = implode(':', [$screen, $sprint ?? 'atual', $snapshot['syncedAt'] ?? '', $events?->total, $events?->last, SprintRules::today()]);
+
+        return Cache::remember('screen-'.sha1($key), 300, $build);
+    }
+
+    /** Idade máxima do cache antes de atualizar: o intervalo das Configurações (desligado vale 1 minuto). */
+    private function ttl(MondayConnection $connection): int
+    {
+        return $connection->refresh_minutes === 0 ? 60 : $connection->refresh_minutes * 60;
+    }
+
+    /**
+     * Último snapshot salvo para as telas, sem esperar o Monday. Vencido, é atualizado depois da resposta (uma busca por
+     * vez); com dados novos, as sprints encerradas já ficam congeladas para a próxima tela e o log de atividades é copiado.
+     *
+     * @return array<string, mixed>
+     */
+    private function latestSnapshot(MondaySnapshotService $snapshots, MondayActivityImporter $importer, MondayConnection $connection, int $ttl): array
+    {
+        $snapshot = $snapshots->latest($connection, $ttl);
+        if ($snapshots->stale) {
+            defer(function () use ($snapshots, $importer, $connection, $ttl): void {
+                try {
+                    $fresh = $snapshots->refreshInBackground($connection, $ttl);
+                    if ($fresh !== null) {
+                        $snapshots->withFrozenSprints($fresh, $connection);
+                        $this->importActivityHourly($importer, $connection);
+                    }
+                } catch (ConnectionException|RuntimeException $exception) {
+                    report($exception);
+                }
+            });
+        }
+
+        return $snapshot;
+    }
+
+    /**
      * Sem servidor com agendador, o uso do dashboard mantém a cópia do histórico em dia.
      * Roda após a resposta e no máximo uma vez por hora; uma falha não afeta o sync.
      */
     private function importActivityAfterResponse(MondayActivityImporter $importer, MondayConnection $connection): void
     {
+        defer(fn () => $this->importActivityHourly($importer, $connection));
+    }
+
+    /** Copia o log de atividades no máximo uma vez por hora; uma falha libera a próxima tentativa. */
+    private function importActivityHourly(MondayActivityImporter $importer, MondayConnection $connection): void
+    {
         if (! Cache::add(self::ACTIVITY_IMPORT_KEY, true, 3600)) {
             return;
         }
-        defer(function () use ($importer, $connection): void {
-            try {
-                $importer->import($connection);
-            } catch (ConnectionException|RuntimeException $exception) {
-                Cache::forget(self::ACTIVITY_IMPORT_KEY);
-                report($exception);
-            }
-        });
+        try {
+            $importer->import($connection);
+        } catch (ConnectionException|RuntimeException $exception) {
+            Cache::forget(self::ACTIVITY_IMPORT_KEY);
+            report($exception);
+        }
     }
 
     private function token(Request $request): string

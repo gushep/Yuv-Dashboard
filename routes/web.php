@@ -70,6 +70,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/items/{item}', [MondayController::class, 'item'])->name('items.show');
         Route::get('/api/items/{item}/activity', [MondayController::class, 'itemActivity'])->name('items.activity');
         Route::post('/api/items/{item}/status', [MondayController::class, 'changeItemStatus'])->middleware('can:update-items')->name('items.status');
+        Route::post('/api/items/{item}/columns', [MondayController::class, 'changeItemColumn'])->middleware('can:update-items')->name('items.columns.update');
+        Route::get('/api/items/{item}/columns/{column}/options', [MondayController::class, 'itemColumnOptions'])
+            ->where('column', '[A-Za-z0-9_]{1,100}')->middleware('can:update-items')->name('items.columns.options');
         Route::post('/api/items/{item}/comments', [MondayController::class, 'postItemComment'])->middleware('can:update-items')->name('items.comments.store');
         Route::post('/api/items/{item}/comments/{update}/files', [MondayController::class, 'attachItemCommentFile'])
             ->whereNumber('update')->middleware('can:update-items')->name('items.comments.files.store');

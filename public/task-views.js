@@ -1,7 +1,8 @@
 /* Visualizações da tela Tarefas além da tabela: quadro Kanban e lista agrupada, sobre a mesma lista já filtrada.
  * Tarefas: por etapa, as colunas são as mesmas 4 dos painéis do Bombeiro e da Sprint (regra de SprintPanel.statusBucket);
  * arrastar para outra etapa abre a escolha do status do Monday. Roadmap e Backlog: as colunas são os status na ordem do fluxo,
- * e arrastar aplica o status da coluna. Só arrasta quem pode atualizar cards. */
+ * e arrastar aplica o status da coluna. Só arrasta quem pode atualizar cards. Visão 360°: esteira só de consulta
+ * (Roadmap → Implementados), com cada demanda numa coluna só. */
 window.TaskViews = (() => {
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const PRIORITY_ORDER = ['Crítica', 'Crítico', 'Alta', 'Média', 'Baixa'];
@@ -141,6 +142,50 @@ window.TaskViews = (() => {
       </details>`).join('') || `<div class="nd">${boardMode() ? 'Nenhum item' : 'Nenhuma tarefa'} com esses filtros.</div>`}</div>`;
   }
 
+  const formatDate = date => date ? date.split('-').reverse().join('/') : '';
+
+  /** Faixa do topo do card da esteira: entrega pela sprint (vermelha se o fim da sprint já passou) ou a sprint em que foi entregue. */
+  function pipelineBanner(row, stage) {
+    if (!row.Sprint) return '';
+    if (stage === 'implementado') return `<div class="pl-banner done"><span>Entregue na</span><strong>Sprint ${escape(row.Sprint)}</strong></div>`;
+    const end = window.MONDAY_SPRINT_DATES?.[row.Sprint]?.end;
+    if (!end) return `<div class="pl-banner"><span>Sprint</span><strong>${escape(row.Sprint)}</strong></div>`;
+    const late = end < SprintRules.today();
+    return `<div class="pl-banner ${late ? 'late' : ''}"><span>Previsão de entrega · Sprint ${escape(row.Sprint)}${late ? ' · atrasado' : ''}</span><strong>${escape(formatDate(end))}</strong></div>`;
+  }
+
+  function pipelineCard(row, stage, options) {
+    const people = devPeople(row).filter(person => !SprintRules.isExcludedPerson(person));
+    const description = clean(row.Descricao);
+    return `<article class="pl-card">
+        ${pipelineBanner(row, stage)}
+        <button type="button" class="pl-title" ${row.Id ? `data-open="${escape(row.Id)}"` : 'disabled'}>${escape(row.Nome)}</button>
+        ${description ? `<p class="pl-desc">${escape(description)}</p>` : ''}
+        <div class="tv-card-meta">
+          <span class="tv-status" style="--st:${escape(options.statusColor(row))}" title="Status no Monday">${escape(row.Status || 'Sem status')}</span>
+          ${row.Prioridade ? prioBadge(row.Prioridade) : ''}
+        </div>
+        ${row.Cliente || people.length ? `<div class="tv-card-foot">
+          <span class="tv-client" title="Cliente">${row.Cliente ? `🏢 ${escape(row.Cliente)}` : ''}</span>
+          <span class="tv-people">${people.map(person => `<span class="tv-avatar" title="${escape(person)}">${escape(initials(person))}</span>`).join('')}</span>
+        </div>` : ''}
+      </article>`;
+  }
+
+  /** Esteira da Visão 360°: uma coluna por etapa, na ordem do fluxo; cada card já chega na etapa em que está. */
+  function renderPipeline(container, rows, options) {
+    container.innerHTML = `<div class="pl-board">${options.stages.map(stage => {
+      // Implementados reúne todas as sprints: as entregas mais recentes primeiro.
+      const stageRows = stage.key === 'implementado'
+        ? rows.filter(row => row.Etapa === stage.key).sort((a, b) => (Number(b.Sprint) || 0) - (Number(a.Sprint) || 0))
+        : Bombeiro.sortByPriority(rows.filter(row => row.Etapa === stage.key));
+      return `<section class="pl-column" style="--stage:${escape(stage.color)}">
+          <header><h3>${escape(stage.label)}</h3><span class="tv-count">${stageRows.length}</span></header>
+          <div class="pl-cards">${stageRows.map(row => pipelineCard(row, stage.key, options)).join('') || '<div class="tv-empty">Nenhuma demanda</div>'}</div>
+        </section>`;
+    }).join('')}</div>`;
+  }
+
   function render(container, rows, options) {
     state.options = options;
     if (options.view === 'list') renderList(container, rows, options);
@@ -255,5 +300,5 @@ window.TaskViews = (() => {
     });
   });
 
-  return {render, toast};
+  return {render, renderPipeline, toast};
 })();

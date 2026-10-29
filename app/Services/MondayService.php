@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use DateTimeImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -10,6 +11,12 @@ use RuntimeException;
 
 class MondayService
 {
+    /**
+     * Tipos de coluna que o detalhe do card altera. Os demais (espelho, fórmula, arquivo, controle de tempo, datas de
+     * criação/atualização) são calculados pelo Monday ou têm caminho próprio (anexos vão pelos comentários).
+     */
+    public const EDITABLE_TYPES = ['status', 'dropdown', 'text', 'long_text', 'numbers', 'date', 'timeline', 'checkbox', 'people', 'board_relation', 'link', 'email'];
+
     public function query(string $token, string $query, array $variables = []): array
     {
         $response = Http::timeout(45)
@@ -294,9 +301,9 @@ query ($ids: [ID!]!) {
     board { id name columns { id title type settings_str } }
     assets { id name file_extension file_size public_url url }
     column_values {
-      id text type column { title }
+      id text type value column { title }
       ... on StatusValue { label_style { color } }
-      ... on BoardRelationValue { display_value }
+      ... on BoardRelationValue { display_value linked_item_ids }
       ... on MirrorValue { display_value }
     }
     subitems { id name column_values { text type ... on StatusValue { label_style { color } } } }
@@ -312,19 +319,25 @@ GRAPHQL;
         $statusColumnId = $this->statusColumnId($item['board']['columns'] ?? [], $boards[(string) $item['board']['id']] ?? null);
         $assets = $this->itemAssets($token, $item);
 
+        $boardColumns = collect($item['board']['columns'] ?? [])->keyBy('id');
         $columns = [];
         foreach ($item['column_values'] ?? [] as $value) {
             if (in_array($value['type'] ?? '', ['name', 'subtasks'], true)) {
                 continue;
             }
             $text = trim((string) (! empty($value['display_value']) ? $value['display_value'] : ($value['text'] ?? '')));
+            $type = (string) ($value['type'] ?? '');
+            $editable = in_array($type, self::EDITABLE_TYPES, true);
             $columns[] = [
                 'id' => (string) $value['id'],
                 'title' => (string) ($value['column']['title'] ?? $value['id']),
-                'type' => (string) ($value['type'] ?? ''),
+                'type' => $type,
                 'text' => $text,
                 'color' => $value['label_style']['color'] ?? null,
-                ...(($value['type'] ?? '') === 'file' ? ['files' => $this->assetsIn($text, $assets)] : []),
+                'editable' => $editable,
+                ...($editable ? ['current' => $this->currentValue($type, $value, $text, $boardColumns->get($value['id']) ?? [])] : []),
+                ...(in_array($type, ['status', 'dropdown'], true) ? ['options' => $this->labelOptions($boardColumns->get($value['id']) ?? [], $type)] : []),
+                ...($type === 'file' ? ['files' => $this->assetsIn($text, $assets)] : []),
             ];
         }
         $comment = fn (array $entry): array => [
@@ -516,6 +529,228 @@ GRAPHQL;
         }
         $mutation = 'mutation ($board: ID!, $item: ID!, $column: String!, $value: String!) { change_simple_column_value(board_id: $board, item_id: $item, column_id: $column, value: $value) { id } }';
         $this->query($token, $mutation, ['board' => $boardId, 'item' => $itemId, 'column' => $statusColumnId, 'value' => $label]);
+    }
+
+    /**
+     * Altera um campo do card (ou o nome, com $columnId "name") pelo detalhe do card. O valor chega no formato do editor
+     * de cada tipo e vai para o Monday no formato da coluna; vazio limpa o campo.
+     */
+    public function changeItemColumn(string $token, array $boards, string $itemId, string $columnId, mixed $value): void
+    {
+        $query = 'query ($ids: [ID!]!) { items(ids: $ids) { id board { id columns { id title type settings_str } } } }';
+        $item = $this->boardItem($token, array_keys($boards), $query, ['ids' => [$itemId]]);
+        if ($columnId === 'name') {
+            $name = is_string($value) ? trim($value) : '';
+            if ($name === '' || mb_strlen($name) > 255) {
+                throw new RuntimeException('Informe um nome de até 255 caracteres.');
+            }
+            $payload = $name;
+        } else {
+            $column = collect($item['board']['columns'] ?? [])->firstWhere('id', $columnId)
+                ?? throw new RuntimeException('Coluna não encontrada neste quadro.');
+            $payload = $this->columnPayload($column, $value);
+        }
+        $mutation = 'mutation ($board: ID!, $item: ID!, $values: JSON!) { change_multiple_column_values(board_id: $board, item_id: $item, column_values: $values) { id } }';
+        $this->query($token, $mutation, [
+            'board' => (string) $item['board']['id'], 'item' => $itemId,
+            'values' => json_encode([$columnId => $payload], JSON_UNESCAPED_UNICODE),
+        ]);
+    }
+
+    /**
+     * Opções de um campo de Pessoas (usuários da conta) ou de Conectar quadros (itens dos quadros ligados, ex.: Sprints
+     * e Épicos), carregadas só quando o campo é editado.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    public function columnOptions(string $token, array $boards, string $itemId, string $columnId): array
+    {
+        $query = 'query ($ids: [ID!]!) { items(ids: $ids) { id board { id columns { id title type settings_str } } } }';
+        $item = $this->boardItem($token, array_keys($boards), $query, ['ids' => [$itemId]]);
+        $column = collect($item['board']['columns'] ?? [])->firstWhere('id', $columnId)
+            ?? throw new RuntimeException('Coluna não encontrada neste quadro.');
+        if ($column['type'] === 'people') {
+            $users = $this->query($token, 'query { users(kind: non_guests, limit: 1000) { id name enabled } }')['users'] ?? [];
+            $options = array_map(fn (array $user): array => ['id' => (string) $user['id'], 'name' => (string) $user['name']],
+                array_filter($users, fn (array $user): bool => ($user['enabled'] ?? true) !== false));
+            usort($options, fn (array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+
+            return array_values($options);
+        }
+        if ($column['type'] === 'board_relation') {
+            $settings = json_decode((string) ($column['settings_str'] ?? ''), true) ?: [];
+            $boardIds = array_values(array_unique(array_map('strval', $settings['boardIds'] ?? (isset($settings['boardId']) ? [$settings['boardId']] : []))));
+            if ($boardIds === []) {
+                return [];
+            }
+            $linked = $this->query($token, 'query ($ids: [ID!]!) { boards(ids: $ids) { items_page(limit: 500) { items { id name } } } }', ['ids' => $boardIds])['boards'] ?? [];
+
+            return array_map(fn (array $entry): array => ['id' => (string) $entry['id'], 'name' => (string) $entry['name']],
+                array_merge(...array_map(fn (array $board): array => $board['items_page']['items'] ?? [], $linked)));
+        }
+
+        throw new RuntimeException('Este campo não tem lista de opções.');
+    }
+
+    /**
+     * Valor atual de um campo editável, no formato do editor: rótulos, ids de pessoas e de itens ligados, datas, etc.
+     *
+     * @param  array<string, mixed>  $value
+     * @param  array<string, mixed>  $column
+     */
+    private function currentValue(string $type, array $value, string $text, array $column): mixed
+    {
+        $raw = json_decode((string) ($value['value'] ?? ''), true);
+        $raw = is_array($raw) ? $raw : [];
+
+        return match ($type) {
+            'dropdown' => array_values(array_filter(array_map(function (mixed $id) use ($column): ?string {
+                foreach (json_decode((string) ($column['settings_str'] ?? ''), true)['labels'] ?? [] as $label) {
+                    if ((string) ($label['id'] ?? '') === (string) $id) {
+                        return (string) $label['name'];
+                    }
+                }
+
+                return null;
+            }, $raw['ids'] ?? []))),
+            'people' => array_values(array_map(fn (array $person): string => (string) $person['id'],
+                array_filter($raw['personsAndTeams'] ?? [], fn (mixed $person): bool => is_array($person) && ($person['kind'] ?? 'person') === 'person'))),
+            // O "value" de Conectar quadros vem vazio na API atual; os itens ligados ficam em linked_item_ids.
+            'board_relation' => array_values(array_map('strval', $value['linked_item_ids']
+                ?? array_map(fn (array $link): mixed => $link['linkedPulseId'], array_filter($raw['linkedPulseIds'] ?? [], 'is_array')))),
+            'date' => (string) ($raw['date'] ?? ''),
+            'timeline' => ['from' => (string) ($raw['from'] ?? ''), 'to' => (string) ($raw['to'] ?? '')],
+            'checkbox' => filter_var($raw['checked'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'link' => ['url' => (string) ($raw['url'] ?? ''), 'text' => (string) ($raw['text'] ?? '')],
+            'email' => (string) ($raw['email'] ?? $text),
+            default => $text,
+        };
+    }
+
+    /**
+     * Rótulos de uma coluna de status (na ordem do Monday) ou de dropdown.
+     *
+     * @param  array<string, mixed>  $column
+     * @return list<array{label: string, color: ?string}>
+     */
+    private function labelOptions(array $column, string $type): array
+    {
+        if ($type === 'status') {
+            return $this->statusOptions($column);
+        }
+
+        return array_map(fn (array $label): array => ['label' => (string) $label['name'], 'color' => null],
+            array_values(array_filter(json_decode((string) ($column['settings_str'] ?? ''), true)['labels'] ?? [], fn (mixed $label): bool => is_array($label) && isset($label['name']))));
+    }
+
+    /**
+     * Valor no formato que o Monday espera para o tipo da coluna, conferindo o que chega do editor. Vazio vira null (limpa).
+     *
+     * @param  array<string, mixed>  $column
+     */
+    private function columnPayload(array $column, mixed $value): mixed
+    {
+        $type = (string) ($column['type'] ?? '');
+        $title = (string) ($column['title'] ?? 'campo');
+        if (! in_array($type, self::EDITABLE_TYPES, true)) {
+            throw new RuntimeException("O campo {$title} é calculado pelo Monday e não pode ser alterado pelo dashboard.");
+        }
+        $text = is_scalar($value) ? trim((string) $value) : '';
+        $list = is_array($value) ? array_values(array_filter(array_map(fn (mixed $entry): string => is_scalar($entry) ? trim((string) $entry) : '', $value), 'strlen')) : [];
+        $invalid = fn (string $reason): RuntimeException => new RuntimeException("{$title}: {$reason}");
+
+        switch ($type) {
+            case 'status':
+                if ($text === '') {
+                    return null;
+                }
+                if (! in_array($text, array_column($this->statusOptions($column), 'label'), true)) {
+                    throw $invalid('opção inexistente neste quadro.');
+                }
+
+                return ['label' => $text];
+            case 'dropdown':
+                $labels = array_column($this->labelOptions($column, 'dropdown'), 'label');
+                if (array_diff($list, $labels) !== []) {
+                    throw $invalid('opção inexistente neste quadro.');
+                }
+
+                return $list === [] ? null : ['labels' => $list];
+            case 'text':
+                if (mb_strlen($text) > 2000) {
+                    throw $invalid('use no máximo 2.000 caracteres.');
+                }
+
+                return $text === '' ? null : $text;
+            case 'long_text':
+                $long = is_string($value) ? trim($value) : '';
+                if (mb_strlen($long) > 20000) {
+                    throw $invalid('use no máximo 20.000 caracteres.');
+                }
+
+                return $long === '' ? null : ['text' => $long];
+            case 'numbers':
+                $number = str_replace(',', '.', $text);
+                if ($number !== '' && ! is_numeric($number)) {
+                    throw $invalid('informe um número.');
+                }
+
+                return $number === '' ? null : $number;
+            case 'date':
+                if ($text !== '' && ! $this->isDate($text)) {
+                    throw $invalid('informe uma data válida.');
+                }
+
+                return $text === '' ? null : ['date' => $text];
+            case 'timeline':
+                $from = is_array($value) ? trim((string) ($value['from'] ?? '')) : '';
+                $to = is_array($value) ? trim((string) ($value['to'] ?? '')) : '';
+                if ($from === '' && $to === '') {
+                    return null;
+                }
+                if (! $this->isDate($from) || ! $this->isDate($to) || $from > $to) {
+                    throw $invalid('informe o início e o fim, com o fim depois do início.');
+                }
+
+                return ['from' => $from, 'to' => $to];
+            case 'checkbox':
+                return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? ['checked' => 'true'] : null;
+            case 'people':
+            case 'board_relation':
+                if (array_filter($list, fn (string $id): bool => ! ctype_digit($id)) !== []) {
+                    throw $invalid('seleção inválida.');
+                }
+                if ($list === []) {
+                    return null;
+                }
+
+                return $type === 'people'
+                    ? ['personsAndTeams' => array_map(fn (string $id): array => ['id' => (int) $id, 'kind' => 'person'], $list)]
+                    : ['item_ids' => array_map('intval', $list)];
+            case 'link':
+                $url = is_array($value) ? trim((string) ($value['url'] ?? '')) : '';
+                if ($url === '') {
+                    return null;
+                }
+                if (! preg_match('#^https?://\S+$#i', $url)) {
+                    throw $invalid('informe um link começando com http:// ou https://.');
+                }
+
+                return ['url' => $url, 'text' => trim((string) ($value['text'] ?? '')) ?: $url];
+            default:
+                if ($text !== '' && ! filter_var($text, FILTER_VALIDATE_EMAIL)) {
+                    throw $invalid('informe um e-mail válido.');
+                }
+
+                return $text === '' ? null : ['email' => $text, 'text' => $text];
+        }
+    }
+
+    private function isDate(string $value): bool
+    {
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+        return $date !== false && $date->format('Y-m-d') === $value;
     }
 
     /**

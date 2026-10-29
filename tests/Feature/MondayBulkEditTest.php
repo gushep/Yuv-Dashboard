@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Http\Controllers\MondayController;
 use App\Models\MondayConnection;
 use App\Models\User;
 use App\Screen;
@@ -47,10 +46,11 @@ class MondayBulkEditTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_priority_of_several_tasks_changes_in_a_single_mutation_and_caches_are_discarded(): void
+    public function test_priority_of_several_tasks_changes_in_a_single_mutation_and_caches_are_marked_stale(): void
     {
-        Cache::put(MondaySnapshotService::CACHE_KEY, ['rows' => []], 3600);
-        Cache::put(MondayController::BOARD_TAB_CACHE.'roadmap', ['rows' => []], 3600);
+        $this->freezeTime();
+        Cache::put(MondaySnapshotService::CACHE_KEY, ['rows' => [], 'syncedAt' => now()->toIso8601String()], 3600);
+        Cache::put(MondaySnapshotService::BOARD_TAB_CACHE.'roadmap', ['boardId' => '999', 'rows' => [], 'syncedAt' => now()->toIso8601String()], 3600);
         Http::fakeSequence('api.monday.com/v2')
             ->push(['data' => ['items' => [$this->item('55', '123', self::TASK_COLUMNS), $this->item('56', '123', self::TASK_COLUMNS)]]])
             ->push(['data' => ['m0' => ['id' => '55'], 'm1' => ['id' => '56']]]);
@@ -64,8 +64,11 @@ class MondayBulkEditTest extends TestCase
                 'b0' => '123', 'i0' => '55', 'c0' => 'prio', 'v0' => '{"label":"Alta"}',
                 'b1' => '123', 'i1' => '56', 'c1' => 'prio', 'v1' => '{"label":"Alta"}',
             ]);
-        $this->assertNull(Cache::get(MondaySnapshotService::CACHE_KEY));
-        $this->assertNull(Cache::get(MondayController::BOARD_TAB_CACHE.'roadmap'));
+        $snapshots = app(MondaySnapshotService::class);
+        $snapshots->latest(MondayConnection::current(), 3600);
+        $this->assertTrue($snapshots->stale);
+        $this->assertSame([], $snapshots->boardTab(MondayConnection::current(), 'roadmap', 3600)['rows']);
+        $this->assertTrue($snapshots->stale);
     }
 
     public function test_client_of_a_roadmap_item_is_found_by_title_and_written_as_text(): void

@@ -104,7 +104,9 @@ class SupportTicketTest extends TestCase
         Http::assertSent(fn (Request $request): bool => str_contains((string) $request['query'], 'create_update')
             && str_contains($request['variables']['body'], 'Cliente: Transportadora Alfa')
             && str_contains($request['variables']['body'], 'Enviado por Davi Suporte'));
-        $this->assertNull(Cache::get(MondaySnapshotService::CACHE_KEY));
+        $snapshots = app(MondaySnapshotService::class);
+        $snapshots->latest(MondayConnection::current(), 3600);
+        $this->assertTrue($snapshots->stale);
     }
 
     public function test_new_ticket_is_announced_in_the_firefighter_channel_mentioning_its_group(): void

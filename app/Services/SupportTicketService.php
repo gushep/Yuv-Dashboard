@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\MondayConnection;
 use App\Support\SprintRules;
-use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
 /**
@@ -66,7 +65,7 @@ class SupportTicketService
         if (empty($created['id'])) {
             throw new RuntimeException('O Monday não confirmou a criação do ticket.');
         }
-        Cache::forget(MondaySnapshotService::CACHE_KEY);
+        $this->snapshots->markStale();
 
         // O Monday registra o dono do token como criador; o comentário identifica quem abriu, guarda a descrição completa
         // e recebe as imagens da descrição (no Monday, imagens do corpo são anexos do comentário).
@@ -139,7 +138,8 @@ class SupportTicketService
      */
     private function currentSprint(MondayConnection $connection): array
     {
-        $snapshot = $this->snapshots->current($connection, $connection->refresh_minutes === 0 ? 60 : $connection->refresh_minutes * 60);
+        // O cronograma das sprints quase não muda: o último snapshot salvo basta, sem esperar o Monday.
+        $snapshot = $this->snapshots->latest($connection, PHP_INT_MAX);
         $today = SprintRules::today();
         $sprints = collect($snapshot['sprints'] ?? [])->sortBy('start')->values();
         $sprint = $sprints->filter(fn (array $s): bool => $s['start'] <= $today && $s['end'] >= $today)->last()
