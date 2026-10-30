@@ -34,6 +34,7 @@ class FeatureRequestController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'requester' => ['required', 'string', 'max:255'],
+            'client' => ['required', 'string', 'max:255'],
             'origin' => ['required', 'string', 'max:255'],
             'type' => ['required', 'string', 'max:255'],
             'module' => ['required', 'string', 'max:255'],
@@ -49,6 +50,8 @@ class FeatureRequestController extends Controller
             'title.required' => 'Informe o título.',
             'title.max' => 'O título deve ter no máximo 255 caracteres.',
             'requester.required' => 'Informe o nome do solicitante.',
+            'client.required' => 'Informe o cliente.',
+            'client.max' => 'O cliente deve ter no máximo 255 caracteres.',
             'origin.required' => 'Selecione a origem.',
             'type.required' => 'Selecione o tipo.',
             'module.required' => 'Selecione o módulo.',

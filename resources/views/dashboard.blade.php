@@ -1636,7 +1636,7 @@ function rawState(tab=rawTab){
 }
 /** Ordem de fluxo dos status de cada quadro (o Monday guarda os status em outra ordem); status desconhecidos vão para o fim. */
 const BOARD_FUNNELS={
-  roadmap:['aguardando revisao','informacoes ausentes','dependencia externa','adicionado ao backlog','action to sprint','em validacao','implementado','descontinuado'],
+  roadmap:['novo','necessita informacoes','mockup pendente','aguardando validacao','dependencia externa','validado','descontinuado'],
   backlog:['falta escopo','refinamento tecnico','mockup','preparado','adicionado ao backlog'],
 };
 const BOARD_TITLES={roadmap:'Roadmap',backlog:'Backlog'};
@@ -1663,6 +1663,8 @@ async function loadBoardTab(tab,force=false){
   finally{board.loading=false;board.loaded=true;}
   if(currentPage==='raw'){if(rawTab===tab||isOverviewTab()) buildRawFilters();renderRaw();}
 }
+/** Status do Funil de Demandas de quem já seguiu para o backlog (o antigo "Adicionado ao Backlog" virou "Validado" e "Adicionado no backlog"). */
+const ROADMAP_FORWARDED=['validado','adicionado no backlog','adicionado ao backlog'];
 /** A mesma demanda em quadros diferentes: os cards não têm vínculo preenchido no Monday, então valem os nomes iguais (sem o "(copy)"). */
 const demandKey=x=>SprintRules.normalize(clean(x.Nome).replace(/\s*\(copy\)\s*/gi,' '));
 /**
@@ -1676,7 +1678,7 @@ const taskStage=x=>SprintRules.isDone(x.Status)?'implementado':isSupportTask(x)?
  * - tarefas da sprint ativa: Em andamento, Em qualidade, Suporte ou Implementados, pelo status e pelo tipo;
  * - tarefas implementadas de qualquer sprint entram em Implementados;
  * - tarefa aberta de outra sprint só entra quando é a mesma demanda de um card do Roadmap ou do Backlog, e então substitui o card do quadro.
- * Retirados (Descontinuado, Despriorizado, Cancelado) ficam de fora, assim como os cards do Roadmap já "Adicionado ao Backlog":
+ * Retirados (Descontinuado, Despriorizado, Cancelado) ficam de fora, assim como os cards do Roadmap já "Validado" ou "Adicionado no backlog":
  * eles seguem nas etapas seguintes pelo card do Backlog ou da tarefa. Cópias recalculadas a cada renderização.
  */
 function overviewRows(){
@@ -1696,8 +1698,8 @@ function overviewRows(){
     const stage=active!==null&&x.Sprint>active&&!SprintRules.isDone(x.Status)?'priorizado':taskStage(x);
     demands.set(key,{...x,Etapa:stage,Quadro:'tarefas'});
   });
-  // Os cards "Adicionado ao Backlog" ainda servem para ligar a demanda à tarefa acima, mas não ficam na coluna Roadmap.
-  return [...demands.values()].filter(x=>!(x.Etapa==='roadmap'&&SprintRules.normalize(x.Status)==='adicionado ao backlog'));
+  // Os cards que já seguiram para o backlog ainda servem para ligar a demanda à tarefa acima, mas não ficam na coluna Roadmap.
+  return [...demands.values()].filter(x=>!(x.Etapa==='roadmap'&&ROADMAP_FORWARDED.includes(SprintRules.normalize(x.Status))));
 }
 /** Esteira do cliente selecionado na Visão 360°, com os filtros aplicados: o que o botão Exportar imagem baixa. */
 let rawExport=null;

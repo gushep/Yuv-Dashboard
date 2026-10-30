@@ -116,7 +116,7 @@ window.NewTicket = (() => {
     const sent = created.attached;
     const feature = created.kind === 'feature';
     const summary = feature
-      ? `<strong>#${escape(created.id)}</strong> foi aberta no <strong>${escape(created.boardName || 'Funil de Demandas')}</strong> com status Aguardando revisão${sent ? ` e ${sent} evidência(s)` : ''}. O time de produto avalia e prioriza junto às demais demandas.`
+      ? `<strong>#${escape(created.id)}</strong> foi aberta no <strong>${escape(created.boardName || 'Funil de Demandas')}</strong> com status ${escape(state.featureOptions?.status || 'Novo')}${sent ? ` e ${sent} evidência(s)` : ''}. O time de produto avalia e prioriza junto às demais demandas.`
       : `<strong>#${escape(created.id)}</strong> foi aberto no Monday na <strong>Sprint ${escape(created.sprint.number)}</strong>, com tipo Suporte e status Backlog${sent ? ` e ${sent} imagem(ns)/anexo(s) na descrição` : ''}.`;
     const canRetry = state.failed.length && (feature || created.commentId);
     return `<div class="nt-success">
@@ -223,7 +223,7 @@ window.NewTicket = (() => {
     };
     return `<form class="nt-form" novalidate>
         <div class="nt-fixed" aria-label="Valores definidos automaticamente">
-          <span class="nt-chip">Quadro: <b>${escape(options?.boardName || 'Funil de Demandas')}</b></span><span class="nt-chip">Status: <b>Aguardando revisão</b></span>
+          <span class="nt-chip">Quadro: <b>${escape(options?.boardName || 'Funil de Demandas')}</b></span><span class="nt-chip">Status: <b>${escape(options?.status || 'Novo')}</b></span>
           <button type="button" class="nt-link nt-change-kind" data-change-kind>← Trocar tipo</button>
         </div>
         <p class="nt-feature-intro">Canal oficial para demandas, ideias e melhorias de produto. Descreva o problema ou a necessidade com detalhes: quanto mais claro o problema, melhor conseguimos priorizar e melhor será a solução. Campos com <span class="nt-req">*</span> são obrigatórios.</p>
@@ -232,6 +232,11 @@ window.NewTicket = (() => {
         </label>
         <label class="nt-field"><span>Nome solicitante ${required}</span><span class="nt-hint">Quem pediu a demanda.</span>
           <input name="requester" maxlength="255" required autocomplete="off" value="${escape(options?.requester || '')}">
+        </label>
+        <label class="nt-field"><span>Cliente ${required}</span>
+          <span class="nt-hint">Nome comercial oficial, sempre escrito do mesmo jeito: escolha um da lista quando ele já existir. Se afeta vários clientes, informe o principal ou “Base toda”.</span>
+          <input name="client" maxlength="255" required autocomplete="off" list="nt-clients" placeholder="Nome do cliente">
+          <datalist id="nt-clients">${(options?.clients || []).map(client => `<option value="${escape(client)}">`).join('')}</datalist>
         </label>
         <div class="nt-grid">${FEATURE_SELECTS.slice(0, 3).map(select).join('')}</div>
         ${text('description')}
@@ -361,11 +366,11 @@ window.NewTicket = (() => {
     }
     const value = name => field(name).value.trim();
     const request = {
-      title:value('title'), requester:value('requester'), origin:value('origin'), type:value('type'), module:value('module'),
+      title:value('title'), requester:value('requester'), client:value('client'), origin:value('origin'), type:value('type'), module:value('module'),
       description:value('description'), affected:[...current.querySelectorAll('[name=affected]:checked')].map(input => input.value),
       solution:value('solution'), requirements:value('requirements'), motivation:value('motivation'), mrr:value('mrr'), severity:checked('severity'),
     };
-    const labels = [['title', 'título'], ['requester', 'nome solicitante'], ['origin', 'origem'], ['type', 'tipo'], ['module', 'módulo'],
+    const labels = [['title', 'título'], ['requester', 'nome solicitante'], ['client', 'cliente'], ['origin', 'origem'], ['type', 'tipo'], ['module', 'módulo'],
       ['description', 'descrição'], ['affected', 'quem é afetado'], ['motivation', 'motivação'], ['severity', 'severidade']];
     const missing = labels.filter(([name]) => name === 'affected' ? !request.affected.length : !request[name]);
     return {url:'/api/feature-requests', payload:request, missing};

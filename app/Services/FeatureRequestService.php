@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MondayConnection;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -13,7 +14,8 @@ use RuntimeException;
  */
 class FeatureRequestService
 {
-    public const STATUS = 'Aguardando revisão';
+    /** Status com que toda demanda nasce no Funil de Demandas. */
+    public const STATUS = 'Novo';
 
     /** Bug é Sustentação: fica fora dos tipos aceitos aqui. */
     public const EXCLUDED_TYPES = ['Bug'];
@@ -25,6 +27,7 @@ class FeatureRequestService
      */
     private const COLUMNS = [
         'requester' => ['titles' => ['nome solicitante', 'solicitante'], 'types' => ['text']],
+        'client' => ['titles' => ['cliente'], 'types' => ['text']],
         'origin' => ['titles' => ['origem'], 'types' => ['status']],
         'type' => ['titles' => ['tipo'], 'types' => ['status']],
         'module' => ['titles' => ['modulo'], 'types' => ['status']],
@@ -51,20 +54,35 @@ class FeatureRequestService
     /**
      * Opções de cada campo de escolha, na ordem do Monday.
      *
-     * @return array{boardName: string, origin: list<string>, type: list<string>, module: list<string>, affected: list<string>, motivation: list<string>, mrr: list<string>, severity: list<string>}
+     * @return array{boardName: string, status: string, origin: list<string>, type: list<string>, module: list<string>, affected: list<string>, motivation: list<string>, mrr: list<string>, severity: list<string>, clients: list<string>}
      */
     public function options(MondayConnection $connection): array
     {
         ['name' => $name, 'columns' => $columns] = $this->board($connection);
         $fields = [...array_keys(self::CHOICES), 'affected'];
 
-        return ['boardName' => $name, ...array_combine($fields, array_map(fn (string $field): array => $this->labels($columns[$field], $field), $fields))];
+        return ['boardName' => $name, 'status' => self::STATUS, ...array_combine($fields, array_map(fn (string $field): array => $this->labels($columns[$field], $field), $fields)), 'clients' => $this->knownClients()];
     }
 
     /**
-     * Cria a demanda com status Aguardando revisão e a data de hoje como Data do registro.
+     * Clientes já usados nos cards do Funil de Demandas e das tarefas, para o formulário sugerir o nome escrito sempre do
+     * mesmo jeito (o filtro de clientes da Visão 360° depende disso). Lidos dos dados já salvos, sem consultar o Monday.
      *
-     * @param  array{title: string, requester: string, origin: string, type: string, module: string, description: string, affected: list<string>, solution: string, requirements: string, motivation: string, mrr: string, severity: string}  $request
+     * @return list<string>
+     */
+    private function knownClients(): array
+    {
+        $rows = [...(Cache::get(MondaySnapshotService::BOARD_TAB_CACHE.'roadmap')['rows'] ?? []), ...(Cache::get(MondaySnapshotService::CACHE_KEY)['rows'] ?? [])];
+        $clients = array_values(array_unique(array_filter(array_map(fn (array $row): string => trim((string) ($row['Cliente'] ?? '')), $rows), 'strlen')));
+        sort($clients, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $clients;
+    }
+
+    /**
+     * Cria a demanda com o status de entrada (STATUS) e a data de hoje como Data do registro.
+     *
+     * @param  array{title: string, requester: string, client: string, origin: string, type: string, module: string, description: string, affected: list<string>, solution: string, requirements: string, motivation: string, mrr: string, severity: string}  $request
      * @return array{id: string, url: string, boardName: string}
      */
     public function create(MondayConnection $connection, array $request): array
@@ -85,6 +103,7 @@ class FeatureRequestService
         $text = fn (array $column, string $value): mixed => $column['type'] === 'long_text' ? ['text' => $value] : $value;
         $values = [
             $columns['requester']['id'] => $request['requester'],
+            $columns['client']['id'] => $request['client'],
             $columns['description']['id'] => $text($columns['description'], $request['description']),
             $columns['affected']['id'] => ['labels' => array_values($request['affected'])],
             $columns['status']['id'] => ['label' => self::STATUS],

@@ -5,9 +5,11 @@ namespace Tests\Feature;
 use App\Models\MondayConnection;
 use App\Models\User;
 use App\Screen;
+use App\Services\MondaySnapshotService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -41,10 +43,23 @@ class FeatureRequestTest extends TestCase
         $this->actingAs(User::factory()->withScreens(Screen::RawData)->canCreateTickets()->create(['name' => 'Ana Produto']))
             ->getJson('/api/feature-requests/options')->assertOk()
             ->assertJsonPath('boardName', 'Funil de Demandas')
+            ->assertJsonPath('status', 'Novo')
             ->assertJsonPath('requester', 'Ana Produto')
             ->assertJsonPath('type', ['Feature', 'Melhoria', 'Homologação'])
             ->assertJsonPath('affected', ['Base Toda', 'Revendedores', 'Motoristas'])
             ->assertJsonPath('severity', ['Alta', 'Crítico', 'Média', 'Baixa']);
+    }
+
+    public function test_options_suggest_the_clients_already_used_in_the_funnel_and_in_the_tasks_without_calling_monday_again(): void
+    {
+        Cache::put(MondaySnapshotService::BOARD_TAB_CACHE.'roadmap', ['rows' => [['Cliente' => ' WISEVIA '], ['Cliente' => ''], ['Cliente' => 'ARQIA']]], 3600);
+        Cache::put(MondaySnapshotService::CACHE_KEY, ['rows' => [['Cliente' => 'arqia cr'], ['Cliente' => 'WISEVIA']]], 3600);
+        Http::fake(['api.monday.com/v2' => Http::response($this->boardResponse())]);
+
+        $this->actingAs(User::factory()->withScreens(Screen::RawData)->canCreateTickets()->create())
+            ->getJson('/api/feature-requests/options')->assertOk()
+            ->assertJsonPath('clients', ['ARQIA', 'arqia cr', 'WISEVIA']);
+        Http::assertSentCount(1);
     }
 
     public function test_request_is_created_in_the_funnel_awaiting_review_with_every_form_column(): void
@@ -65,11 +80,12 @@ class FeatureRequestTest extends TestCase
             $this->assertSame(['board' => '999', 'name' => 'Filtro por modelo de equipamento'], array_intersect_key($request['variables'], ['board' => 1, 'name' => 1]));
             $this->assertEqualsCanonicalizing([
                 'text_req' => 'Joana CS',
+                'text_cli' => 'Transportadora Alfa',
                 'long_desc' => ['text' => 'Clientes não conseguem filtrar alarmes por modelo.'],
                 'long_sol' => ['text' => 'Adicionar o filtro na tela de alarmes.'],
                 'long_req' => ['text' => 'Filtrar por um ou mais modelos.'],
                 'drop_aff' => ['labels' => ['Base Toda', 'Motoristas']],
-                'status' => ['label' => 'Aguardando revisão'],
+                'status' => ['label' => 'Novo'],
                 'origin' => ['label' => 'CS'],
                 'type' => ['label' => 'Melhoria'],
                 'module' => ['label' => 'Relatorios'],
@@ -102,7 +118,7 @@ class FeatureRequestTest extends TestCase
         $this->actingAs(User::factory()->withScreens(Screen::RawData)->canCreateTickets()->create());
 
         $this->postJson('/api/feature-requests', [])->assertUnprocessable()
-            ->assertJsonValidationErrors(['title', 'requester', 'origin', 'type', 'module', 'description', 'affected', 'motivation', 'severity'])
+            ->assertJsonValidationErrors(['title', 'requester', 'client', 'origin', 'type', 'module', 'description', 'affected', 'motivation', 'severity'])
             ->assertJsonMissingValidationErrors(['solution', 'requirements', 'mrr']);
         $this->postJson('/api/feature-requests', $this->request(['mrr' => 'Milhões']))
             ->assertUnprocessable()->assertJsonPath('error', 'Possível MRR inválido(a) para o Funil de Demandas.');
@@ -154,7 +170,7 @@ class FeatureRequestTest extends TestCase
     private function request(array $overrides = []): array
     {
         return [
-            'title' => 'Filtro por modelo de equipamento', 'requester' => ' Joana CS ', 'origin' => 'CS', 'type' => 'Melhoria', 'module' => 'Relatorios',
+            'title' => 'Filtro por modelo de equipamento', 'requester' => ' Joana CS ', 'client' => ' Transportadora Alfa ', 'origin' => 'CS', 'type' => 'Melhoria', 'module' => 'Relatorios',
             'description' => 'Clientes não conseguem filtrar alarmes por modelo.', 'affected' => ['Base Toda', 'Motoristas'],
             'solution' => 'Adicionar o filtro na tela de alarmes.', 'requirements' => 'Filtrar por um ou mais modelos.',
             'motivation' => 'Retenção', 'mrr' => 'Sem receita direta', 'severity' => 'Média', ...$overrides,
@@ -176,10 +192,11 @@ class FeatureRequestTest extends TestCase
                 ['id' => 'name', 'title' => 'Titulo', 'type' => 'name', 'settings_str' => '{}'],
                 $status('impact', 'Impacto', ['0' => 'Alta', '1' => 'Crítico', '2' => 'Média', '7' => 'Baixa']),
                 ['id' => 'long_desc', 'title' => 'Descrição da demanda', 'type' => 'long_text', 'settings_str' => '{}'],
-                $status('status', 'Status', ['1' => 'Implementado', '9' => 'Aguardando revisão']),
+                $status('status', 'Status', ['1' => 'Validado', '9' => 'Novo']),
                 $status('origin', 'Origem', ['0' => 'Interno', '2' => 'CS']),
                 $status('module', 'Modulo', ['1' => 'Rastreamento', '5' => 'Relatorios']),
                 ['id' => 'text_req', 'title' => 'Nome solicitante', 'type' => 'text', 'settings_str' => '{}'],
+                ['id' => 'text_cli', 'title' => 'Cliente', 'type' => 'text', 'settings_str' => '{}'],
                 $status('type', 'Tipo', ['0' => 'Feature', '1' => 'Melhoria', '2' => 'Bug', '4' => 'Homologação']),
                 ['id' => 'date', 'title' => 'Data do registro', 'type' => 'date', 'settings_str' => '{}'],
                 ['id' => 'long_sol', 'title' => 'Solução proposta', 'type' => 'long_text', 'settings_str' => '{}'],
