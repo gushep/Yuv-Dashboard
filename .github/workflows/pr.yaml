@@ -20,6 +20,8 @@ jobs:
     secrets: inherit
   pr-meta:
     uses: jimibrasil/yuv-ci-workflows/.github/workflows/pr-meta.yml@v2
+    with:
+      catalog-required: false
   gate:
     if: always()
     needs: [tests, image, pr-meta]
