@@ -7,6 +7,7 @@ use App\Services\BombeiroNotifier;
 use App\Services\MondayActivityImporter;
 use App\Services\MondaySnapshotService;
 use App\Services\SprintReleaseService;
+use App\Support\DarkThemeStylesheet;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Artisan;
@@ -36,6 +37,10 @@ Artisan::command('app:create-admin {email} {name}', function (string $email, str
 
     return 0;
 })->purpose('Cria um usuário inicial do dashboard');
+
+Artisan::command('theme:dark', function (DarkThemeStylesheet $stylesheet) {
+    $this->info('Tema escuro gerado em '.$stylesheet->write().'.');
+})->purpose('Gera o public/dark-theme.css a partir dos estilos do dashboard. Rode sempre que mudar um CSS.');
 
 Artisan::command('monday:import-activity', function (MondayActivityImporter $importer) {
     $connection = MondayConnection::current();

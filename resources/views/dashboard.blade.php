@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="{{ auth()->user()->theme->value }}">
 <head>
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <meta charset="UTF-8">
@@ -7,6 +7,7 @@
 <title>Yuv Sprint Metrics</title>
 @include('pwa-head')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ URL::versioned('theme.js') }}"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -44,6 +45,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .apk-download{text-decoration:none}
 /* Dentro do app instalado o link de download não faz sentido. */
 @media(display-mode:standalone){.apk-download{display:none}}
+/* Botão de tema: mostra a opção para a qual a pessoa vai trocar. */
+.theme-icon-light,.theme-label-light,[data-theme=dark] .theme-icon-dark,[data-theme=dark] .theme-label-dark{display:none}
+[data-theme=dark] .theme-icon-light{display:block}
+[data-theme=dark] .theme-label-light{display:inline}
 .sidebar-version{padding:6px 20px 0;font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap}
 
 /* OVERLAY */
@@ -253,6 +258,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="{{ URL::versioned('new-ticket.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('task-views.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('responsive.css') }}">
+{{-- Gerado por php artisan theme:dark a partir dos estilos acima; fica por último para valer sobre eles. --}}
+<link rel="stylesheet" href="{{ URL::versioned('dark-theme.css') }}">
 </head>
 <body>
 <aside class="sidebar" id="sidebar" onmouseleave="this.classList.remove('suppressed')" onkeydown="this.classList.remove('suppressed')">
@@ -368,6 +375,11 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <span class="nav-label">Baixar app Android</span>
     </a>
     @endif
+    <button type="button" class="sidebar-action theme-toggle" onclick="Theme.toggle()" aria-pressed="{{ auth()->user()->theme === App\Theme::Dark ? 'true' : 'false' }}">
+      <svg class="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg class="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <span class="nav-label theme-label-dark">Tema escuro</span><span class="nav-label theme-label-light">Tema claro</span>
+    </button>
     <form method="post" action="/logout">@csrf<button type="submit" class="sidebar-action">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       <span class="nav-label">Sair da conta</span>
@@ -885,12 +897,12 @@ Chart.register({id:'valueLabels',defaults:{display:false},afterDatasetsDraw(char
       });
       const {x,y}=meta.data[0]||{};
       if(x===undefined) return;
-      ctx.fillStyle='#0d1117';ctx.font="700 18px 'DM Sans',sans-serif";ctx.fillText(String(total),x,y-7);
-      ctx.fillStyle='#64748b';ctx.font="500 10px 'DM Sans',sans-serif";ctx.fillText(opts.unit||'itens',x,y+9);
+      ctx.fillStyle=Theme.color('#0d1117');ctx.font="700 18px 'DM Sans',sans-serif";ctx.fillText(String(total),x,y-7);
+      ctx.fillStyle=Theme.color('#64748b');ctx.font="500 10px 'DM Sans',sans-serif";ctx.fillText(opts.unit||'itens',x,y+9);
       return;
     }
     const horizontal=chart.options.indexAxis==='y';
-    ctx.textAlign=horizontal?'left':'center';ctx.fillStyle='#334155';
+    ctx.textAlign=horizontal?'left':'center';ctx.fillStyle=Theme.color('#334155');
     meta.data.forEach((bar,j)=>{
       const v=Number(ds.data[j])||0;
       if(v) ctx.fillText(String(v),horizontal?bar.x+4:bar.x,horizontal?bar.y:bar.y-7);

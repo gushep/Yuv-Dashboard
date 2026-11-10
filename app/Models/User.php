@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Screen;
+use App\Theme;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -15,6 +16,7 @@ use Illuminate\Support\Collection;
 
 /**
  * @property Collection<int, Screen>|null $screens
+ * @property Theme $theme
  */
 #[Fillable(['name', 'email', 'password', 'screens', 'can_update_items', 'can_create_tickets'])]
 #[Hidden(['password', 'remember_token'])]
@@ -22,6 +24,13 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    /**
+     * Usuário novo começa no tema claro, como a coluna do banco.
+     *
+     * @var array<string, string>
+     */
+    protected $attributes = ['theme' => 'light'];
 
     /**
      * Get the attributes that should be cast.
@@ -36,6 +45,7 @@ class User extends Authenticatable
             'screens' => AsEnumCollection::of(Screen::class),
             'can_update_items' => 'boolean',
             'can_create_tickets' => 'boolean',
+            'theme' => Theme::class,
         ];
     }
 

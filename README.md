@@ -37,6 +37,12 @@ Cada tela tem seu próprio endereço (`/torre-de-controle`, `/burndown`, `/sprin
 
 No celular (até 640px), `public/responsive.css` e `public/responsive.js` transformam as tabelas de lista em cartões (com o cabeçalho como botões de ordenação e sem os campos vazios), abrem os modais em tela cheia e compactam os cabeçalhos das telas. As tabelas comparativas de Capacity, Previsibilidade e Consumo mantêm rolagem lateral com a primeira coluna fixa.
 
+### Tema claro e escuro
+
+Qualquer usuário logado troca entre o tema claro (padrão) e o escuro no botão do rodapé do menu lateral, sem permissão de tela. A escolha fica gravada no usuário (`users.theme`, enum `App\Theme`, rota `POST /api/theme`) e a página já abre no tema salvo (`data-theme` no `<html>`), sem piscar.
+
+As cores do tema escuro ficam em `public/dark-theme.css`, **gerado** pelo `php artisan theme:dark` a partir do `<style>` do `dashboard.blade.php` e dos `.css` que a página carrega (`App\Support\DarkThemeStylesheet`): cada regra com cor é repetida com o prefixo `[data-theme=dark]`, as variáveis principais do `:root` têm valores escolhidos à mão (`TOKENS`) e as demais cores trocam de luminosidade mantendo o tom. Ao mudar qualquer CSS do dashboard, rode `php artisan theme:dark` e suba o `dark-theme.css` junto; o teste `ThemePreferenceTest` falha se o arquivo estiver desatualizado. Ajustes pontuais que a troca automática não resolve vão em `EXTRA`. As cores neutras dos gráficos (eixos, grade, legenda e textos desenhados no canvas) acompanham o tema por `public/theme.js`. A exportação do pipeline como imagem continua no tema claro.
+
 ### App Android
 
 O app **Yuv Sprint Metrics** (pacote `br.com.yuv.metrics`, identificador técnico mantido para não quebrar as instalações existentes) é um pacote TWA gerado pelo PWABuilder: abre o próprio site em tela cheia, então sempre mostra a versão publicada e não precisa ser gerado de novo a cada deploy. O `public/.well-known/assetlinks.json` liga o app ao domínio (sem ele, o app abre com a barra do Chrome). O instalador fica em `public/downloads/yuv-sprint-metrics.apk` no servidor, fora do Git (`*.apk` é ignorado); quando o arquivo existe, o menu lateral mostra "Baixar app Android". Para publicar uma versão nova, gere o pacote com a **mesma chave de assinatura** (guardada fora do repositório) e substitua o arquivo no servidor.

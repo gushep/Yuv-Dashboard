@@ -3,6 +3,7 @@
 use App\Http\Controllers\FeatureRequestController;
 use App\Http\Controllers\MondayController;
 use App\Http\Controllers\SupportTicketController;
+use App\Http\Controllers\ThemeController;
 use App\Http\Controllers\UserController;
 use App\Screen;
 use Illuminate\Http\Request;
@@ -50,6 +51,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/capacity', [MondayController::class, 'capacity']);
     Route::get('/api/support-reserves', [MondayController::class, 'supportReserves'])->name('support-reserves.index');
     Route::post('/api/sync', [MondayController::class, 'sync']);
+    Route::post('/api/theme', ThemeController::class)->name('theme.update');
 
     Route::middleware('screen:settings')->group(function () {
         Route::post('/api/boards', [MondayController::class, 'boards']);
