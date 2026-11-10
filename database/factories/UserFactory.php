@@ -66,6 +66,26 @@ class UserFactory extends Factory
     }
 
     /**
+     * Maestro Scrum: conduz a planning poker e grava a estimativa no card.
+     */
+    public function scrumMaster(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'can_conduct_planning' => true,
+        ]);
+    }
+
+    /**
+     * Time de desenvolvimento: joga a carta com as horas na planning.
+     */
+    public function estimator(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'can_estimate_planning' => true,
+        ]);
+    }
+
+    /**
      * Indicate that the model's email address should be unverified.
      */
     public function unverified(): static

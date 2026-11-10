@@ -26,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('access-screen', fn (User $user, string $screen): bool => $user->canAccessScreen(Screen::from($screen)));
         Gate::define('update-items', fn (User $user): bool => $user->canUpdateItems());
         Gate::define('create-tickets', fn (User $user): bool => $user->canCreateTickets());
+        Gate::define('conduct-planning', fn (User $user): bool => $user->canConductPlanning());
 
         // O CDN da hospedagem guarda .js e .css por 7 dias; a versão no endereço faz o navegador buscar o arquivo novo após cada deploy.
         URL::macro('versioned', function (string $path): string {

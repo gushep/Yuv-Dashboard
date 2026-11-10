@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
  * @property Collection<int, Screen>|null $screens
  * @property Theme $theme
  */
-#[Fillable(['name', 'email', 'password', 'screens', 'can_update_items', 'can_create_tickets'])]
+#[Fillable(['name', 'email', 'password', 'screens', 'can_update_items', 'can_create_tickets', 'can_conduct_planning', 'can_estimate_planning'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -45,6 +45,8 @@ class User extends Authenticatable
             'screens' => AsEnumCollection::of(Screen::class),
             'can_update_items' => 'boolean',
             'can_create_tickets' => 'boolean',
+            'can_conduct_planning' => 'boolean',
+            'can_estimate_planning' => 'boolean',
             'theme' => Theme::class,
         ];
     }
@@ -63,6 +65,22 @@ class User extends Authenticatable
     public function canCreateTickets(): bool
     {
         return $this->can_create_tickets && ($this->canAccessScreen(Screen::RawData) || $this->canAccessScreen(Screen::Firefighter));
+    }
+
+    /**
+     * Maestro Scrum: escolhe o card, revela os votos e grava a estimativa escolhida no Monday. Exige a tela Planning.
+     */
+    public function canConductPlanning(): bool
+    {
+        return $this->can_conduct_planning && $this->canAccessScreen(Screen::Planning);
+    }
+
+    /**
+     * Joga a carta com as horas na planning: é o time de desenvolvimento. Quem só tem a tela assiste à mesa.
+     */
+    public function canEstimatePlanning(): bool
+    {
+        return $this->can_estimate_planning && $this->canAccessScreen(Screen::Planning);
     }
 
     public function canAccessScreen(Screen $screen): bool

@@ -46,7 +46,7 @@ window.Users = (() => {
       const screens = user.screens.length
         ? `<div class="users-screen-list">${user.screens.map(value => `<span class="b">${escape(screenLabel(value))}</span>`).join('')}</div>`
         : '<span class="users-none">Sem acesso a nenhuma tela</span>';
-      const permissions = [user.canUpdateItems && 'Atualiza cards', user.canCreateTickets && 'Abre tickets'].filter(Boolean);
+      const permissions = [user.canUpdateItems && 'Atualiza cards', user.canCreateTickets && 'Abre tickets', user.canConductPlanning && 'Maestro Scrum', user.canEstimatePlanning && 'Estima na planning'].filter(Boolean);
       const statusPermission = permissions.length ? `<div class="users-screen-list users-perm-list">${permissions.map(label => `<span class="b users-perm">${label}</span>`).join('')}</div>` : '';
       const isMe = user.id === currentUserId();
       return `<tr>
@@ -84,6 +84,8 @@ window.Users = (() => {
     setSelected(user.screens);
     el('users-update-items').checked = user.canUpdateItems;
     el('users-create-tickets').checked = user.canCreateTickets;
+    el('users-conduct-planning').checked = user.canConductPlanning;
+    el('users-estimate-planning').checked = user.canEstimatePlanning;
     el('users-form-title').textContent = `Editar ${user.name}`;
     el('users-save').textContent = 'Salvar alterações';
     el('users-cancel').hidden = false;
@@ -110,7 +112,7 @@ window.Users = (() => {
     state.saving = true;
     el('users-save').disabled = true;
     const editing = state.editing;
-    const body = {name:el('users-name').value.trim(), email:el('users-email').value.trim(), password:el('users-password').value, screens:selectedScreens(), can_update_items:el('users-update-items').checked, can_create_tickets:el('users-create-tickets').checked};
+    const body = {name:el('users-name').value.trim(), email:el('users-email').value.trim(), password:el('users-password').value, screens:selectedScreens(), can_update_items:el('users-update-items').checked, can_create_tickets:el('users-create-tickets').checked, can_conduct_planning:el('users-conduct-planning').checked, can_estimate_planning:el('users-estimate-planning').checked};
     try {
       await request(editing ? `${baseUrl()}/${editing}` : baseUrl(), editing ? 'PUT' : 'POST', body);
       resetForm();

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\FeatureRequestController;
 use App\Http\Controllers\MondayController;
+use App\Http\Controllers\PlanningController;
 use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\ThemeController;
 use App\Http\Controllers\UserController;
@@ -89,6 +90,24 @@ Route::middleware('auth')->group(function () {
         Route::post('/api/feature-requests', [FeatureRequestController::class, 'store'])->name('feature-requests.store');
         Route::post('/api/feature-requests/{item}/files', [FeatureRequestController::class, 'attachFile'])
             ->whereNumber('item')->name('feature-requests.files.store');
+    });
+
+    Route::middleware('screen:planning')->prefix('/api/planning')->name('planning.')->group(function () {
+        Route::get('/', [PlanningController::class, 'show'])->name('show');
+        Route::get('/sprints', [PlanningController::class, 'history'])->name('history');
+        Route::whereNumber(['session', 'round'])->group(function () {
+            Route::get('/rounds/{round}/scope', [PlanningController::class, 'scope'])->name('rounds.scope');
+            Route::post('/rounds/{round}/votes', [PlanningController::class, 'vote'])->name('votes.store');
+            Route::middleware('can:conduct-planning')->group(function () {
+                Route::post('/sessions', [PlanningController::class, 'openTable'])->name('sessions.store');
+                Route::post('/sessions/{session}/close', [PlanningController::class, 'closeTable'])->name('sessions.close');
+                Route::post('/sessions/{session}/rounds', [PlanningController::class, 'playCard'])->name('rounds.store');
+                Route::post('/rounds/{round}/estimate', [PlanningController::class, 'startEstimate'])->name('rounds.estimate');
+                Route::post('/rounds/{round}/reveal', [PlanningController::class, 'reveal'])->name('rounds.reveal');
+                Route::post('/rounds/{round}/decision', [PlanningController::class, 'decide'])->name('rounds.decide');
+                Route::post('/rounds/{round}/cancel', [PlanningController::class, 'cancel'])->name('rounds.cancel');
+            });
+        });
     });
 
     Route::apiResource('/api/users', UserController::class)->except('show')->middleware('screen:users');

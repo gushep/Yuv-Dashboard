@@ -15,6 +15,7 @@ enum Screen: string
     case Epics = 'epicos';
     case Team = 'time';
     case RawData = 'raw';
+    case Planning = 'planning';
     case Firefighter = 'bombeiro';
     case SprintPanel = 'sprint-panel';
     case Carousel = 'carousel';
@@ -35,6 +36,7 @@ enum Screen: string
             self::Epics => 'Épicos',
             self::Team => 'Time',
             self::RawData => 'Tarefas',
+            self::Planning => 'Planning poker',
             self::Firefighter => 'Painel do Bombeiro',
             self::SprintPanel => 'Painel da Sprint',
             self::Carousel => 'Apresentação dos Painéis',
@@ -58,6 +60,7 @@ enum Screen: string
             self::Epics => 'epicos',
             self::Team => 'time',
             self::RawData => 'tarefas',
+            self::Planning => 'planning',
             self::Firefighter => 'bombeiro',
             self::SprintPanel => 'painel-da-sprint',
             self::Carousel => 'apresentacao',

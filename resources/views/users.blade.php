@@ -28,6 +28,16 @@
         <span class="users-switch-track" aria-hidden="true"></span>
         <span class="users-switch-text"><strong>Abrir tickets</strong><small>Botão Novo Ticket nas telas Tarefas e Painel do Bombeiro.</small></span>
       </label>
+      <label class="users-switch">
+        <input type="checkbox" role="switch" id="users-conduct-planning">
+        <span class="users-switch-track" aria-hidden="true"></span>
+        <span class="users-switch-text"><strong>Maestro Scrum</strong><small>Na tela Planning poker: abrir a mesa, jogar os cards, revelar e gravar a estimativa no card. Não joga carta.</small></span>
+      </label>
+      <label class="users-switch">
+        <input type="checkbox" role="switch" id="users-estimate-planning">
+        <span class="users-switch-track" aria-hidden="true"></span>
+        <span class="users-switch-text"><strong>Estima na planning</strong><small>Time de desenvolvimento: joga a carta com as horas. Sem esta marca, a pessoa só assiste à mesa.</small></span>
+      </label>
     </fieldset>
     <div class="settings-actions">
       <button type="submit" id="users-save">Cadastrar usuário</button>

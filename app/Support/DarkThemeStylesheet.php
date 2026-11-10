@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 /**
  * Gera o public/dark-theme.css a partir dos estilos do dashboard (o <style> da página e os .css carregados por ela).
@@ -34,6 +35,14 @@ class DarkThemeStylesheet
     /**
      * Ajustes que a troca automática não resolve (ex.: tooltip que usa a cor do texto como fundo).
      */
+    /**
+     * Áreas com cores próprias, iguais nos dois temas (ex.: a mesa e as cartas da Planning poker): as regras cujo
+     * seletor contém uma delas não são repetidas no tema escuro.
+     *
+     * @var list<string>
+     */
+    public const FIXED = ['.pp-game'];
+
     public const EXTRA = <<<'CSS'
 :root[data-theme=dark]{color-scheme:dark}
 [data-theme=dark] .kpi-tip{background:#2a3446;color:#e6ebf2}
@@ -201,6 +210,9 @@ CSS;
                     $out .= "{$node['at']}{\n{$inner}}\n";
                 }
 
+                continue;
+            }
+            if (Str::contains($node['selector'], self::FIXED)) {
                 continue;
             }
             $isRoot = trim($node['selector']) === ':root';

@@ -35,6 +35,8 @@ class UserRequest extends FormRequest
             'screens.*' => ['distinct', Rule::enum(Screen::class)],
             'can_update_items' => ['sometimes', 'boolean'],
             'can_create_tickets' => ['sometimes', 'boolean'],
+            'can_conduct_planning' => ['sometimes', 'boolean'],
+            'can_estimate_planning' => ['sometimes', 'boolean'],
         ];
     }
 

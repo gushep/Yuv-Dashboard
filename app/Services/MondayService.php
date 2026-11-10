@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\SprintRules;
 use DateTimeImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
@@ -178,6 +179,7 @@ GRAPHQL;
     {
         $rows = [];
         $unassignedSupport = [];
+        $backlog = [];
         $skipped = 0;
 
         foreach ($items as $item) {
@@ -198,6 +200,18 @@ GRAPHQL;
                         'Status' => $this->text($item, $map['Status'] ?? null),
                         'Prioridade' => $this->text($item, $map['Prioridade'] ?? null),
                         'Tipo' => $type, 'Sprint' => null,
+                        'Cliente' => trim($this->text($item, $map['Cliente'] ?? null)),
+                    ];
+                } elseif (SprintRules::isNotStarted($status = $this->text($item, $map['Status'] ?? null))) {
+                    // Backlog do quadro: sem sprint e ainda não iniciado. São os cards da planning poker.
+                    $backlog[] = [
+                        'Id' => (string) $item['id'], 'Url' => (string) ($item['url'] ?? ''),
+                        'Nome' => (string) $item['name'],
+                        'Responsavel' => $this->text($item, $map['Responsavel'] ?? null),
+                        'Status' => $status,
+                        'Prioridade' => $this->text($item, $map['Prioridade'] ?? null),
+                        'Tipo' => $type, 'Sprint' => null,
+                        'EstH' => $this->hours($item, $map['EstH'] ?? null),
                         'Cliente' => trim($this->text($item, $map['Cliente'] ?? null)),
                     ];
                 }
@@ -229,7 +243,7 @@ GRAPHQL;
             }
         }
 
-        return compact('rows', 'unassignedSupport', 'skipped');
+        return compact('rows', 'unassignedSupport', 'backlog', 'skipped');
     }
 
     /** @return array<string, array{available: bool, comments: array}> */
