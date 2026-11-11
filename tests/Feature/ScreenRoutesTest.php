@@ -51,6 +51,55 @@ class ScreenRoutesTest extends TestCase
         $this->get('/tarefas')->assertOk()->assertSee('<span class="nav-label">Tarefas</span>', false);
     }
 
+    public function test_agile_management_menu_groups_sprints_sprint_planning_and_the_scrum_events_under_construction(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $this->get('/')->assertOk()
+            ->assertSeeInOrder(['Gerenciamento Ágil', "navigate('sprint')", 'Sprints', "navigate('planning')", 'Sprint Planning', "navigate('daily-scrum')", 'Daily Scrum', "navigate('sprint-review')", 'Sprint Review', "navigate('sprint-retrospective')", 'Sprint Retrospective'], false)
+            ->assertSee('id="page-daily-scrum"', false)->assertSee('id="page-sprint-review"', false)->assertSee('id="page-sprint-retrospective"', false)
+            ->assertSee('Em construção')
+            ->assertDontSee('<span class="nav-label">Planning poker</span>', false);
+    }
+
+    public function test_agile_management_menu_shows_only_the_screens_of_the_user(): void
+    {
+        $this->actingAs(User::factory()->withScreens(Screen::Dashboard, Screen::Sprints)->create())->get('/')->assertOk()
+            ->assertSee('id="nav-group-agile"', false)->assertSee('id="nav-sprint"', false)
+            ->assertDontSee('id="nav-planning"', false)->assertDontSee('id="nav-daily-scrum"', false);
+
+        $this->actingAs(User::factory()->withScreens(Screen::Dashboard)->create())->get('/')->assertOk()
+            ->assertDontSee('id="nav-group-agile"', false);
+    }
+
+    public function test_new_agile_screens_are_granted_to_who_already_sees_sprints_or_sprint_planning(): void
+    {
+        $planner = User::factory()->withScreens(Screen::Planning)->create();
+        $viewer = User::factory()->withScreens(Screen::Dashboard)->create();
+        $migration = require database_path('migrations/2026_11_11_183208_grant_agile_screens_to_users.php');
+
+        $migration->up();
+
+        $this->assertTrue($planner->fresh()->canAccessScreen(Screen::DailyScrum));
+        $this->assertTrue($planner->fresh()->canAccessScreen(Screen::SprintReview));
+        $this->assertTrue($planner->fresh()->canAccessScreen(Screen::SprintRetrospective));
+        $this->assertFalse($viewer->fresh()->canAccessScreen(Screen::DailyScrum));
+
+        $migration->down();
+        $this->assertFalse($planner->fresh()->canAccessScreen(Screen::DailyScrum));
+        $this->assertTrue($planner->fresh()->canAccessScreen(Screen::Planning));
+    }
+
+    public function test_every_screen_has_a_guided_tour_opened_from_the_top_bar(): void
+    {
+        $tours = (string) file_get_contents(public_path('screen-tours.js'));
+        preg_match_all("/^\s{4}'?([\w-]+)'?: \{title: /m", $tours, $matches);
+
+        $this->assertEqualsCanonicalizing(Screen::values(), $matches[1], 'Toda tela de App\Screen precisa de um tour em public/screen-tours.js.');
+        $this->actingAs(User::factory()->create())->get('/')->assertOk()
+            ->assertSee('id="tb-tour"', false)->assertSee('Tour.startScreen()', false)->assertSee('screen-tours.js');
+    }
+
     public function test_screen_addresses_require_login_and_unknown_addresses_are_not_found(): void
     {
         $this->get('/burndown')->assertRedirect('/login');

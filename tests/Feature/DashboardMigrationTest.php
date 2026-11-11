@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\MondayConnection;
 use App\Models\User;
+use App\Screen;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -43,7 +44,7 @@ class DashboardMigrationTest extends TestCase
 
     public function test_token_is_encrypted_and_capacity_is_persisted(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->scrumMaster()->create());
         $connection = MondayConnection::current();
         $connection->token = 'token-de-teste';
         $connection->save();
@@ -53,6 +54,29 @@ class DashboardMigrationTest extends TestCase
         $this->postJson('/api/capacity', ['sprint' => '17', 'developer' => 'Gustavo', 'minutes' => 4800])
             ->assertOk()->assertJsonPath('overrides.17|Gustavo', 4800);
         $this->getJson('/api/capacity')->assertJsonPath('overrides.17|Gustavo', 4800);
+    }
+
+    public function test_dashboard_tells_the_screens_whether_the_user_changes_capacity_and_offers_the_guided_tour(): void
+    {
+        $this->actingAs(User::factory()->create())->get('/')->assertOk()
+            ->assertSee('window.CAN_MANAGE_CAPACITY=false', false)
+            ->assertSee('id="tour-button"', false)->assertSee('tour.js')->assertSee('driver.js@1.3.1')
+            ->assertSee('id="team-settings"', false)->assertSee('id="cons-projects-body"', false)
+            ->assertSee('id="tb-hours"', false)->assertSee('hours-strip.js');
+
+        $this->actingAs(User::factory()->scrumMaster()->create())->get('/')->assertOk()
+            ->assertSee('window.CAN_MANAGE_CAPACITY=true', false);
+    }
+
+    public function test_only_the_scrum_master_changes_the_capacity_hours_even_without_the_planning_screen(): void
+    {
+        $this->actingAs(User::factory()->withScreens(Screen::Capacity)->create());
+        $this->postJson(route('capacity.store'), ['sprint' => '17', 'developer' => 'Ana', 'minutes' => 2400])->assertForbidden();
+        $this->assertSame([], MondayConnection::current()->capacity_overrides);
+
+        $this->actingAs(User::factory()->withScreens(Screen::Capacity)->scrumMaster()->create());
+        $this->postJson(route('capacity.store'), ['sprint' => '17', 'developer' => 'Ana', 'minutes' => 2400])->assertOk();
+        $this->assertSame(['17|Ana' => 2400], MondayConnection::current()->capacity_overrides);
     }
 
     public function test_monday_sync_preserves_hours_sprints_and_unassigned_support(): void

@@ -76,6 +76,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Maestro Scrum também é quem ajusta as horas de cada pessoa no Capacity e a reserva de suporte no Consumo de
+     * horas. Não depende da tela Planning; a tela de cada ajuste é conferida na rota.
+     */
+    public function canManageCapacity(): bool
+    {
+        return (bool) $this->can_conduct_planning;
+    }
+
+    /**
      * Joga a carta com as horas na planning: é o time de desenvolvimento. Quem só tem a tela assiste à mesa.
      */
     public function canEstimatePlanning(): bool

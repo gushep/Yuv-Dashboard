@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\MondayConnection;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -62,6 +63,29 @@ class ControlTowerTest extends TestCase
         $this->assertTrue($alertKeys->contains('stalled:4:2026-10-01'));
         $this->assertTrue($alertKeys->contains('blocked:5:2026-10-06'));
         $response->assertDontSee('token-secreto');
+    }
+
+    public function test_capacity_signal_compares_the_effort_with_full_stack_minus_the_support_reserve_and_shows_projects_apart(): void
+    {
+        $this->prepareScenario();
+        $connection = MondayConnection::current();
+        // Ana herda as 50h salvas na sprint 16; Bia é de Projetos, sem card na sprint, com o padrão de 80h.
+        $connection->capacity_overrides = ['16|Ana Souza' => 50 * 60];
+        $connection->forecast_settings = ['supportReserves' => ['17' => 20 * 60]];
+        $connection->metric_settings = ['capacityHours' => 80, 'team' => [
+            ['id' => '1', 'name' => 'Ana Souza', 'group' => 'fullstack'],
+            ['id' => '2', 'name' => 'Bia Lima', 'group' => 'projects'],
+        ]];
+        $connection->save();
+
+        $response = $this->getJson('/api/control-tower')->assertOk()
+            ->assertJsonPath('capacity.teams.fullstack', ['capacityHours' => 50, 'availableHours' => 6, 'remainingHours' => 8])
+            ->assertJsonPath('capacity.teams.projects', ['capacityHours' => 80, 'availableHours' => 16, 'remainingHours' => 0])
+            ->assertJsonPath('capacity.teams.reserveHours', 20)
+            ->assertJsonPath('capacity.availableHours', 26)
+            ->assertJsonPath('capacity.ratio', 133.3);
+
+        $this->assertSame('red', collect($response->json('signals'))->keyBy('key')['capacity']['level']);
     }
 
     public function test_control_tower_is_rebuilt_when_a_new_snapshot_arrives(): void

@@ -10,6 +10,7 @@
     <span id="forecast-last-sync" role="status"></span>
   </div>
   <div class="forecast-cutoff"><strong id="forecast-cutoff"></strong></div>
+  <section class="team-summary" id="forecast-teams" aria-label="Previsão por time"></section>
   <p class="forecast-note">Somente visualização: corrija as estimativas e os responsáveis no Monday e depois atualize os dados.</p>
   <p class="forecast-note">Em andamento: estimativa − tempo real registrado. Exemplo: 10h estimadas e 4h apontadas = 6h para concluir. Esse cálculo é uma aproximação; tarefas não iniciadas usam a estimativa total.</p>
   <div id="forecast-error" class="cap-message cap-error" role="status" hidden></div>

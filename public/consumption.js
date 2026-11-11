@@ -14,9 +14,13 @@ window.Consumption = (() => {
   const emptyTotals = () => ({sprint:0, support:0, total:0, tasks:[]});
   function add(target, task) { target[task.group] += task.minutes ?? 0; target.total += task.minutes ?? 0; target.tasks.push(task); }
   function shares(totals) { return {sprint:totals.total ? totals.sprint/totals.total*100 : null, support:totals.total ? totals.support/totals.total*100 : null}; }
+  /**
+   * Horas executadas da sprint. O macro soma tudo, como sempre; a composição separa Desenvolvimento (Full stack),
+   * Projetos, cards só de pessoas sem time (fora das métricas por pessoa) e os sem atribuição individual.
+   */
   function model(rows, sprint) {
     const unique = new Map(), seenSprints = new Map(), groups = new Map();
-    const macro = emptyTotals(), unassigned = emptyTotals();
+    const macro = emptyTotals(), unassigned = emptyTotals(), outside = emptyTotals();
     let missingType = 0, missingReal = 0, missingId = 0, multiSprint = 0;
     for (const row of rows) {
       const id = String(row.Id ?? '').trim();
@@ -34,14 +38,25 @@ window.Consumption = (() => {
       if (minutes === null) missingReal++;
       if (seenSprints.get(String(row.Id).trim())?.size > 1) multiSprint++;
       add(macro,task);
-      if (people.length === 1) {
-        if (!groups.has(people[0])) groups.set(people[0],{name:people[0],...emptyTotals()});
-        add(groups.get(people[0]),task);
-      } else { task.reason = people.length ? 'Tempo compartilhado entre vários responsáveis' : 'Sem responsável'; add(unassigned,task); }
+      const counted = people.filter(name => window.SprintRules.teamOf(name) !== null);
+      if (people.length && !counted.length) { task.reason = 'Responsável sem time nas Configurações'; add(outside,task); }
+      else if (counted.length === 1) {
+        if (!groups.has(counted[0])) groups.set(counted[0],{name:counted[0],team:window.SprintRules.teamOf(counted[0]),...emptyTotals()});
+        add(groups.get(counted[0]),task);
+      } else { task.reason = counted.length ? 'Tempo compartilhado entre vários responsáveis' : 'Sem responsável'; add(unassigned,task); }
     }
     const developers = [...groups.values()].sort((a,b) => b.total-a.total || a.name.localeCompare(b.name,'pt-BR'));
-    const attributed = developers.reduce((sum,dev) => ({sprint:sum.sprint+dev.sprint, support:sum.support+dev.support, total:sum.total+dev.total}),emptyTotals());
-    return {macro, developers, attributed, unassigned, missingType, missingReal, missingId, multiSprint};
+    const sum = list => list.reduce((total,dev) => ({sprint:total.sprint+dev.sprint, support:total.support+dev.support, total:total.total+dev.total, tasks:[...total.tasks,...dev.tasks]}),emptyTotals());
+    const attributed = sum(developers);
+    const teams = {fullstack:sum(developers.filter(dev => dev.team === 'fullstack')), projects:sum(developers.filter(dev => dev.team === 'projects'))};
+    return {macro, developers, attributed, teams, outside, unassigned, missingType, missingReal, missingId, multiSprint};
+  }
+  /** Composição de um indicador do topo em fonte menor: Desenvolvimento, Projetos e, quando houver, o resto. */
+  function compositionText(result, key) {
+    const parts = [`Desenvolvimento ${format(result.teams.fullstack[key])}`, `Projetos ${format(result.teams.projects[key])}`];
+    if (result.outside[key]) parts.push(`Sem time ${format(result.outside[key])}`);
+    if (result.unassigned[key]) parts.push(`Sem atribuição ${format(result.unassigned[key])}`);
+    return parts.join(' · ');
   }
   function reserveModel(support, reserve) {
     if (!reserve) return {consumed:null, available:null, excess:null, balance:-support, scale:Math.max(support,1), marker:null};
@@ -68,8 +83,26 @@ window.Consumption = (() => {
     const url = window.SprintPanel.safeMondayUrl(row.Url);
     return url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(row.Nome || 'Sem título')} ↗</a>` : escape(row.Nome || 'Sem título');
   }
-  function details(totals, unassigned = false) {
-    return `<div class="cap-table-scroll"><table class="cons-detail-table"><thead><tr><th>Tarefa</th><th>Tipo</th><th>Grupo calculado</th><th>Status original</th><th>Tempo Real</th>${unassigned ? '<th>Atribuição</th>' : ''}</tr></thead><tbody>${totals.tasks.map(task => `<tr><td>${taskLink(task.row)}</td><td>${escape(task.row.Tipo || 'Sem Tipo')}</td><td>${task.group === 'support' ? 'Suporte' : 'Sprint'}</td><td>${escape(task.row.Status || 'Não informado')}</td><td>${format(task.minutes)}</td>${unassigned ? `<td>${escape(task.reason)}</td>` : ''}</tr>`).join('')}</tbody></table></div><p class="cons-subtotals">Subtotais: Sprint ${format(totals.sprint)} · Suporte ${format(totals.support)} · Total ${format(totals.total)}${totals.tasks.some(task => task.minutes === null) ? ' · Há itens sem registro de Tempo Real.' : ''}</p>`;
+  /**
+   * Tasks de um desenvolvedor (ou sem atribuição) como datatable: busca, filtro por Tipo, Grupo, Status e Atribuição
+   * e ordenação pelo cabeçalho (mesmo componente dos modais de indicadores), com os subtotais embaixo.
+   */
+  function renderDetails(container, totals, unassigned = false) {
+    const columns = [
+      {label:'Tarefa', primary:true, html:task => taskLink(task.row), value:task => task.row.Nome || 'Sem título'},
+      {label:'Tipo', html:task => escape(task.row.Tipo || 'Sem Tipo'), value:task => task.row.Tipo || 'Sem Tipo', filter:true},
+      {label:'Grupo calculado', html:task => task.group === 'support' ? 'Suporte' : 'Sprint', value:task => task.group === 'support' ? 'Suporte' : 'Sprint', filter:true},
+      {label:'Status original', html:task => escape(task.row.Status || 'Não informado'), value:task => task.row.Status || 'Não informado', filter:true},
+      {label:'Tempo Real', html:task => format(task.minutes), value:task => format(task.minutes), sort:task => task.minutes ?? ''},
+      ...(unassigned ? [{label:'Atribuição', html:task => escape(task.reason), value:task => task.reason, filter:true}] : [])
+    ];
+    const table = document.createElement('div');
+    container.replaceChildren(table);
+    window.KpiTable.render(table, {columns, rows:totals.tasks, empty:'Nenhuma task.', tableClass:'cons-detail-table'});
+    const subtotals = document.createElement('p');
+    subtotals.className = 'cons-subtotals';
+    subtotals.textContent = `Subtotais: Sprint ${format(totals.sprint)} · Suporte ${format(totals.support)} · Total ${format(totals.total)}${totals.tasks.some(task => task.minutes === null) ? ' · Há itens sem registro de Tempo Real.' : ''}`;
+    container.append(subtotals);
   }
   function cells(totals) {
     const parts = shares(totals);
@@ -94,15 +127,19 @@ window.Consumption = (() => {
     el('cons-empty').textContent = state.rows === null ? 'Configure a integração com Monday e atualize os dados para visualizar horas reais.' : 'Nenhum item ou cronograma de sprint disponível na consulta atual.';
     if (state.rows === null || state.sprint === null) return;
     const result = model(state.rows,state.sprint), totals = result.macro, parts = shares(totals);
+    const reserve = state.reserves[state.sprint] ?? state.defaultMinutes ?? 0, comparison = reserveModel(totals.support,reserve);
+    // Os mesmos cards do Capacity (previsto e registrado contra a capacidade, com semáforo), pela mesma regra.
+    el('cons-teams').innerHTML = window.Capacity.summaryFor(state.rows, state.sprint, dates || null, window.SprintRules.settings.capacityOverrides || {}, reserve).html;
     el('cons-total').textContent = format(totals.total);
-    el('cons-sprint-hours').textContent = `${format(totals.sprint)} · ${percent(parts.sprint)}`;
-    el('cons-support-hours').textContent = `${format(totals.support)} · ${percent(parts.support)}`;
+    el('cons-total-parts').textContent = compositionText(result,'total');
+    el('cons-support-projects').hidden = !result.teams.projects.support;
+    el('cons-support-projects').textContent = result.teams.projects.support ? `Atenção: Projetos registrou ${format(result.teams.projects.support)} de suporte; a sustentação é do time Full stack.` : '';
     el('cons-composition').innerHTML = bar(totals);
     el('cons-legend').innerHTML = `<span class="cons-sprint">● Sprint · ${format(totals.sprint)} · ${percent(parts.sprint)}</span><span class="cons-support">● Suporte · ${format(totals.support)} · ${percent(parts.support)}</span>`;
-    const reserve = state.reserves[state.sprint] ?? state.defaultMinutes ?? 0, comparison = reserveModel(totals.support,reserve);
+    const canEdit = Boolean(window.CAN_MANAGE_CAPACITY);
     el('cons-reserve-input').value = reserve/60;
-    el('cons-reserve-input').disabled = !state.loaded || state.saving;
-    el('cons-reserve-save').disabled = !state.loaded || state.saving;
+    el('cons-reserve-input').disabled = !canEdit || !state.loaded || state.saving;
+    el('cons-reserve-save').disabled = !canEdit || !state.loaded || state.saving;
     el('cons-reserve').classList.toggle('cons-over',comparison.balance < 0);
     el('cons-reserve-hours').textContent = state.loaded ? `${format(totals.support)} consumidas / ${format(reserve)} reservadas` : 'Carregando reserva salva…';
     el('cons-reserve-percent').textContent = !state.loaded ? 'Reserva ainda indisponível' : reserve ? `${percent(comparison.consumed)} da reserva consumida` : 'Sem reserva configurada';
@@ -115,22 +152,31 @@ window.Consumption = (() => {
     if (!names.includes(state.developer)) state.developer = '';
     el('cons-developer').replaceChildren(new Option('Todos os desenvolvedores',''), ...names.map(name => new Option(name,name)));
     el('cons-developer').value = state.developer;
-    const displayed = result.developers.filter(dev => !state.developer || dev.name === state.developer);
-    el('cons-body').replaceChildren();
-    for (const [index,dev] of displayed.entries()) {
-      const tr = document.createElement('tr'), expanded = state.expanded.has(dev.name);
-      const initials = dev.name.split(/\s+/).map(part => part[0]).slice(0,2).join('').toLocaleUpperCase('pt-BR');
-      tr.innerHTML = `<td><button type="button" class="cap-dev-button cons-dev" aria-expanded="${expanded}"><span class="cap-avatar cap-avatar-${index%4}">${escape(initials)}</span><span class="cap-dev-name" title="${escape(dev.name)}">${escape(dev.name)}</span><span class="cap-chevron" aria-hidden="true">${expanded ? '⌄' : '›'}</span></button></td>${cells(dev)}`;
-      tr.querySelector('button').onclick = () => { expanded ? state.expanded.delete(dev.name) : state.expanded.add(dev.name); render(); };
-      el('cons-body').append(tr);
-      if (expanded) { const detail = document.createElement('tr'); detail.className = 'cons-detail'; detail.innerHTML = `<td colspan="5">${details(dev)}</td>`; el('cons-body').append(detail); }
+    // Duas tabelas: Desenvolvimento (Full stack) e Projetos; o filtro de desenvolvedor vale para as duas.
+    // Antes de classificar os times não há Projetos: a tabela dele fica escondida.
+    const projectsOn = window.SprintRules.teamsConfigured();
+    el('cons-projects-title').hidden = !projectsOn;
+    el('cons-projects-body').closest('.cons-developer-scroll').hidden = !projectsOn;
+    for (const [team, body, foot, label] of [['fullstack','cons-body','cons-foot','Desenvolvimento'],['projects','cons-projects-body','cons-projects-foot','Projetos']]) {
+      const displayed = result.developers.filter(dev => dev.team === team && (!state.developer || dev.name === state.developer));
+      el(body).replaceChildren();
+      for (const [index,dev] of displayed.entries()) {
+        const tr = document.createElement('tr'), expanded = state.expanded.has(dev.name);
+        const initials = dev.name.split(/\s+/).map(part => part[0]).slice(0,2).join('').toLocaleUpperCase('pt-BR');
+        tr.innerHTML = `<td><button type="button" class="cap-dev-button cons-dev" aria-expanded="${expanded}"><span class="cap-avatar cap-avatar-${index%4}">${escape(initials)}</span><span class="cap-dev-name" title="${escape(dev.name)}">${escape(dev.name)}</span><span class="cap-chevron" aria-hidden="true">${expanded ? '⌄' : '›'}</span></button></td>${cells(dev)}`;
+        tr.querySelector('button').onclick = () => { expanded ? state.expanded.delete(dev.name) : state.expanded.add(dev.name); render(); };
+        el(body).append(tr);
+        if (expanded) { const detail = document.createElement('tr'); detail.className = 'cons-detail'; detail.innerHTML = '<td colspan="5"></td>'; renderDetails(detail.firstElementChild, dev); el(body).append(detail); }
+      }
+      if (!displayed.length) el(body).innerHTML = `<tr><td colspan="5">${state.developer ? 'O desenvolvedor filtrado não é deste time.' : `Nenhum item atribuível individualmente a ${label} nesta sprint.`}</td></tr>`;
+      const shown = displayed.reduce((sum,dev) => ({sprint:sum.sprint+dev.sprint,support:sum.support+dev.support,total:sum.total+dev.total,tasks:[...sum.tasks,...dev.tasks]}),emptyTotals());
+      el(foot).innerHTML = `<tr><th>${state.developer ? 'Total exibido' : `Total ${label}`}</th>${cells(shown)}</tr>`;
     }
-    if (!displayed.length) el('cons-body').innerHTML = '<tr><td colspan="5">Nenhum item atribuível individualmente nesta sprint.</td></tr>';
-    const shown = displayed.reduce((sum,dev) => ({sprint:sum.sprint+dev.sprint,support:sum.support+dev.support,total:sum.total+dev.total,tasks:[...sum.tasks,...dev.tasks]}),emptyTotals());
-    el('cons-foot').innerHTML = `<tr><th>${state.developer ? 'Total dos desenvolvedores exibidos' : 'Total atribuível aos desenvolvedores'}</th>${cells(shown)}</tr>`;
-    el('cons-unassigned-summary').textContent = `Sprint ${format(result.unassigned.sprint)} · Suporte ${format(result.unassigned.support)} · Total ${format(result.unassigned.total)} · ${result.unassigned.tasks.length} item(ns)`;
-    el('cons-unassigned').innerHTML = result.unassigned.tasks.length ? details(result.unassigned,true) : 'Nenhum item sem atribuição individual.';
-    el('cons-reconciliation').textContent = `Reconciliação do time: ${format(totals.total)} executadas = ${format(result.attributed.total)} atribuídas aos devs + ${format(result.unassigned.total)} sem atribuição individual.`;
+    const others = {sprint:result.unassigned.sprint+result.outside.sprint, support:result.unassigned.support+result.outside.support, total:result.unassigned.total+result.outside.total, tasks:[...result.unassigned.tasks,...result.outside.tasks]};
+    el('cons-unassigned-summary').textContent = `Sprint ${format(others.sprint)} · Suporte ${format(others.support)} · Total ${format(others.total)} · ${others.tasks.length} item(ns)`;
+    if (others.tasks.length) renderDetails(el('cons-unassigned'), others, true);
+    else el('cons-unassigned').textContent = 'Nenhum item sem atribuição individual.';
+    el('cons-reconciliation').textContent = `Reconciliação do time: ${format(totals.total)} executadas = ${format(result.teams.fullstack.total)} Desenvolvimento + ${format(result.teams.projects.total)} Projetos + ${format(result.outside.total)} de pessoas sem time + ${format(result.unassigned.total)} sem atribuição individual.`;
     el('cons-quality').textContent = `${totals.tasks.length} itens únicos · ${result.missingType} sem Tipo (incluídos em Sprint) · ${result.missingReal} sem registro válido de Tempo Real (não são zeros confirmados) · ${result.multiSprint} cards presentes em várias sprints, com tempo acumulado · ${result.missingId} registros sem ID excluídos por falta de identificação auditável.`;
     el('cons-quality-summary').textContent = `Qualidade dos dados: Tempo Real por card · ${result.missingType} sem Tipo · ${result.missingReal} sem registro · ver detalhes`;
   }
@@ -142,6 +188,7 @@ window.Consumption = (() => {
   async function saveReserve(event) {
     event.preventDefault();
     if (!state.loaded || state.saving || state.sprint === null) return;
+    if (!window.CAN_MANAGE_CAPACITY) { el('cons-save-status').textContent = 'Somente o Maestro Scrum altera a reserva.'; return; }
     const hours = Number(el('cons-reserve-input').value.replace(',','.'));
     if (!Number.isFinite(hours) || hours < 0 || hours > 10000) { el('cons-save-status').textContent = 'Informe uma reserva entre 0h e 10000h.'; return; }
     const sprint = state.sprint;
@@ -172,5 +219,5 @@ window.Consumption = (() => {
     el('cons-refresh').onclick = () => syncMonday(true);
     el('cons-reserve-form').onsubmit = saveReserve;
   });
-  return {enter,leave,onDataUpdated,onError,onLoading,onSyncComplete,model,reserveModel,shares,format,bar};
+  return {enter,leave,onDataUpdated,onError,onLoading,onSyncComplete,model,compositionText,reserveModel,shares,format,bar};
 })();

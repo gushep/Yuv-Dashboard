@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Tours das telas · testes</title>
+<pre id="test-result">RUNNING</pre>
+<script>
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+const text = async path => (await fetch(path)).text();
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    await load('../public/screen-tours.js'); await load('../public/tour.js');
+    check('Motor do tour com o tour da tela e o das novidades', typeof Tour.startScreen === 'function' && typeof Tour.start === 'function' && Tour.screenTitle('capacity') === 'Capacity');
+    // Que toda tela de App\Screen tem tour é conferido no ScreenRoutesTest (PHP); aqui, os passos de cada tour.
+    const screens = Object.keys(ScreenTours.TOURS);
+    check(`Tours carregados (${screens.length})`, screens.length > 15);
+    // Os #ids dos passos existem nas views (HTML estático ou contêiner que o JS preenche).
+    const views = (await Promise.all(['dashboard', 'control-tower', 'burndown', 'planning', 'forecast', 'consumption', 'release', 'users', 'under-construction']
+      .map(view => text(`../resources/views/${view}.blade.php`)))).join('\n');
+    const absent = screens.flatMap(screen => ScreenTours.steps(screen).map(step => step.element).filter(Boolean)
+      .map(selector => selector.match(/^#([\w-]+)/)?.[1]).filter(Boolean).filter(id => !views.includes(`id="${id}"`)).map(id => `${screen}:#${id}`));
+    check(`Elementos dos passos existem nas telas${absent.length ? `: ${[...new Set(absent)].join(', ')}` : ''}`, !absent.length);
+    check('Cada tour começa explicando a tela e termina no botão do tour', screens.every(screen => { const steps = ScreenTours.steps(screen); return !steps[0].element && steps.at(-1).element === '#tb-tour'; }));
+    check('Título de cada tour', ScreenTours.title('planning') === 'Sprint Planning' && ScreenTours.title('no-existe') === '' && !ScreenTours.has('no-access'));
+    const dashboard = await text('../resources/views/dashboard.blade.php');
+    check('Botão do tour no canto direito da barra superior e na apresentação', /id="tb-right"><\/div>\s*\{\{--[^]*?--\}\}\s*<button type="button" class="tb-tour" id="tb-tour" onclick="Tour.startScreen\(\)"/.test(dashboard) && dashboard.includes("Tour.startScreen('carousel')"));
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

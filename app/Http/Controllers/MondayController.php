@@ -11,6 +11,7 @@ use App\Services\MondayService;
 use App\Services\MondaySnapshotService;
 use App\Services\SprintReleaseService;
 use App\Support\SprintRules;
+use App\Support\TeamRules;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,22 +46,54 @@ class MondayController extends Controller
             'refreshMinutes' => $connection->refresh_minutes,
             'hasToken' => filled($connection->token),
             'metrics' => $connection->metricSettings(),
+            // Horas por pessoa e sprint do Capacity, para os gráficos por pessoa usarem a capacidade de cada um.
+            'capacityOverrides' => (object) ($connection->capacity_overrides ?? []),
         ]);
     }
 
+    /**
+     * Grava a capacidade padrão e os times. `team` lista só quem está em Full stack ou Projetos; quem fica de fora não
+     * entra em nenhuma métrica por pessoa. Sem `team` ou `excludedPeople` na requisição, o valor salvo é mantido.
+     */
     public function saveMetricSettings(Request $request): JsonResponse
     {
         $data = $request->validate([
             'capacityHours' => ['required', 'numeric', 'between:0,200'],
-            'excludedPeople' => ['present', 'array', 'max:50'],
+            'excludedPeople' => ['sometimes', 'array', 'max:50'],
             'excludedPeople.*' => ['nullable', 'string', 'max:150'],
+            'team' => ['sometimes', 'array', 'max:300'],
+            'team.*.id' => ['required', 'string', 'regex:/^\d{1,20}$/'],
+            'team.*.name' => ['required', 'string', 'max:150'],
+            'team.*.group' => ['required', Rule::in(TeamRules::GROUPS)],
+        ], [
+            'team.*.group.in' => 'Escolha Full stack ou Projetos para cada pessoa classificada.',
         ]);
-        $people = array_values(array_unique(array_filter(array_map(fn (?string $name): string => trim((string) $name), $data['excludedPeople']), 'strlen')));
         $connection = MondayConnection::current();
-        $connection->metric_settings = ['capacityHours' => round((float) $data['capacityHours'], 2), 'excludedPeople' => $people];
+        $current = $connection->metricSettings();
+        $people = array_key_exists('excludedPeople', $data)
+            ? array_values(array_unique(array_filter(array_map(fn (?string $name): string => trim((string) $name), $data['excludedPeople']), 'strlen')))
+            : $current['excludedPeople'];
+        $team = $current['team'];
+        if (array_key_exists('team', $data)) {
+            $team = [];
+            foreach ($data['team'] as $member) {
+                $name = trim($member['name']);
+                $team[SprintRules::normalize($name)] = ['id' => $member['id'], 'name' => $name, 'group' => $member['group']];
+            }
+            $team = array_values($team);
+        }
+        $connection->metric_settings = ['capacityHours' => round((float) $data['capacityHours'], 2), 'excludedPeople' => $people, 'team' => $team];
         $connection->save();
 
         return response()->json(['saved' => true, 'metrics' => $connection->metricSettings()]);
+    }
+
+    /**
+     * Usuários ativos do Monday, para classificar o time nas Configurações.
+     */
+    public function mondayUsers(MondayService $monday): JsonResponse
+    {
+        return $this->attempt(fn (): array => ['users' => $monday->activeUsers($this->configuredConnection()->token)]);
     }
 
     public function capacity(): JsonResponse
@@ -72,7 +105,7 @@ class MondayController extends Controller
     {
         return response()->json([
             'reserves' => MondayConnection::current()->forecast_settings['supportReserves'] ?? [],
-            'defaultMinutes' => 2400,
+            'defaultMinutes' => MondayConnection::DEFAULT_SUPPORT_RESERVE_MINUTES,
         ]);
     }
 

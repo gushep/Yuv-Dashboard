@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MondayConnection;
 use App\Support\SprintRules;
+use App\Support\TeamRules;
 
 /**
  * Torre de controle da sprint: reúne trajetória, sinais de alerta, previsão e manobras sugeridas.
@@ -26,8 +27,6 @@ class ControlTowerService
     public const PROBABILITY_GREEN = 85;
 
     public const PROBABILITY_RED = 50;
-
-    private const DEFAULT_SUPPORT_RESERVE_MINUTES = 2400;
 
     public function __construct(private ThroughputForecast $forecast) {}
 
@@ -228,7 +227,7 @@ class ControlTowerService
                 $consumed += (float) ($row['RealH'] ?? 0) * 60;
             }
         }
-        $reserve = (int) ($connection->forecast_settings['supportReserves'][(string) $sprint] ?? self::DEFAULT_SUPPORT_RESERVE_MINUTES);
+        $reserve = $connection->supportReserveMinutes($sprint);
         $days = SprintRules::workingDays($range['start'], $range['end']);
         $elapsed = count(array_filter($days, fn (string $day): bool => $day <= $today));
         $result = ['consumed' => (int) round($consumed), 'reserve' => $reserve, 'sprintEnd' => end($days) ?: null, 'exhaustionDate' => null, 'projected' => null, 'projectedPercent' => null];
@@ -250,22 +249,30 @@ class ControlTowerService
     }
 
     /**
-     * Esforço restante dos cards abertos contra a capacidade futura das pessoas da sprint.
+     * Esforço restante dos cards abertos contra a capacidade futura do time. O total soma Full stack e Projetos, como
+     * sempre; o sinal compara com a capacidade full stack descontada a reserva do Bombeiro, pois só ela atende os itens
+     * da sprint. Cards só de Projetos ficam fora dessa conta; os demais (inclusive sem responsável) são do full stack.
      *
      * @param  array<string, array<string, mixed>>  $members
-     * @return array{remainingHours: float, availableHours: ?float, ratio: ?float, missing: int, people: int, text: string}
+     * @return array{remainingHours: float, availableHours: ?float, ratio: ?float, missing: int, people: int, text: string, teams: array<string, mixed>}
      */
     private function capacity(array $members, int $sprint, array $range, MondayConnection $connection, string $today): array
     {
-        $settings = $connection->metricSettings();
-        $excluded = array_map([SprintRules::class, 'normalize'], $settings['excludedPeople']);
+        $teams = $connection->teamRules();
         $people = [];
+        foreach ($teams->members() as $member) {
+            $people[$member['name']] = $member['group'];
+        }
         $remaining = 0.0;
+        $projectsRemaining = 0.0;
         $missing = 0;
         foreach ($members as $state) {
+            $groups = [];
             foreach (array_filter(array_map('trim', explode(',', (string) ($state['Responsavel'] ?? '')))) as $person) {
-                if (! in_array(SprintRules::normalize($person), $excluded, true)) {
-                    $people[$person] = true;
+                $group = $teams->teamOf($person);
+                if ($group !== null) {
+                    $people[$teams->canonicalName($person)] ??= $group;
+                    $groups[$group] = true;
                 }
             }
             if (! SprintRules::isOpen($state['Status'] ?? '')) {
@@ -276,22 +283,47 @@ class ControlTowerService
             $revised = $state['RemainingH'] ?? null;
             $effort = $revised !== null ? (float) $revised
                 : ($estimate === null || $estimate <= 0 ? null : (SprintRules::isNotStarted($state['Status'] ?? '') ? (float) $estimate : max(0.0, (float) $estimate - (float) ($real ?? 0))));
-            $effort === null ? $missing++ : $remaining += $effort;
+            if ($effort === null) {
+                $missing++;
+
+                continue;
+            }
+            $remaining += $effort;
+            if (isset($groups[TeamRules::PROJECTS]) && ! isset($groups[TeamRules::FULLSTACK])) {
+                $projectsRemaining += $effort;
+            }
         }
         $days = SprintRules::workingDays($range['start'], $range['end']);
         $future = count(array_filter($days, fn (string $day): bool => $day > $today));
         $overrides = $connection->capacity_overrides ?? [];
-        $total = 0.0;
-        foreach (array_keys($people) as $person) {
-            $total += isset($overrides["{$sprint}|{$person}"]) ? $overrides["{$sprint}|{$person}"] / 60 : (float) $settings['capacityHours'];
+        $totals = [TeamRules::FULLSTACK => 0.0, TeamRules::PROJECTS => 0.0];
+        foreach ($people as $person => $group) {
+            $totals[$group] += $teams->capacityMinutes($overrides, $sprint, $person) / 60;
         }
-        $available = $days === [] ? null : round($total * $future / count($days), 1);
-        $ratio = $available ? round($remaining / $available * 100, 1) : null;
+        // Antes de classificar os times vale a regra anterior, sem desconto do Bombeiro.
+        $reserve = $teams->configured() ? $connection->supportReserveMinutes($sprint) / 60 : 0.0;
+        $factor = $days === [] ? null : $future / count($days);
+        $available = $factor === null ? null : round(($totals[TeamRules::FULLSTACK] + $totals[TeamRules::PROJECTS]) * $factor, 1);
+        $fullstackAvailable = $factor === null ? null : round(max(0.0, $totals[TeamRules::FULLSTACK] - $reserve) * $factor, 1);
+        $projectsAvailable = $factor === null ? null : round($totals[TeamRules::PROJECTS] * $factor, 1);
+        $fullstackRemaining = $remaining - $projectsRemaining;
+        $ratio = $fullstackAvailable ? round($fullstackRemaining / $fullstackAvailable * 100, 1) : null;
+        $composition = $teams->configured()
+            ? " Full stack: {$this->hours($fullstackRemaining * 60)} restantes para {$this->hours(($fullstackAvailable ?? 0) * 60)} futuras (capacidade {$this->hours($totals[TeamRules::FULLSTACK] * 60)} − Bombeiro {$this->hours($reserve * 60)}) · {$this->percent($ratio)}. Projetos: {$this->hours($projectsRemaining * 60)} restantes para {$this->hours(($projectsAvailable ?? 0) * 60)} futuras."
+            : ' Times ainda não classificados nas Configurações: todos contam como full stack, sem desconto do Bombeiro.';
         $text = $available === null ? 'Datas da sprint indisponíveis.'
             : ($available == 0 ? 'Sem dias úteis futuros na sprint.'
-            : "{$this->hours($remaining * 60)} de esforço restante para {$this->hours($available * 60)} de capacidade futura ({$this->percent($ratio)}).".($missing ? " {$missing} card(s) sem estimativa ficaram fora da conta." : ''));
+            : "{$this->hours($remaining * 60)} de esforço restante para {$this->hours($available * 60)} de capacidade futura do time.{$composition}".($missing ? " {$missing} card(s) sem estimativa ficaram fora da conta." : ''));
 
-        return ['remainingHours' => round($remaining, 1), 'availableHours' => $available, 'ratio' => $ratio, 'missing' => $missing, 'people' => count($people), 'text' => $text];
+        return [
+            'remainingHours' => round($remaining, 1), 'availableHours' => $available, 'ratio' => $ratio, 'missing' => $missing, 'people' => count($people), 'text' => $text,
+            'teams' => [
+                'configured' => $teams->configured(),
+                'reserveHours' => round($reserve, 1),
+                TeamRules::FULLSTACK => ['capacityHours' => round($totals[TeamRules::FULLSTACK], 1), 'availableHours' => $fullstackAvailable, 'remainingHours' => round($fullstackRemaining, 1)],
+                TeamRules::PROJECTS => ['capacityHours' => round($totals[TeamRules::PROJECTS], 1), 'availableHours' => $projectsAvailable, 'remainingHours' => round($projectsRemaining, 1)],
+            ],
+        ];
     }
 
     /**

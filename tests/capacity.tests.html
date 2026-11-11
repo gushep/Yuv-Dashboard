@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Capacity · testes</title>
+<link rel="stylesheet" href="../public/capacity.css"><link rel="stylesheet" href="../public/teams.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0}</style>
+<main class="main"><div class="content" id="fixture"></div></main><pre id="test-result">RUNNING</pre>
+<script>
+window.DATA = [];
+window.CAN_MANAGE_CAPACITY = false;
+window.MONDAY_SPRINT_DATES = {17: {start: '2026-09-28', end: '2026-10-09'}};
+window.MONDAY_LIVE_SPRINTS = new Set([17]);
+window.MONDAY_LAST_SYNC = '2026-10-07T12:00:00Z';
+// Carla (Projetos) herda as 40h salvas na sprint 16; reserva do Bombeiro da sprint 17: 8h.
+window.mondayRequest = async (path, body) => {
+  if (body) throw new Error('Este teste não grava dados.');
+  if (path === '/api/support-reserves') return {reserves: {17: 480}, defaultMinutes: 4800};
+  return {overrides: {'16|Carla': 2400}};
+};
+const row = (Id, Responsavel, Tipo, Planejada, EstH, RealH, Status = 'Em progresso') => ({Id, Nome: `Card ${Id}`, Responsavel, Tipo, Planejada, EstH, RealH, Status, Sprint: 17});
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    const dashboard = await (await fetch('../resources/views/dashboard.blade.php')).text();
+    const style = document.createElement('style'); style.textContent = dashboard.match(/<style>([\s\S]*?)<\/style>/)[1]; document.head.prepend(style);
+    document.getElementById('fixture').innerHTML = dashboard.match(/<!-- CAPACITY -->([\s\S]*?)<!-- PAINEL DO BOMBEIRO -->/)[1];
+    document.getElementById('page-capacity').classList.add('active');
+    await load('../public/sprint-rules.js'); await load('../public/capacity.js');
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    SprintRules.applySettings({team: [{id: '1', name: 'Ana', group: 'fullstack'}, {id: '2', name: 'Bruno', group: 'fullstack'}, {id: '3', name: 'Carla', group: 'projects'}]});
+    DATA.push(
+      row('1', 'Ana', 'Melhoria', 'Planejada', 10, 4),
+      row('2', 'Ana', 'Suporte', 'Planejada', 3, 2),
+      row('3', 'Bruno', 'Suporte', 'Não planejada', 5, 6),
+      row('4', 'Carla', 'Melhoria', 'Planejada', 37, 10),
+      row('5', '', 'Suporte', 'Não planejada', 2, 1),
+      row('6', 'QA', 'Melhoria', 'Planejada', 4, 4),
+      row('7', 'Ana', 'Melhoria', 'Planejada', 8, 0, 'Cancelado')
+    );
+    Capacity.enter(17); await tick(); await tick();
+    const support = Capacity.supportTotals(DATA, 17);
+    check('Bombeiro soma Suporte de qualquer planejamento e responsável', support.cards === 3 && support.estimate === 600 && support.registered === 540);
+    const result = Capacity.model(DATA, 17, MONDAY_SPRINT_DATES[17], {'16|Carla': 2400});
+    const totals = Capacity.teamTotals(result.developers, 480);
+    check('Full stack sem os cards de Suporte e sem o cancelado no previsto', totals.fullstack.capacity === 9600 && totals.fullstack.net === 9120 && totals.fullstack.estimate === 600 && totals.fullstack.registered === 240);
+    check('Projetos com as horas herdadas da sprint anterior', totals.projects.capacity === 2400 && totals.projects.estimate === 2220 && totals.projects.registered === 600);
+    check('Fora da conta: só o card de quem está sem time', JSON.stringify(Capacity.outsideTotals(result)) === JSON.stringify({estimate: 240, registered: 240}));
+    const rows = [...document.querySelectorAll('#cap-teams .team-summary-row')];
+    const text = index => rows[index].textContent.replace(/\s+/g, ' ');
+    check('Duas linhas: previsto e registrado', rows.length === 2 && document.querySelectorAll('#cap-teams .team-summary-title')[0].textContent.includes('Previsto') && document.querySelectorAll('#cap-teams .team-summary-title')[1].textContent.includes('Registrado'));
+    check('Previsto: X de Y em cada card', text(0).includes('57h de 200h') && text(0).includes('10h de 152h') && text(0).includes('10h de 8h') && text(0).includes('37h de 40h'));
+    check('Registrado: X de Y em cada card', text(1).includes('23h de 200h') && text(1).includes('4h de 152h') && text(1).includes('9h de 8h') && text(1).includes('10h de 40h'));
+    const levels = index => [...rows[index].querySelectorAll('.team-card')].map(card => card.className.match(/level-(\w+)/)[1]).join();
+    check('Semáforo: verde com saldo, amarelo a partir de 90%, vermelho na capacidade ou acima', levels(0) === 'green,green,red,yellow' && levels(1) === 'green,green,red,green' && text(0).includes('2h acima da capacidade') && text(1).includes('1h acima da capacidade'));
+    const boxes = index => [...rows[index].querySelectorAll('.team-card-head .team-card-available')].map(box => box.textContent).join('|');
+    check('Caixinha de horas disponíveis no canto de cada card', boxes(1) === 'Disponível 177h|Disponível 148h|Excedido 1h|Disponível 30h' && boxes(0) === 'Disponível 143h|Disponível 142h|Excedido 2h|Disponível 3h');
+    check('Limites do semáforo', Capacity.capacityLevel(89, 100) === 'green' && Capacity.capacityLevel(90, 100) === 'yellow' && Capacity.capacityLevel(99, 100) === 'yellow' && Capacity.capacityLevel(100, 100) === 'red' && Capacity.capacityLevel(0, 0) === 'green' && Capacity.capacityLevel(5, 0) === 'red');
+    check('Total mostra o que ficou fora da conta', text(0).includes('fora da conta: 4h'));
+    check('Horas herdadas e campo só leitura para quem não é Maestro', document.getElementById('cap-body').textContent.includes('herdado da Sprint 16') && [...document.querySelectorAll('.cap-hours-input')].every(input => input.disabled));
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

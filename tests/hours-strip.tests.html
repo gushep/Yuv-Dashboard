@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Horas na barra superior · testes</title>
+<link rel="stylesheet" href="../public/teams.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0}</style>
+<main class="main" id="fixture"></main><pre id="test-result">RUNNING</pre>
+<script>
+var currentPage = 'dashboard', currentSprint = null, allowed = ['dashboard', 'sprint', 'capacity', 'consumption'], navigated = null;
+function canAccessScreen(page) { return allowed.includes(page); }
+function defaultSprint() { return 17; }
+function navigate(page, sprint) { navigated = [page, sprint]; }
+window.DATA = [];
+window.MONDAY_SPRINT_DATES = {16: {start: '2026-09-14', end: '2026-09-25'}, 17: {start: '2026-09-28', end: '2026-10-09'}};
+let reserveCalls = 0;
+window.mondayRequest = async path => {
+  if (path !== '/api/support-reserves') throw new Error(`Rota inesperada: ${path}`);
+  reserveCalls++;
+  return {reserves: {17: 480}, defaultMinutes: 4800};
+};
+const row = (Id, Responsavel, Tipo, EstH, RealH, Sprint = 17) => ({Id, Nome: `Card ${Id}`, Responsavel, Tipo, Planejada: 'Planejada', EstH, RealH, Status: 'Em progresso', Sprint});
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    const dashboard = await (await fetch('../resources/views/dashboard.blade.php')).text();
+    const style = document.createElement('style'); style.textContent = dashboard.match(/<style>([\s\S]*?)<\/style>/)[1]; document.head.prepend(style);
+    document.getElementById('fixture').innerHTML = dashboard.match(/<div class="topbar">[\s\S]*?<div class="topbar-right" id="tb-right"><\/div>\s*<\/div>/)[0];
+    await load('../public/sprint-rules.js'); await load('../public/capacity.js'); await load('../public/hours-strip.js');
+    SprintRules.applySettings({team: [{id: '1', name: 'Ana', group: 'fullstack'}]});
+    const bar = document.getElementById('tb-hours');
+    check('Resumo fica dentro da barra superior, antes do intervalo de sprints', bar.closest('.topbar') && bar.nextElementSibling?.id === 'tb-right');
+    HoursStrip.render();
+    check('Sem dados sincronizados o resumo fica escondido', bar.hidden);
+    DATA.push(row('1', 'Ana', 'Melhoria', 20, 10), row('2', 'Ana', 'Suporte', 5, 9), row('3', 'Ana', 'Melhoria', 4, 4, 16));
+    await HoursStrip.onDataUpdated();
+    // Tabela em grade: cabeçalho e duas linhas de 9 células (rótulo + uso e Disponível de cada uma das 4 partes).
+    const cells = () => [...bar.querySelectorAll('.tb-hours-table > span')].map(cell => cell.textContent.replace(/\s+/g, ' ').trim());
+    const rowOf = label => { const all = cells(), start = all.indexOf(label); return all.slice(start, start + 9); };
+    const levels = label => { const all = [...bar.querySelectorAll('.tb-hours-table > span')], start = all.findIndex(cell => cell.textContent === label); return all.slice(start + 1, start + 9).map(cell => cell.className.match(/level-(\w+)/)[1]).join(); };
+    check('Cabeçalho: cada parte com a coluna Disponível ao lado', !bar.hidden && cells().slice(0, 9).join() === 'Sprint 17,Capacidade,Disponível,Full stack,Disponível,Bombeiro,Disponível,Projetos,Disponível' && reserveCalls === 1);
+    check('Linha Planejado: uso e disponível depois do planejado', JSON.stringify(rowOf('Planejado')) === JSON.stringify(['Planejado', '25h de 80h · 31%', '55h', '20h de 72h · 28%', '52h', '5h de 8h · 63%', '3h', '0h de 0h · —', '0h']));
+    check('Linha Realizado: uso e disponível depois do realizado', JSON.stringify(rowOf('Realizado')) === JSON.stringify(['Realizado', '19h de 80h · 24%', '61h', '10h de 72h · 14%', '62h', '9h de 8h · 113%', '1h excedido', '0h de 0h · —', '0h']));
+    check('Semáforo em cada célula', levels('Planejado') === 'green,green,green,green,green,green,green,green' && levels('Realizado') === 'green,green,green,green,red,red,green,green');
+    const readOnly = document.createElement('div'); readOnly.innerHTML = HoursStrip.tableHtml(17, {link: false});
+    check('Versão só leitura (lista de sprints da Planning): mesmas células, sem link para o Capacity', readOnly.querySelector('.tb-hours-table.static[role="group"]') && !readOnly.querySelector('[data-sprint]') && [...readOnly.querySelectorAll('.tb-hours-table > span')].length === cells().length);
+    bar.querySelector('.tb-hours-table').click();
+    check('Clique abre o Capacity da sprint', JSON.stringify(navigated) === '["capacity",17]');
+    currentPage = 'sprint'; currentSprint = 16; HoursStrip.render();
+    check('Tela Sprints: acompanha a sprint escolhida', cells()[0] === 'Sprint 16' && rowOf('Planejado')[1] === '4h de 80h · 5%');
+    for (const page of HoursStrip.HIDDEN_ON) { currentPage = page; HoursStrip.render(); check(`Escondido em ${page}`, bar.hidden && !bar.innerHTML); }
+    currentPage = 'consumption'; HoursStrip.render();
+    check('Aparece também nas telas que já têm os cards', !bar.hidden);
+    currentPage = 'dashboard'; allowed = ['dashboard']; HoursStrip.render();
+    check('Escondido para quem não acessa o Capacity', bar.hidden);
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

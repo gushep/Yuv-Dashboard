@@ -19,6 +19,13 @@
     check('Configuração altera capacidade e pessoas fora das métricas',R.capacityMinutes()===3600 && R.isExcludedPerson(' ana souza ') && !R.isExcludedPerson('Bia'));
     R.applySettings({capacityHours:-5,excludedPeople:'inválido'});
     check('Configuração inválida é ignorada',R.capacityMinutes()===3600 && R.isExcludedPerson('Ana Souza'));
+    check('Sem times classificados, todos são Full stack menos os fora das métricas',!R.teamsConfigured() && R.teamOf('Bia')==='fullstack' && R.teamOf('Ana Souza')===null);
+    R.applySettings({team:[{id:'1',name:'Bia Lima',group:'fullstack'},{id:'2',name:'Caio',group:'projects'},{id:'3',name:'Dani',group:'qa'}]});
+    check('Com times, só Full stack e Projetos contam; o resto fica sem time',R.teamsConfigured() && R.teamOf(' bia lima ')==='fullstack' && R.teamOf('Caio')==='projects' && R.teamOf('Dani')===null && R.isExcludedPerson('Bia') && R.isExcludedPerson('Ana Souza') && !R.isExcludedPerson('Caio') && R.teamMembers().length===2);
+    const overrides={'18|Caio':2400,'21|Caio':600,'17|Bia Lima':4000};
+    check('Horas herdadas da última sprint salva',R.capacityFor(overrides,20,'Caio').minutes===2400 && R.capacityFor(overrides,20,'Caio').inherited && R.capacityFor(overrides,20,'Caio').fromSprint===18);
+    check('Horas da própria sprint prevalecem e sem nenhuma vale o padrão',R.capacityFor(overrides,21,'caio').minutes===600 && !R.capacityFor(overrides,21,'Caio').inherited && R.capacityFor(overrides,17,'Caio').minutes===3600);
+    R.applySettings({team:[]});
     const sprint={start:'2026-09-28',end:'2026-10-09'};
     check('Dias úteis ignoram fim de semana',R.workingDays('2026-10-02','2026-10-06').join()==='2026-10-02,2026-10-05,2026-10-06');
     const half=R.pace(20*60,sprint,'2026-10-02',40*60);

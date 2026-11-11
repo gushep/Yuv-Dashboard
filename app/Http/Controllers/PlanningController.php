@@ -39,14 +39,23 @@ class PlanningController extends Controller
 
     public function closeTable(Request $request, PlanningSession $session): JsonResponse
     {
-        return $this->table($request, fn () => $this->planning->closeTable($session));
+        return $this->table($request, fn () => $this->planning->closeTable($this->connection(), $session));
+    }
+
+    /** Como foi a planning de uma sprint (só leitura). */
+    public function review(int $sprint): JsonResponse
+    {
+        return $this->attempt(fn (): array => $this->planning->review($this->connection(), $sprint));
     }
 
     public function playCard(Request $request, PlanningSession $session): JsonResponse
     {
-        $data = $request->validate(['item' => ['required', 'string', 'regex:/^\d{1,20}$/']], ['item.required' => 'Escolha a carta.']);
+        $data = $request->validate(
+            ['item' => ['required', 'string', 'regex:/^\d{1,20}$/'], 'replace' => ['sometimes', 'boolean']],
+            ['item.required' => 'Escolha a carta.'],
+        );
 
-        return $this->table($request, fn () => $this->planning->playCard($this->connection(), $session, $request->user(), $data['item']));
+        return $this->table($request, fn () => $this->planning->playCard($this->connection(), $session, $request->user(), $data['item'], (bool) ($data['replace'] ?? false)));
     }
 
     public function scope(PlanningRound $round): JsonResponse

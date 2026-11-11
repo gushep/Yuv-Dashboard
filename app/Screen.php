@@ -16,6 +16,9 @@ enum Screen: string
     case Team = 'time';
     case RawData = 'raw';
     case Planning = 'planning';
+    case DailyScrum = 'daily-scrum';
+    case SprintReview = 'sprint-review';
+    case SprintRetrospective = 'sprint-retrospective';
     case Firefighter = 'bombeiro';
     case SprintPanel = 'sprint-panel';
     case Carousel = 'carousel';
@@ -36,7 +39,10 @@ enum Screen: string
             self::Epics => 'Épicos',
             self::Team => 'Time',
             self::RawData => 'Tarefas',
-            self::Planning => 'Planning poker',
+            self::Planning => 'Sprint Planning',
+            self::DailyScrum => 'Daily Scrum',
+            self::SprintReview => 'Sprint Review',
+            self::SprintRetrospective => 'Sprint Retrospective',
             self::Firefighter => 'Painel do Bombeiro',
             self::SprintPanel => 'Painel da Sprint',
             self::Carousel => 'Apresentação dos Painéis',
@@ -61,6 +67,9 @@ enum Screen: string
             self::Team => 'time',
             self::RawData => 'tarefas',
             self::Planning => 'planning',
+            self::DailyScrum => 'daily-scrum',
+            self::SprintReview => 'sprint-review',
+            self::SprintRetrospective => 'sprint-retrospective',
             self::Firefighter => 'bombeiro',
             self::SprintPanel => 'painel-da-sprint',
             self::Carousel => 'apresentacao',

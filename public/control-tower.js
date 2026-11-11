@@ -9,7 +9,7 @@ window.ControlTower = (() => {
     red: ['Risco alto: manobra necessária', 'Há sinais vermelhos; decida as manobras abaixo.']
   };
   const LEVEL = {green:'Verde', yellow:'Amarelo', red:'Vermelho', unknown:'Sem dados'};
-  const state = {active:false, sprint:null, data:null, loading:false, error:'', request:0, chart:null, origin:'',
+  const state = {active:false, sprint:null, data:null, reserves:null, loading:false, error:'', request:0, chart:null, origin:'',
     filters:{q:'', situations:new Set(), owner:'', priority:'', commitment:''}, sort:{key:null, dir:1}};
   const OPEN_SITUATIONS = ['notStarted', 'progress', 'blocked'];
   /** Origem do card na sprint; a cor liga a barra de progresso à etiqueta da tabela. */
@@ -145,10 +145,10 @@ window.ControlTower = (() => {
         criteria:`Status Parado, Bloqueado, Impedido ou Limitação externa. Amarelo com algum card impedido; vermelho se algum está impedido há ${t.blockedRedDays} dias úteis ou mais.`,
         title:'Cards impedidos', list:() => full(data.blocked), extra:AGE_COLUMN},
       support: {text:'Se as horas de suporte cabem na reserva da sprint.',
-        criteria:'Tempo Real dos cards de Tipo Suporte da sprint, projetado pelo ritmo por dia útil até o fim, contra a reserva configurada (padrão 40h). Vermelho se a reserva acaba antes do fim; amarelo acima de 90% da reserva projetada.',
+        criteria:'Tempo Real dos cards de Tipo Suporte da sprint, projetado pelo ritmo por dia útil até o fim, contra a reserva configurada (padrão 80h, descontadas da capacidade Full stack). Vermelho se a reserva acaba antes do fim; amarelo acima de 90% da reserva projetada.',
         title:'Cards de suporte', list:() => items.filter(isSupport)},
-      capacity: {text:'Se o esforço que falta cabe na capacidade que resta ao time.',
-        criteria:'Esforço restante dos cards em aberto (Restante revisado; sem ele, Estimado − Real, ou Estimado se não iniciado) sobre a capacidade das pessoas da sprint nos dias úteis futuros. Amarelo a partir de 90%, vermelho acima de 100%.',
+      capacity: {text:'Se o esforço que falta cabe na capacidade que resta ao time Full stack, que atende os itens da sprint.',
+        criteria:'Esforço restante dos cards em aberto (Restante revisado; sem ele, Estimado − Real, ou Estimado se não iniciado), tirando os cards só de Projetos, sobre a capacidade Full stack menos a reserva do Bombeiro nos dias úteis futuros. O detalhe mostra também o total do time e a parte de Projetos. Amarelo a partir de 90%, vermelho acima de 100%. Antes de classificar os times, todos contam e não há desconto do Bombeiro.',
         title:'Cards em aberto', list:() => items.filter(item => window.SprintRules.isOpen(item.status))},
     }[key];
   }
@@ -214,11 +214,26 @@ window.ControlTower = (() => {
     return mondayRequest(url.pathname + url.search);
   }
 
+  /**
+   * Horas planejadas, utilizadas e disponíveis: os mesmos cards do Capacity e do Consumo de horas, montados no
+   * navegador com as linhas sincronizadas e a reserva do Bombeiro da sprint.
+   */
+  function renderHours(sprint) {
+    const node = el('tower-hours');
+    if (!node || !window.Capacity?.summaryFor || typeof DATA === 'undefined') return;
+    const reserve = state.reserves?.reserves?.[sprint] ?? state.reserves?.defaultMinutes ?? 0;
+    node.innerHTML = window.Capacity.summaryFor(DATA, sprint, window.MONDAY_SPRINT_DATES?.[sprint] || null, window.SprintRules.settings.capacityOverrides || {}, reserve).html;
+  }
+  async function loadReserves() {
+    try { state.reserves = await mondayRequest('/api/support-reserves'); }
+    catch { state.reserves = null; /* Sem a reserva salva, o card do Bombeiro usa 0h até a próxima carga. */ }
+  }
+
   async function load() {
     const request = ++state.request;
     state.loading = true; render();
     try {
-      const data = await fetchTower(state.sprint);
+      const [data] = await Promise.all([fetchTower(state.sprint), loadReserves()]);
       if (request !== state.request) return;
       state.data = data; state.sprint = data.sprint; state.error = '';
       updateBadge(data);
@@ -264,6 +279,7 @@ window.ControlTower = (() => {
     el('tower-forecast').textContent = forecast.available
       ? `Previsão (Monte Carlo, ${forecast.runs.toLocaleString('pt-BR')} simulações sobre ${forecast.samples} dias úteis de histórico): com 85% de confiança, pelo menos ${forecast.p85} card(s) concluídos até o fim; resultado mais provável, ${forecast.p50}. Chance de concluir todo o escopo restante (${data.totals.remaining}): ${forecast.probabilityAll.toLocaleString('pt-BR')}%.`
       : 'Previsão indisponível: o histórico de entregas ainda é curto (mínimo de 10 dias úteis com dados).';
+    renderHours(data.sprint);
     renderChart(data);
     renderOrigins(data);
 
@@ -408,5 +424,5 @@ window.ControlTower = (() => {
     });
   });
 
-  return {enter, leave, load, refreshAlerts, updateBadge};
+  return {enter, leave, load, refreshAlerts, updateBadge, loadReserves, renderHours};
 })();

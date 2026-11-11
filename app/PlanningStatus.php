@@ -15,7 +15,7 @@ enum PlanningStatus: string
     case Revealed = 'revealed';
     /** Estimativa gravada no card. */
     case Closed = 'closed';
-    /** Card tirado da mesa sem gravar nada. */
+    /** Card tirado da mesa sem gravar nada (interrompido), ou estimativa substituída por uma reestimativa. */
     case Canceled = 'canceled';
 
     /**

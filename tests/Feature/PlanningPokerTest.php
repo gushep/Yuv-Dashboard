@@ -87,6 +87,124 @@ class PlanningPokerTest extends TestCase
             ->assertJsonCount(2, 'sprints');
     }
 
+    public function test_history_tells_which_sprint_is_in_progress_and_which_had_a_planning(): void
+    {
+        $session = PlanningSession::factory()->create(['sprint' => 18, 'sprint_name' => 'Sprint 18', 'status' => PlanningSession::CLOSED]);
+        PlanningRound::factory()->for($session, 'session')->count(2)->create(['status' => PlanningStatus::Closed, 'final_estimate' => 5]);
+        PlanningRound::factory()->for($session, 'session')->create(['status' => PlanningStatus::Canceled]);
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->create());
+
+        $this->getJson(route('planning.history'))->assertOk()
+            ->assertJsonPath('sprints.0.number', 19)
+            ->assertJsonPath('sprints.0.current', true)
+            ->assertJsonPath('sprints.0.planning', null)
+            ->assertJsonPath('sprints.1.number', 18)
+            ->assertJsonPath('sprints.1.current', false)
+            ->assertJsonPath('sprints.1.planning', ['open' => false, 'estimated' => 2]);
+    }
+
+    public function test_review_shows_how_the_planning_of_a_sprint_went_without_the_replaced_estimates(): void
+    {
+        $session = PlanningSession::factory()->create(['sprint' => 18, 'sprint_name' => 'Sprint 18', 'status' => PlanningSession::CLOSED, 'closed_at' => now()]);
+        $replaced = PlanningRound::factory()->for($session, 'session')->create(['status' => PlanningStatus::Canceled, 'item_id' => '901', 'final_estimate' => 30]);
+        $round = PlanningRound::factory()->for($session, 'session')->create([
+            'status' => PlanningStatus::Closed, 'item_id' => '901', 'item_name' => 'Relatório de jornada', 'ai_estimate' => 8, 'average' => 6,
+            'final_estimate' => 6, 'final_source' => 'planning', 'decision_note' => 'Reaproveita o filtro atual.', 'closed_at' => now(),
+            'decided_by' => User::factory()->create(['name' => 'Gustavo'])->id,
+        ]);
+        PlanningVote::factory()->for($round, 'round')->for(User::factory()->create(['name' => 'Bruno']))->create(['hours' => 8]);
+        PlanningVote::factory()->for($round, 'round')->for(User::factory()->create(['name' => 'Ana']))->create(['hours' => 4]);
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->create());
+
+        $this->getJson(route('planning.review', 18))->assertOk()
+            ->assertJsonCount(1, 'rounds')
+            ->assertJsonPath('rounds.0.name', 'Relatório de jornada')
+            ->assertJsonPath('rounds.0.finalEstimate', 6)
+            ->assertJsonPath('rounds.0.aiEstimate', 8)
+            ->assertJsonPath('rounds.0.decidedBy', 'Gustavo')
+            ->assertJsonPath('rounds.0.note', 'Reaproveita o filtro atual.')
+            ->assertJsonPath('rounds.0.votes', [['name' => 'Ana', 'hours' => 4], ['name' => 'Bruno', 'hours' => 8]])
+            // A mesa daquela sprint, só para leitura: a carga do time com os cards da sprint.
+            ->assertJsonPath('open', false)
+            ->assertJsonPath('load.0.name', 'Ana')
+            ->assertJsonPath('load.0.inSprint', 3)
+            ->assertJsonPath('reserveHours', 0);
+        $this->assertSame(PlanningStatus::Canceled, $replaced->fresh()->status);
+
+        $this->getJson(route('planning.review', 17))->assertUnprocessable()->assertJsonPath('error', 'A Sprint 17 não está no cronograma de sprints do Monday.');
+    }
+
+    public function test_review_of_a_sprint_planned_outside_the_app_shows_the_team_load_and_the_sprint_cards(): void
+    {
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->create());
+
+        $response = $this->getJson(route('planning.review', 19))->assertOk()
+            ->assertJsonPath('recorded', false)
+            ->assertJsonPath('name', 'Sprint 19')
+            ->assertJsonCount(0, 'rounds')
+            // O card cancelado fica de fora; os demais vêm com o Tempo estimado do Monday, do maior para o menor.
+            ->assertJsonPath('cards', [
+                ['name' => 'Relatório de frota', 'url' => null, 'owner' => 'Ana', 'type' => 'Melhoria', 'estimate' => 8],
+                ['name' => 'Ajuste de filtro', 'url' => null, 'owner' => 'Bruno', 'type' => 'Bug', 'estimate' => 2],
+            ]);
+        $load = collect($response->json('load'))->keyBy('name');
+        $this->assertEquals(8, $load['Ana']['inSprint']);
+        $this->assertEquals(2, $load['Bruno']['inSprint']);
+    }
+
+    public function test_entering_the_table_of_a_sprint_in_progress_reopens_its_planning_with_the_estimates(): void
+    {
+        $session = PlanningSession::factory()->create(['sprint' => 19, 'sprint_name' => 'Sprint 19', 'status' => PlanningSession::CLOSED, 'closed_at' => now()]);
+        PlanningRound::factory()->for($session, 'session')->create(['status' => PlanningStatus::Closed, 'item_id' => '901', 'final_estimate' => 5]);
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->scrumMaster()->create());
+
+        $this->postJson(route('planning.sessions.store'), ['sprint' => 19])->assertOk()
+            ->assertJsonPath('session.id', $session->id)
+            ->assertJsonCount(1, 'estimated');
+        $this->assertSame(PlanningSession::OPEN, $session->fresh()->status);
+        $this->assertSame(1, PlanningSession::count());
+
+        // Entrar de novo na mesa que já está aberta não é erro.
+        $this->postJson(route('planning.sessions.store'), ['sprint' => 19])->assertOk()->assertJsonPath('session.id', $session->id);
+    }
+
+    public function test_closing_the_planning_links_the_estimated_cards_to_its_sprint_on_monday(): void
+    {
+        $snapshot = Cache::get(MondaySnapshotService::CACHE_KEY);
+        $snapshot['sprintItems'] = ['5019' => 19, '5020' => 20];
+        Cache::put(MondaySnapshotService::CACHE_KEY, $snapshot, 3600);
+        $session = PlanningSession::factory()->create();
+        PlanningRound::factory()->for($session, 'session')->create(['status' => PlanningStatus::Closed, 'item_id' => '901', 'item_name' => 'Relatório de jornada', 'final_estimate' => 6]);
+        // Reestimado: a rodada substituída não liga de novo.
+        PlanningRound::factory()->for($session, 'session')->create(['status' => PlanningStatus::Canceled, 'item_id' => '902', 'item_name' => 'Interrompido']);
+        Http::fakeSequence('api.monday.com/v2')
+            ->push(['data' => ['items' => [['id' => '901', 'board' => ['id' => '123', 'columns' => [['id' => 'task_sprint', 'title' => 'Sprint', 'type' => 'board_relation', 'settings_str' => '{"boardIds":[456]}']]]]]]])
+            ->push(['data' => ['change_multiple_column_values' => ['id' => '901']]]);
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->scrumMaster()->create());
+
+        $this->postJson(route('planning.sessions.close', $session))->assertOk()->assertJsonPath('session', null);
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn (Request $request): bool => str_contains((string) $request['query'], 'change_multiple_column_values')
+            && $request['variables']['item'] === '901' && json_decode($request['variables']['values'], true) === ['task_sprint' => ['item_ids' => [5020]]]);
+        $this->assertSame(PlanningSession::CLOSED, $session->fresh()->status);
+    }
+
+    public function test_planning_stays_open_when_monday_refuses_to_link_a_card_to_the_sprint(): void
+    {
+        $snapshot = Cache::get(MondaySnapshotService::CACHE_KEY);
+        $snapshot['sprintItems'] = ['5020' => 20];
+        Cache::put(MondaySnapshotService::CACHE_KEY, $snapshot, 3600);
+        $session = PlanningSession::factory()->create();
+        PlanningRound::factory()->for($session, 'session')->create(['status' => PlanningStatus::Closed, 'item_id' => '901', 'item_name' => 'Relatório de jornada', 'final_estimate' => 6]);
+        Http::fake(['api.monday.com/v2' => Http::response(['errors' => [['message' => 'Sem permissão']]])]);
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->scrumMaster()->create());
+
+        $this->postJson(route('planning.sessions.close', $session))->assertUnprocessable()
+            ->assertJsonPath('error', 'O Monday não ligou à Sprint 20: Relatório de jornada. A planning continua aberta; tente encerrar de novo.');
+        $this->assertSame(PlanningSession::OPEN, $session->fresh()->status);
+    }
+
     public function test_planning_a_new_sprint_requires_a_current_or_future_sprint_and_one_table_at_a_time(): void
     {
         $maestro = User::factory()->withScreens(Screen::Planning)->scrumMaster()->create(['name' => 'Gustavo']);
@@ -144,6 +262,60 @@ class PlanningPokerTest extends TestCase
         Http::fake(['api.monday.com/v2' => Http::response(['data' => ['items' => [['id' => '901', 'board' => ['id' => '123'], 'column_values' => [['text' => '']], 'updates' => []]]]])]);
         $this->postJson(route('planning.rounds.store', $session), ['item' => '901'])->assertUnprocessable()
             ->assertJsonPath('error', 'O card Outro card ainda está na mesa. Registre a estimativa ou tire o card antes de jogar outro.');
+    }
+
+    public function test_playing_another_card_with_replace_interrupts_the_one_on_the_table_without_touching_monday(): void
+    {
+        $session = PlanningSession::factory()->create();
+        $interrupted = PlanningRound::factory()->for($session, 'session')->voting()->create(['item_id' => '555', 'item_name' => 'Outro card']);
+        PlanningVote::factory()->for($interrupted, 'round')->create(['hours' => 5]);
+        Http::fake(['api.monday.com/v2' => Http::response(['data' => ['items' => [['id' => '901', 'board' => ['id' => '123'], 'column_values' => [['text' => '6']], 'updates' => []]]]])]);
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->scrumMaster()->create());
+
+        $this->postJson(route('planning.rounds.store', $session), ['item' => '901', 'replace' => true])->assertOk()
+            ->assertJsonPath('round.item.name', 'Relatório de jornada')
+            ->assertJsonPath('round.status', 'reading');
+
+        $this->assertSame(PlanningStatus::Canceled, $interrupted->fresh()->status);
+        Http::assertSentCount(1);
+        Http::assertNotSent(fn (Request $request): bool => str_contains((string) $request['query'], 'change_multiple_column_values'));
+    }
+
+    public function test_reestimating_brings_the_card_back_with_the_original_ai_estimate_and_replaces_the_previous_estimate(): void
+    {
+        $session = PlanningSession::factory()->create();
+        // Já estimado nesta planning e fora do Backlog (entrou na sprint): o Tempo estimado do card já tem os 38h gravados.
+        $first = PlanningRound::factory()->for($session, 'session')->create([
+            'status' => PlanningStatus::Closed, 'item_id' => '777', 'item_name' => 'Integração Jimi', 'item_owner' => 'Bruno',
+            'ai_estimate' => 30, 'final_estimate' => 38, 'final_source' => 'planning', 'closed_at' => now(),
+        ]);
+        // Monday: detalhes do card ao jogar; depois, gravar o Tempo estimado e comentar ao decidir.
+        Http::fakeSequence('api.monday.com/v2')
+            ->push(['data' => ['items' => [['id' => '777', 'board' => ['id' => '123'], 'column_values' => [['text' => '38']], 'updates' => []]]]])
+            ->push(['data' => ['items' => [['id' => '777', 'board' => ['id' => '123', 'columns' => [['id' => 'est_col', 'title' => 'Tempo Estimado', 'type' => 'numbers', 'settings_str' => '{}']]]]]]])
+            ->push(['data' => ['change_multiple_column_values' => ['id' => '777']]])
+            ->push(['data' => ['items' => [['id' => '777', 'board' => ['id' => '123']]]]])
+            ->push(['data' => ['create_update' => ['id' => '778']]]);
+        $maestro = User::factory()->withScreens(Screen::Planning)->scrumMaster()->create(['name' => 'Gustavo']);
+
+        $this->actingAs($maestro)->postJson(route('planning.rounds.store', $session), ['item' => '777'])->assertOk()
+            ->assertJsonPath('round.item.name', 'Integração Jimi')
+            ->assertJsonCount(1, 'estimated');
+
+        $again = PlanningRound::query()->where('item_id', '777')->latest('id')->first();
+        $this->assertNotSame($first->id, $again->id);
+        $this->assertSame(30.0, $again->ai_estimate);
+        $this->assertSame('Bruno', $again->item_owner);
+
+        $again->update(['status' => PlanningStatus::Revealed, 'average' => 20, 'revealed_at' => now()]);
+        PlanningVote::factory()->for($again, 'round')->create(['hours' => 20]);
+
+        $this->postJson(route('planning.rounds.decide', $again), ['source' => 'planning'])->assertOk()
+            ->assertJsonCount(1, 'estimated')
+            ->assertJsonPath('estimated.0.finalEstimate', 20);
+
+        $this->assertSame(PlanningStatus::Canceled, $first->fresh()->status);
+        $this->assertSame(PlanningStatus::Closed, $again->fresh()->status);
     }
 
     public function test_cards_are_played_face_down_only_after_the_maestro_opens_the_estimate(): void
@@ -380,11 +552,46 @@ class PlanningPokerTest extends TestCase
         PlanningRound::factory()->for($session, 'session')->create(['status' => PlanningStatus::Closed, 'item_id' => '901', 'item_owner' => 'Bruno', 'final_estimate' => 38, 'final_source' => 'planning']);
         PlanningRound::factory()->for($session, 'session')->create(['status' => PlanningStatus::Closed, 'item_id' => '30', 'item_owner' => 'Ana', 'final_estimate' => 30, 'final_source' => 'planning']);
 
-        $load = collect($this->actingAs(User::factory()->withScreens(Screen::Planning)->create())->getJson(route('planning.show'))->assertOk()->json('load'))->keyBy('name');
+        $response = $this->actingAs(User::factory()->withScreens(Screen::Planning)->create())->getJson(route('planning.show'))->assertOk();
+        $load = collect($response->json('load'))->keyBy('name');
 
         $this->assertSame(['Bruno', 'Ana'], $load->keys()->all());
-        $this->assertEquals(['name' => 'Bruno', 'inSprint' => 5, 'planned' => 38, 'total' => 43, 'capacity' => 40, 'percent' => 108], $load['Bruno']);
-        $this->assertEquals(['name' => 'Ana', 'inSprint' => 35, 'planned' => 0, 'total' => 35, 'capacity' => 80, 'percent' => 44], $load['Ana']);
+        $this->assertEquals(['name' => 'Bruno', 'team' => 'fullstack', 'inSprint' => 5, 'planned' => 38, 'support' => 0, 'total' => 43, 'capacity' => 40, 'percent' => 108], $load['Bruno']);
+        $this->assertEquals(['name' => 'Ana', 'team' => 'fullstack', 'inSprint' => 35, 'planned' => 0, 'support' => 0, 'total' => 35, 'capacity' => 80, 'percent' => 44], $load['Ana']);
+        // Sem times classificados, a capacidade Full stack não tem desconto do Bombeiro.
+        $this->assertEquals(0, $response->json('reserveHours'));
+    }
+
+    public function test_with_teams_classified_the_load_has_only_their_people_with_the_capacity_inherited_from_the_last_saved_sprint(): void
+    {
+        $connection = MondayConnection::current();
+        $connection->capacity_overrides = ['18|Carla' => 40 * 60, '21|Carla' => 10 * 60];
+        $connection->metric_settings = ['capacityHours' => 80, 'team' => [
+            ['id' => '1', 'name' => 'Ana', 'group' => 'fullstack'],
+            ['id' => '2', 'name' => 'Carla', 'group' => 'projects'],
+        ]];
+        $connection->save();
+        $snapshot = Cache::get(MondaySnapshotService::CACHE_KEY);
+        $snapshot['rows'] = [
+            // Mesma pessoa escrita de outro jeito no card: conta uma vez só, com o nome classificado.
+            ['Id' => '30', 'Nome' => 'Da Ana', 'Status' => 'Backlog', 'Responsavel' => 'ANA', 'Sprint' => 20, 'EstH' => 30.0],
+            ['Id' => '31', 'Nome' => 'Do QA', 'Status' => 'Backlog', 'Responsavel' => 'QA', 'Sprint' => 20, 'EstH' => 9.0],
+            ['Id' => '32', 'Nome' => 'Sustentação', 'Status' => 'Backlog', 'Tipo' => ' Suporte ', 'Responsavel' => 'Ana', 'Sprint' => 20, 'EstH' => 6.0],
+        ];
+        Cache::put(MondaySnapshotService::CACHE_KEY, $snapshot, 3600);
+        $session = PlanningSession::factory()->create();
+        $connection->forecast_settings = ['supportReserves' => [(string) $session->sprint => 50 * 60]];
+        $connection->save();
+
+        $response = $this->actingAs(User::factory()->withScreens(Screen::Planning)->create())->getJson(route('planning.show'))->assertOk();
+        $load = collect($response->json('load'))->keyBy('name');
+
+        $this->assertSame(['Ana', 'Carla'], $load->keys()->all());
+        // O card de Suporte entra na carga da Ana e, à parte, em "support", que conta contra a reserva do Bombeiro.
+        $this->assertEquals(36, $load['Ana']['inSprint']);
+        $this->assertEquals(6, $load['Ana']['support']);
+        $this->assertEquals(['name' => 'Carla', 'team' => 'projects', 'inSprint' => 0, 'planned' => 0, 'support' => 0, 'total' => 0, 'capacity' => 40, 'percent' => 0], $load['Carla']);
+        $this->assertEquals(50, $response->json('reserveHours'));
     }
 
     public function test_backlog_of_the_snapshot_has_only_cards_without_sprint_not_started_and_not_support(): void

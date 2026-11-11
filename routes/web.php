@@ -60,10 +60,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/api/config', [MondayController::class, 'saveConfig']);
         Route::post('/api/refresh', [MondayController::class, 'saveRefresh']);
         Route::post('/api/metric-settings', [MondayController::class, 'saveMetricSettings'])->name('metric-settings.store');
+        Route::get('/api/monday-users', [MondayController::class, 'mondayUsers'])->name('monday-users.index');
         Route::post('/api/board-tabs', [MondayController::class, 'saveBoardTabs'])->name('board-tabs.store');
     });
-    Route::post('/api/capacity', [MondayController::class, 'saveCapacity'])->middleware('screen:capacity');
-    Route::post('/api/support-reserves', [MondayController::class, 'saveSupportReserve'])->middleware('screen:consumption')->name('support-reserves.store');
+    // Horas por pessoa e reserva de suporte: só o Maestro Scrum altera.
+    Route::post('/api/capacity', [MondayController::class, 'saveCapacity'])->middleware(['screen:capacity', 'can:manage-capacity'])->name('capacity.store');
+    Route::post('/api/support-reserves', [MondayController::class, 'saveSupportReserve'])->middleware(['screen:consumption', 'can:manage-capacity'])->name('support-reserves.store');
     Route::post('/api/release', [MondayController::class, 'release'])->middleware('screen:release')->name('release.data');
     Route::get('/api/control-tower', [MondayController::class, 'controlTower'])->middleware('screen:control-tower')->name('control-tower.show');
     Route::get('/api/burndown', [MondayController::class, 'burndown'])->middleware('screen:burndown')->name('burndown.show');
@@ -95,6 +97,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('screen:planning')->prefix('/api/planning')->name('planning.')->group(function () {
         Route::get('/', [PlanningController::class, 'show'])->name('show');
         Route::get('/sprints', [PlanningController::class, 'history'])->name('history');
+        Route::get('/sprints/{sprint}', [PlanningController::class, 'review'])->whereNumber('sprint')->name('review');
         Route::whereNumber(['session', 'round'])->group(function () {
             Route::get('/rounds/{round}/scope', [PlanningController::class, 'scope'])->name('rounds.scope');
             Route::post('/rounds/{round}/votes', [PlanningController::class, 'vote'])->name('votes.store');

@@ -10,6 +10,8 @@ const row = (Id, Responsavel='Ana', Status='Em progresso', EstH=10, RealH=2, ext
 window.mondayRequest = async (path, body) => {
   if (body) { writes++; throw new Error('Esta tela não pode gravar dados.'); }
   if (failed) throw new Error('Falha de teste');
+  // A reserva do Bombeiro entra no resumo Full stack.
+  if (path === '/api/support-reserves') return {reserves:{}, defaultMinutes:4800};
   if (path !== '/api/capacity') throw new Error('Capacidade deve usar a leitura existente.');
   return {overrides:{'17|Bia':2400},settings:{revisions:{'17|20|Ana':{minutes:0}},adjustments:{'17|Ana':[{date:'2026-10-08',minutes:480}]},thresholds:{low:99,limit:100}}};
 };window.syncMonday = async () => { refreshed++; Forecast.onLoading(); Forecast.onDataUpdated(); Forecast.onSyncComplete(); };
@@ -51,6 +53,13 @@ window.MONDAY_LAST_SYNC='2026-10-06T12:00:00-03:00';
     Forecast.enter(17);await tick();document.getElementById('page-forecast').classList.add('active');
     const ref=document.getElementById('forecast-reference');ref.value='2026-10-06';ref.dispatchEvent(new Event('change'));
     check('Render real, ordenação de excesso e impedimento',document.querySelector('#forecast-body tr').textContent.includes('Ana') && document.getElementById('forecast-body').textContent.includes('6h a mais') && document.getElementById('forecast-body').textContent.includes('1 impedimento'));
+    check('Resumo por time sem desconto do Bombeiro antes de classificar',document.getElementById('forecast-teams').textContent.includes('Time completo') && document.getElementById('forecast-teams').textContent.includes('sem desconto do Bombeiro'));
+    const teams=Forecast.teamForecast([{team:'fullstack',known:600,available:1440},{team:'projects',known:60,available:480}],4800,dates,'2026-10-06');
+    check('Resumo por time: total, Full stack sem o Bombeiro e Projetos',teams.total.available===1920 && teams.fullstack.available===1440 && teams.projects.known===60);
+    SprintRules.applySettings({team:[{id:'1',name:'Ana',group:'fullstack'}]});
+    const configured=Forecast.teamForecast([{team:'fullstack',known:600,available:1440}],4800,dates,'2026-10-06');
+    check('Com times, a parte futura do Bombeiro sai do Full stack',configured.fullstack.reserve===1440 && configured.fullstack.available===0 && configured.total.available===1440);
+    SprintRules.applySettings({team:[]});
     document.querySelector('#forecast-body .cap-dev-button').click();
     check('Expansão, segurança e origem detalhada',document.querySelector('.forecast-detail') && !document.querySelector('.forecast-detail img') && !document.querySelector('.forecast-detail a') && document.querySelector('.forecast-detail').textContent.includes('Estimativa total · tarefa não iniciada'));
     check('Rolagem horizontal fica restrita à tabela',document.documentElement.scrollWidth<=window.innerWidth);

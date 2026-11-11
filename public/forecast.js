@@ -9,7 +9,7 @@ window.Forecast = (() => {
     if (text && !['nao','nenhum','sem impedimento','sem bloqueio','false','0','desbloqueado'].includes(normalize(text))) return text;
     return ['parado','bloqueado','impedido','limitacao externa'].includes(normalize(row.Status)) ? `Status: ${row.Status}` : '';
   }
-  const state = {active:false, sprint:null, developer:'all', reference:null, expanded:new Set(), overrides:{}, loaded:false, error:'', syncError:'', loading:false};
+  const state = {active:false, sprint:null, developer:'all', reference:null, expanded:new Set(), overrides:{}, reserves:{}, defaultReserve:0, loaded:false, error:'', syncError:'', loading:false};
   const labels = {over:'Acima da capacidade', limit:'No limite', unknown:'Sem previsão', within:'Dentro da capacidade', low:'Baixa carga prevista', empty:'Sem demandas abertas'};
   function duration(value) {
     if (value === null || value === undefined || String(value).trim() === '') return null;
@@ -66,8 +66,9 @@ window.Forecast = (() => {
       if (Number(row.Sprint) === Number(sprint)) unique.set(row.Id ? String(row.Id) : `snapshot-${index}`, row);
     });
     for (const row of unique.values()) {
-      const people = owners(row), done = !window.SprintRules.isOpen(row.Status);
-      if (!people.length && !done) unassigned.push(row);
+      // Só Full stack e Projetos têm previsão individual; card só de quem está sem time fica fora.
+      const named = owners(row), people = named.filter(name => window.SprintRules.teamOf(name) !== null), done = !window.SprintRules.isOpen(row.Status);
+      if (!named.length && !done) unassigned.push(row);
       for (const name of people) {
         if (!groups.has(name)) groups.set(name,[]);
         if (done) continue;
@@ -89,16 +90,42 @@ window.Forecast = (() => {
         groups.get(name).push({row, estimate, real, remainingEffort, source, issue, reasons});
       }
     }
+    const known = new Set([...groups.keys()].map(name => window.SprintRules.normalize(name)));
+    for (const member of window.SprintRules.teamMembers()) if (!known.has(window.SprintRules.normalize(member.name))) groups.set(member.name, []);
     const developers = [...groups].map(([name,tasks]) => {
-      const key = `${sprint}|${name}`, total = Number.isInteger(overrides[key]) ? overrides[key] : window.SprintRules.capacityMinutes();
+      const total = window.SprintRules.capacityFor(overrides, sprint, name).minutes;
       const calendar = capacity(total, dates, reference, holidays);
       const known = tasks.reduce((sum,task) => sum + (task.remainingEffort ?? 0),0), missing = tasks.filter(task => task.remainingEffort === null).length;
       const available = calendar.remaining, status = classify(known,available,missing,tasks.length);
-      return {name,tasks,total,calendar,known,missing,available,status};
+      return {name,team:window.SprintRules.teamOf(name),tasks,total,calendar,known,missing,available,status};
     });
     const rank = {over:0,limit:1,unknown:2,within:3,low:4,empty:5};
     developers.sort((a,b) => rank[a.status]-rank[b.status] || (b.known-(b.available ?? b.known))-(a.known-(a.available ?? a.known)) || a.name.localeCompare(b.name,'pt-BR'));
     return {developers,unassigned};
+  }
+  /**
+   * Composição da previsão: total do time como sempre; Full stack com a parte futura da reserva do Bombeiro
+   * descontada (só depois de classificar os times); Projetos à parte.
+   */
+  function teamForecast(developers, reserveMinutes, dates, reference) {
+    const sum = (list, key) => list.reduce((total, dev) => total + (dev[key] ?? 0), 0);
+    const of = team => developers.filter(dev => dev.team === team);
+    const reserve = window.SprintRules.teamsConfigured() ? capacity(reserveMinutes, dates, reference).remaining ?? 0 : 0;
+    const fullstackAvailable = Math.max(0, sum(of('fullstack'), 'available') - reserve);
+    return {
+      total: {known: sum(developers, 'known'), available: sum(developers, 'available')},
+      fullstack: {known: sum(of('fullstack'), 'known'), available: fullstackAvailable, reserve},
+      projects: {known: sum(of('projects'), 'known'), available: sum(of('projects'), 'available')}
+    };
+  }
+  function renderTeams(developers, dates) {
+    const totals = teamForecast(developers, state.reserves[state.sprint] ?? state.defaultReserve, dates, state.reference);
+    const card = (label, team, parts, kind = '') => `<div class="team-card ${kind}${team.known > team.available ? ' negative' : ''}"><span class="team-card-label">${label}</span><strong>${format(team.known)} <small>de ${format(team.available)}</small></strong><small>${parts}</small></div>`;
+    el('forecast-teams').innerHTML = [
+      card('Time completo', totals.total, `Horas para concluir de capacidade restante · Full stack ${format(totals.fullstack.known)} · Projetos ${format(totals.projects.known)}`),
+      card('Full stack', totals.fullstack, window.SprintRules.teamsConfigured() ? `Capacidade restante já sem o Bombeiro (${format(totals.fullstack.reserve)} até o fim da sprint)` : 'Times ainda não classificados: sem desconto do Bombeiro', 'fullstack'),
+      card('Projetos (IA)', totals.projects, 'Demandas próprias, fora da sprint e da sustentação', 'projects')
+    ].join('');
   }
   const badge = status => `<span class="forecast-badge ${status}"><span aria-hidden="true">●</span> ${labels[status]}</span>`;
   function taskLink(row) {
@@ -128,10 +155,12 @@ window.Forecast = (() => {
     state.reference ||= window.Capacity.todaySaoPaulo(); el('forecast-reference').value = state.reference;
     const result = model(DATA,state.sprint,dates,state.overrides,state.reference);
     const names = result.developers.map(dev=>dev.name);
-    if (!names.includes(state.developer)) state.developer = 'all';
-    el('forecast-developer').replaceChildren(new Option('Todos os desenvolvedores','all'),...names.map(name=>new Option(name,name)));
+    const teamFilters = ['fullstack','projects'].map(team => [`team:${team}`, `Só ${window.SprintRules.teamLabel(team)}`]);
+    if (!names.includes(state.developer) && !teamFilters.some(([value]) => value === state.developer)) state.developer = 'all';
+    el('forecast-developer').replaceChildren(new Option('Todos os desenvolvedores','all'),...teamFilters.map(([value,label]) => new Option(label,value)),...names.map(name=>new Option(name,name)));
     el('forecast-developer').value = state.developer;
-    const shown = result.developers.filter(dev=>state.developer==='all' || dev.name===state.developer);
+    const shown = result.developers.filter(dev=>state.developer==='all' || dev.name===state.developer || `team:${dev.team}`===state.developer);
+    renderTeams(result.developers, dates);
     const tbody = el('forecast-body'); tbody.replaceChildren();
     if (state.loaded) for (const [index,dev] of shown.entries()) {
       const tr = document.createElement('tr'); tr.className = 'forecast-dev-row';
@@ -139,7 +168,7 @@ window.Forecast = (() => {
       const ratio = dev.available>0 ? `${(dev.known/dev.available*100).toFixed(1)}%${dev.missing ? ' (mínimo conhecido)' : ''}` : 'Sem divisão: capacidade zero ou indisponível';
       const blockers = dev.tasks.filter(task=>blocker(task.row)).length;
       const initials = dev.name.split(/\s+/).map(part=>part[0]).slice(0,2).join('');
-      tr.innerHTML = `<td><button class="cap-dev-button" type="button" aria-expanded="${expanded}" aria-label="${expanded?'Recolher':'Expandir'} tarefas de ${escape(dev.name)}"><span class="cap-chevron">${expanded?'⌄':'›'}</span><span class="cap-avatar cap-avatar-${index%4}">${escape(initials)}</span><span>${escape(dev.name)}</span></button>${blockers ? `<small class="forecast-blocker">${blockers} impedimento(s) conhecido(s)</small>` : ''}</td><td title="Carga futura = horas para concluir ÷ capacidade restante: ${escape(ratio)}. Ocupação futura, não produtividade ou probabilidade de entrega.">${badge(dev.status)}</td><td>${dev.tasks.length}${dev.missing ? `<small>${dev.missing} pendente(s) de revisão</small>` : ''}</td><td>${dev.missing ? `Pelo menos ${format(dev.known)}` : format(dev.known)}</td><td title="${escape(`Capacidade total ${format(dev.total)} ÷ ${dev.calendar.totalDays ?? '?'} dias úteis × ${dev.calendar.days ?? '?'} dias futuros`)}">${format(dev.available)}</td><td class="forecast-balance ${dev.status}">${escape(balance(dev))}</td>`;
+      tr.innerHTML = `<td><button class="cap-dev-button" type="button" aria-expanded="${expanded}" aria-label="${expanded?'Recolher':'Expandir'} tarefas de ${escape(dev.name)}"><span class="cap-chevron">${expanded?'⌄':'›'}</span><span class="cap-avatar cap-avatar-${index%4}">${escape(initials)}</span><span>${escape(dev.name)}</span></button><span class="team-badge ${dev.team}">${escape(window.SprintRules.teamLabel(dev.team))}</span>${blockers ? `<small class="forecast-blocker">${blockers} impedimento(s) conhecido(s)</small>` : ''}</td><td title="Carga futura = horas para concluir ÷ capacidade restante: ${escape(ratio)}. Ocupação futura, não produtividade ou probabilidade de entrega.">${badge(dev.status)}</td><td>${dev.tasks.length}${dev.missing ? `<small>${dev.missing} pendente(s) de revisão</small>` : ''}</td><td>${dev.missing ? `Pelo menos ${format(dev.known)}` : format(dev.known)}</td><td title="${escape(`Capacidade total ${format(dev.total)} ÷ ${dev.calendar.totalDays ?? '?'} dias úteis × ${dev.calendar.days ?? '?'} dias futuros`)}">${format(dev.available)}</td><td class="forecast-balance ${dev.status}">${escape(balance(dev))}</td>`;
       const toggle = () => { expanded ? state.expanded.delete(dev.name) : state.expanded.add(dev.name); render(); };
       tr.addEventListener('click', toggle);
       tbody.append(tr); if (expanded) tbody.append(detail(dev));
@@ -148,7 +177,7 @@ window.Forecast = (() => {
     const calendar = capacity(window.SprintRules.capacityMinutes(),dates,state.reference);
     el('forecast-cutoff').textContent = `Corte: fim de ${state.reference.split('-').reverse().join('/')} · ${calendar.days ?? '?'} dias úteis posteriores · America/Sao_Paulo`;
     el('forecast-last-sync').textContent = state.loading ? 'Atualizando dados do Monday…' : window.MONDAY_LAST_SYNC ? `Última atualização: ${new Date(window.MONDAY_LAST_SYNC).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}` : 'Base incorporada · sem atualização do Monday';
-    const warnings = ['Segunda a sexta; não há calendário de feriados ou calendário individual configurado. Corte exclui o dia de referência inteiro.','Nas tarefas em andamento, o cálculo usa estimativa menos tempo real compatível como aproximação. Esforço restante revisado no Monday tem prioridade. Tempo real ausente ou estimativa consumida em tarefa aberta exigem revisão. Cards compartilhados ou em várias sprints ficam pendentes para evitar atribuição incorreta.','Capacidade herdada do painel Capacity; reservas e ausências não estão disponíveis na integração atual e não são descontadas. Ajustes de esforço devem ser feitos no Monday.', 'A data de referência altera a capacidade futura; tarefas refletem a base atual, sem reconstruir histórico.'];
+    const warnings = ['Segunda a sexta; não há calendário de feriados ou calendário individual configurado. Corte exclui o dia de referência inteiro.','Nas tarefas em andamento, o cálculo usa estimativa menos tempo real compatível como aproximação. Esforço restante revisado no Monday tem prioridade. Tempo real ausente ou estimativa consumida em tarefa aberta exigem revisão. Cards compartilhados ou em várias sprints ficam pendentes para evitar atribuição incorreta.','Capacidade herdada do painel Capacity (sem ajuste na sprint, vale o último valor salvo). A reserva do Bombeiro é descontada só no resumo Full stack; na linha de cada pessoa, não. Ausências não estão disponíveis na integração atual. Ajustes de esforço devem ser feitos no Monday.', 'A data de referência altera a capacidade futura; tarefas refletem a base atual, sem reconstruir histórico.'];
     if (!dates) warnings.push('Cronograma da sprint ausente: não é possível calcular a capacidade futura.');
     if (!window.MONDAY_LIVE_SPRINTS?.has(state.sprint)) warnings.push('Base incorporada sem IDs e sem distinção entre tempo ausente e zero: tarefas em andamento exigem atualização dos dados.');
     el('forecast-warning').textContent = warnings.join(' ');
@@ -162,7 +191,11 @@ window.Forecast = (() => {
   }
   function fail(message) { state.error = message; render(); }
   async function load() {
-    try { const result = await mondayRequest('/api/capacity'); state.overrides = result.overrides || {}; state.loaded = true; state.error = ''; render(); }
+    try {
+      const [result, reserves] = await Promise.all([mondayRequest('/api/capacity'), mondayRequest('/api/support-reserves')]);
+      state.overrides = result.overrides || {}; state.reserves = reserves.reserves || {}; state.defaultReserve = reserves.defaultMinutes ?? 0;
+      state.loaded = true; state.error = ''; render();
+    }
     catch (error) { state.loaded = false; fail(`Não foi possível carregar a configuração: ${error.message}`); }
   }
   function enter(hint = null) {
@@ -181,5 +214,5 @@ window.Forecast = (() => {
     el('forecast-reference').onchange = event => { if (dateValid(event.target.value)) { state.reference = event.target.value; render(); } };
     el('forecast-refresh').onclick = () => syncMonday(true);
   });
-  return {enter,leave,render,onDataUpdated,onLoading,onError,onSyncComplete,model,duration,format,capacity,workingDays,classify,balance};
+  return {enter,leave,render,onDataUpdated,onLoading,onError,onSyncComplete,model,teamForecast,duration,format,capacity,workingDays,classify,balance};
 })();

@@ -47,7 +47,7 @@ class PlanningService
         if ($session === null) {
             return [
                 'canConduct' => $canConduct, 'canEstimate' => false, 'me' => ['id' => $user->id, 'name' => $user->name],
-                'session' => null, 'round' => null, 'seats' => [], 'estimated' => [], 'hand' => null, 'load' => [],
+                'session' => null, 'round' => null, 'seats' => [], 'estimated' => [], 'hand' => null, 'load' => [], 'reserveHours' => 0.0,
                 'sprintOptions' => $canConduct ? $this->sprintOptions($connection) : [],
             ];
         }
@@ -71,7 +71,9 @@ class PlanningService
                 'average' => $closed->average, 'aiEstimate' => $closed->ai_estimate,
             ])->all(),
             'hand' => $canConduct ? $this->backlog($connection) : null,
-            'load' => $this->load($connection, $session, $estimated),
+            'load' => $this->load($connection, $session->sprint, $estimated),
+            // Reserva do Bombeiro descontada da capacidade Full stack, só depois de classificar os times (como no Capacity).
+            'reserveHours' => $connection->teamRules()->configured() ? round($connection->supportReserveMinutes($session->sprint) / 60, 2) : 0.0,
             'sprintOptions' => [],
         ];
     }
@@ -79,45 +81,53 @@ class PlanningService
     /**
      * Carga de cada pessoa na sprint planejada contra a capacidade: horas estimadas dos cards em que ela é responsável e
      * que já estão na sprint, mais as dos cards estimados nesta planning. Card com mais de um responsável divide as
-     * horas igualmente. A capacidade é a da tela Capacity para a sprint, ou o padrão das Configurações (80h).
+     * horas igualmente. A capacidade é a da tela Capacity (a da sprint ou a herdada da última sprint salva), ou o padrão
+     * das Configurações. Só entram as pessoas de Full stack ou Projetos; as classificadas aparecem mesmo sem carga.
      *
      * @param  Collection<int, PlanningRound>  $estimated
-     * @return list<array{name: string, inSprint: float, planned: float, total: float, capacity: float, percent: ?int}>
+     * @return list<array{name: string, team: string, inSprint: float, planned: float, support: float, total: float, capacity: float, percent: ?int}>
      */
-    private function load(MondayConnection $connection, PlanningSession $session, Collection $estimated): array
+    private function load(MondayConnection $connection, int $sprint, Collection $estimated): array
     {
         $snapshot = $this->snapshots->latest($connection, PHP_INT_MAX);
-        $settings = $connection->metricSettings();
-        $excluded = array_map([SprintRules::class, 'normalize'], $settings['excludedPeople']);
+        $teams = $connection->teamRules();
         $overrides = $connection->capacity_overrides ?? [];
         $people = [];
-        $add = function (string $owners, float $hours, string $key) use (&$people, $excluded): void {
-            $names = array_values(array_filter(array_map('trim', explode(',', $owners)), fn (string $name): bool => $name !== '' && ! in_array(SprintRules::normalize($name), $excluded, true)));
+        $empty = ['inSprint' => 0.0, 'planned' => 0.0, 'support' => 0.0];
+        foreach ($teams->members() as $member) {
+            $people[$member['name']] = $empty;
+        }
+        $add = function (string $owners, float $hours, array $keys) use (&$people, $teams, $empty): void {
+            $names = array_values(array_map([$teams, 'canonicalName'], array_filter(array_map('trim', explode(',', $owners)), fn (string $name): bool => $name !== '' && $teams->counts($name))));
             foreach ($names as $name) {
-                $people[$name] ??= ['inSprint' => 0.0, 'planned' => 0.0];
-                $people[$name][$key] += $hours / count($names);
+                $people[$name] ??= $empty;
+                foreach ($keys as $key) {
+                    $people[$name][$key] += $hours / count($names);
+                }
             }
         };
         $inSprint = collect($snapshot['rows'] ?? [])
-            ->filter(fn (array $row): bool => (int) ($row['Sprint'] ?? 0) === $session->sprint && ! SprintRules::isRemoved($row['Status'] ?? null));
+            ->filter(fn (array $row): bool => (int) ($row['Sprint'] ?? 0) === $sprint && ! SprintRules::isRemoved($row['Status'] ?? null));
         foreach ($inSprint as $row) {
-            $add((string) ($row['Responsavel'] ?? ''), (float) ($row['EstH'] ?? 0), 'inSprint');
+            // Cards de Suporte entram na carga da pessoa e, à parte, em "support", que conta contra a reserva do Bombeiro.
+            $isSupport = SprintRules::normalize($row['Tipo'] ?? '') === 'suporte';
+            $add((string) ($row['Responsavel'] ?? ''), (float) ($row['EstH'] ?? 0), $isSupport ? ['inSprint', 'support'] : ['inSprint']);
         }
         // Card estimado aqui que já entrou na sprint no Monday conta uma vez só, pela sprint.
         $sprintIds = $inSprint->pluck('Id')->all();
         foreach ($estimated as $round) {
             if (! in_array($round->item_id, $sprintIds, true)) {
-                $add((string) $round->item_owner, (float) $round->final_estimate, 'planned');
+                $add((string) $round->item_owner, (float) $round->final_estimate, ['planned']);
             }
         }
 
-        return collect($people)->map(function (array $hours, string $name) use ($overrides, $settings, $session): array {
-            $capacity = isset($overrides["{$session->sprint}|{$name}"]) ? $overrides["{$session->sprint}|{$name}"] / 60 : (float) $settings['capacityHours'];
+        return collect($people)->map(function (array $hours, string $name) use ($overrides, $teams, $sprint): array {
+            $capacity = $teams->capacityMinutes($overrides, $sprint, $name) / 60;
             $total = $hours['inSprint'] + $hours['planned'];
 
             return [
-                'name' => $name, 'inSprint' => round($hours['inSprint'], 2), 'planned' => round($hours['planned'], 2),
-                'total' => round($total, 2), 'capacity' => round($capacity, 2), 'percent' => $capacity > 0 ? (int) round($total / $capacity * 100) : null,
+                'name' => $name, 'team' => (string) $teams->teamOf($name), 'inSprint' => round($hours['inSprint'], 2), 'planned' => round($hours['planned'], 2),
+                'support' => round($hours['support'], 2), 'total' => round($total, 2), 'capacity' => round($capacity, 2), 'percent' => $capacity > 0 ? (int) round($total / $capacity * 100) : null,
             ];
         })->sortByDesc('total')->values()->all();
     }
@@ -132,11 +142,15 @@ class PlanningService
         $snapshot = $this->snapshots->latest($connection, PHP_INT_MAX);
         $today = SprintRules::today();
         $rows = collect($snapshot['rows'] ?? [])->reject(fn (array $row): bool => SprintRules::isRemoved($row['Status'] ?? null))->groupBy('Sprint');
+        // Mesa mais recente de cada sprint e quantos cards ficaram estimados nela.
+        $sessions = PlanningSession::query()->withCount(['rounds as estimated_count' => fn ($query) => $query->where('status', PlanningStatus::Closed)])
+            ->orderBy('id')->get()->keyBy('sprint');
 
         return collect($snapshot['sprints'] ?? [])
             ->filter(fn (array $sprint): bool => $sprint['start'] <= $today)
             ->sortByDesc('start')->take(self::HISTORY_SPRINTS)
-            ->map(function (array $sprint) use ($rows): array {
+            ->map(function (array $sprint) use ($rows, $sessions, $today): array {
+                $session = $sessions->get((int) $sprint['number']);
                 $tasks = collect($rows->get($sprint['number'], []))->map(fn (array $row): array => [
                     'id' => $row['Id'], 'url' => $row['Url'] ?? '', 'name' => $row['Nome'], 'type' => $row['Tipo'] ?? '',
                     'status' => $row['Status'] ?? '', 'owner' => $row['Responsavel'] ?? '',
@@ -149,11 +163,62 @@ class PlanningService
                     'plannedHours' => round((float) $tasks->sum('planned'), 2),
                     'executedHours' => round((float) $tasks->sum('executed'), 2),
                     'tasks' => $tasks->all(),
+                    // Em andamento: dá para entrar (ou reabrir) a mesa até a sprint terminar; encerrada: só ver como foi.
+                    'current' => $sprint['end'] >= $today,
+                    'planning' => $session ? ['open' => $session->status === PlanningSession::OPEN, 'estimated' => (int) $session->estimated_count] : null,
                 ];
             })->values()->all();
     }
 
-    /** Abre a mesa de uma sprint que ainda não terminou. Só existe uma mesa aberta por vez. */
+    /**
+     * Como foi a planning de uma sprint, só para leitura: cada card estimado com as cartas do time, a média, a estimativa
+     * da IA, a decisão do PO e o que o time discutiu. Estimativas substituídas por reestimativa ficam de fora.
+     *
+     * Traz também a carga do time na sprint (como na mesa), para a tela mostrar a mesa daquela sprint só para leitura.
+     *
+     * Sprint planejada fora do app (sem mesa registrada): a mesma tela, com a carga do time e os cards da sprint.
+     *
+     * @return array{sprint: int, name: ?string, startedBy: ?string, recorded: bool, closedAt: ?string, open: bool, cards: list<array<string, mixed>>, load: list<array<string, mixed>>, reserveHours: float, rounds: list<array<string, mixed>>}
+     */
+    public function review(MondayConnection $connection, int $sprint): array
+    {
+        $sessions = PlanningSession::query()->where('sprint', $sprint)->with('starter')->orderBy('id')->get();
+        $snapshot = $this->snapshots->latest($connection, PHP_INT_MAX);
+        $schedule = collect($snapshot['sprints'] ?? [])->firstWhere('number', $sprint);
+        if ($sessions->isEmpty() && $schedule === null) {
+            throw new RuntimeException("A Sprint {$sprint} não está no cronograma de sprints do Monday.");
+        }
+        $rounds = PlanningRound::query()->whereIn('planning_session_id', $sessions->modelKeys())->where('status', PlanningStatus::Closed)
+            ->with(['votes.user', 'decider'])->orderBy('closed_at')->get();
+        // Sprint planejada fora do app: sem cartas nem decisões; a tela mostra os cards da sprint com o Tempo estimado do Monday.
+        $cards = $sessions->isEmpty() ? collect($snapshot['rows'] ?? [])
+            ->filter(fn (array $row): bool => (int) ($row['Sprint'] ?? 0) === $sprint && ! SprintRules::isRemoved($row['Status'] ?? null))
+            ->sortByDesc(fn (array $row): float => (float) ($row['EstH'] ?? 0))
+            ->map(fn (array $row): array => ['name' => $row['Nome'], 'url' => ($row['Url'] ?? '') ?: null, 'owner' => ($row['Responsavel'] ?? '') ?: null, 'type' => ($row['Tipo'] ?? '') ?: null, 'estimate' => $row['EstH'] ?? null])
+            ->values()->all() : [];
+
+        return [
+            'sprint' => $sprint, 'name' => $sessions->last()?->sprint_name ?? $schedule['name'], 'startedBy' => $sessions->first()?->starter?->name,
+            'recorded' => $sessions->isNotEmpty(),
+            'closedAt' => $sessions->last()?->closed_at?->toIso8601String(),
+            'open' => $sessions->last()?->status === PlanningSession::OPEN,
+            'cards' => $cards,
+            'load' => $this->load($connection, $sprint, $rounds),
+            'reserveHours' => $connection->teamRules()->configured() ? round($connection->supportReserveMinutes($sprint) / 60, 2) : 0.0,
+            'rounds' => $rounds->map(fn (PlanningRound $round): array => [
+                'name' => $round->item_name, 'url' => $round->item_url, 'owner' => $round->item_owner,
+                'aiEstimate' => $round->ai_estimate, 'average' => $round->average, 'finalEstimate' => $round->final_estimate, 'finalSource' => $round->final_source,
+                'decidedBy' => $round->decider?->name, 'note' => $round->decision_note, 'closedAt' => $round->closed_at?->toIso8601String(),
+                'votes' => $round->votes->map(fn (PlanningVote $vote): array => ['name' => $vote->user?->name ?? 'Sem nome', 'hours' => $vote->hours])
+                    ->sortBy('name')->values()->all(),
+            ])->all(),
+        ];
+    }
+
+    /**
+     * Abre a mesa de uma sprint que ainda não terminou. Só existe uma mesa aberta por vez. Se a sprint já teve mesa e
+     * ainda não terminou, a mesma mesa é reaberta, com as estimativas já feitas.
+     */
     public function openTable(MondayConnection $connection, User $user, int $sprint): PlanningSession
     {
         $option = collect($this->sprintOptions($connection))->firstWhere('number', $sprint)
@@ -161,20 +226,34 @@ class PlanningService
 
         return DB::transaction(function () use ($user, $option): PlanningSession {
             $open = PlanningSession::query()->where('status', PlanningSession::OPEN)->lockForUpdate()->first();
+            if ($open !== null && $open->sprint === $option['number']) {
+                return $open;
+            }
             if ($open !== null) {
                 throw new RuntimeException("Já existe uma planning aberta: {$open->sprint_name}. Encerre antes de abrir outra.");
+            }
+            $previous = PlanningSession::query()->where('sprint', $option['number'])->latest('id')->lockForUpdate()->first();
+            if ($previous !== null) {
+                $previous->update(['status' => PlanningSession::OPEN, 'closed_at' => null]);
+
+                return $previous;
             }
 
             return PlanningSession::create(['sprint' => $option['number'], 'sprint_name' => $option['name'], 'status' => PlanningSession::OPEN, 'started_by' => $user->id]);
         });
     }
 
-    /** Encerra a mesa; um card que ainda estava nela sai sem gravar nada. */
-    public function closeTable(PlanningSession $session): void
+    /**
+     * Encerra a mesa; um card que ainda estava nela sai sem gravar nada. Antes, cada card estimado na mesa é ligado à
+     * sprint da planning pela coluna Sprint do quadro Tarefas (os que já estão nela ficam como estão). Se o Monday recusar
+     * algum, a mesa continua aberta para tentar de novo.
+     */
+    public function closeTable(MondayConnection $connection, PlanningSession $session): void
     {
         if ($session->status !== PlanningSession::OPEN) {
             throw new RuntimeException('Esta planning já foi encerrada.');
         }
+        $this->linkEstimatedToSprint($connection, $session);
         DB::transaction(function () use ($session): void {
             $session->rounds()->whereIn('status', PlanningStatus::open())->update(['status' => PlanningStatus::Canceled, 'closed_at' => now()]);
             $session->update(['status' => PlanningSession::CLOSED, 'closed_at' => now()]);
@@ -182,27 +261,80 @@ class PlanningService
     }
 
     /**
+     * Liga os cards estimados na mesa à sprint da planning (coluna Sprint, que conecta ao quadro de Sprints).
+     *
+     * @return int quantos cards foram ligados agora
+     */
+    private function linkEstimatedToSprint(MondayConnection $connection, PlanningSession $session): int
+    {
+        $estimated = $session->rounds()->where('status', PlanningStatus::Closed)->get()->unique('item_id');
+        $snapshot = $this->snapshots->latest($connection, PHP_INT_MAX);
+        $inSprint = collect($snapshot['rows'] ?? [])->where('Sprint', $session->sprint)->pluck('Id')->map(fn (mixed $id): string => (string) $id)->all();
+        $pending = $estimated->reject(fn (PlanningRound $round): bool => in_array($round->item_id, $inSprint, true));
+        if ($pending->isEmpty()) {
+            return 0;
+        }
+        $column = (string) (($connection->column_map ?? [])['Sprint'] ?? '');
+        $sprintItem = array_search($session->sprint, $snapshot['sprintItems'] ?? [], true);
+        if ($column === '' || $sprintItem === false) {
+            throw new RuntimeException("Não encontrei a {$session->sprint_name} no quadro de Sprints do Monday para ligar os cards estimados. Atualize os dados e tente encerrar de novo.");
+        }
+        $failed = [];
+        $linked = 0;
+        foreach ($pending as $round) {
+            try {
+                $this->monday->changeItemColumn((string) $connection->token, [(string) $connection->board_id => null], $round->item_id, $column, [(string) $sprintItem]);
+                $linked++;
+            } catch (RuntimeException $exception) {
+                report($exception);
+                $failed[] = $round->item_name;
+            }
+        }
+        if ($linked > 0) {
+            $this->snapshots->markStale();
+        }
+        if ($failed !== []) {
+            throw new RuntimeException("O Monday não ligou à {$session->sprint_name}: ".implode(', ', $failed).'. A planning continua aberta; tente encerrar de novo.');
+        }
+        Log::info('Cards estimados ligados à sprint ao encerrar a planning.', ['sprint' => $session->sprint, 'cards' => $linked]);
+
+        return $linked;
+    }
+
+    /**
      * Joga o card no centro da mesa para leitura. Lê agora no Monday a estimativa da IA (Tempo estimado) e o escopo mais
      * recente publicado no card.
+     *
+     * Reestimar: um card já estimado nesta planning volta para a mesa mesmo que não esteja mais no Backlog. A estimativa
+     * da IA é a original da primeira rodada, porque o Tempo estimado do card já tem o valor gravado pela planning.
+     *
+     * Interromper: com $replace, o card que estava na mesa sai sem gravar nada (cartas descartadas) e volta para a mão,
+     * na mesma transação em que o novo card entra.
      */
-    public function playCard(MondayConnection $connection, PlanningSession $session, User $user, string $itemId): PlanningRound
+    public function playCard(MondayConnection $connection, PlanningSession $session, User $user, string $itemId, bool $replace = false): PlanningRound
     {
         if ($session->status !== PlanningSession::OPEN) {
             throw new RuntimeException('Esta planning já foi encerrada.');
         }
+        $previous = $session->rounds()->where('item_id', $itemId)->where('status', PlanningStatus::Closed)->latest('closed_at')->first();
         $card = collect($this->backlog($connection)['items'])->firstWhere('Id', $itemId)
+            ?? ($previous ? ['Id' => $previous->item_id, 'Nome' => $previous->item_name, 'Url' => $previous->item_url, 'Responsavel' => $previous->item_owner] : null)
             ?? throw new RuntimeException('Este card não está no Backlog do quadro Tarefas (sem sprint e não iniciado).');
         $details = $this->cardDetails($connection, $itemId);
+        if ($previous !== null) {
+            $details['aiEstimate'] = $previous->ai_estimate;
+        }
 
-        return DB::transaction(function () use ($session, $user, $card, $details): PlanningRound {
+        return DB::transaction(function () use ($session, $user, $card, $details, $replace): PlanningRound {
             $open = PlanningRound::query()->where('planning_session_id', $session->id)->whereIn('status', PlanningStatus::open())->lockForUpdate()->first();
-            if ($open !== null) {
+            if ($open !== null && ! $replace) {
                 throw new RuntimeException("O card {$open->item_name} ainda está na mesa. Registre a estimativa ou tire o card antes de jogar outro.");
             }
+            $open?->update(['status' => PlanningStatus::Canceled, 'closed_at' => now()]);
 
             return PlanningRound::create([
                 'planning_session_id' => $session->id,
-                'item_id' => $card['Id'], 'item_name' => $card['Nome'], 'item_url' => $card['Url'] ?: null, 'item_owner' => ($card['Responsavel'] ?? '') ?: null,
+                'item_id' => $card['Id'], 'item_name' => $card['Nome'], 'item_url' => ($card['Url'] ?? '') ?: null, 'item_owner' => ($card['Responsavel'] ?? '') ?: null,
                 'ai_estimate' => $details['aiEstimate'], 'scope_title' => $details['scopeTitle'], 'scope_html' => $details['scopeHtml'],
                 'status' => PlanningStatus::Reading, 'started_by' => $user->id,
             ]);
@@ -283,10 +415,15 @@ class PlanningService
         $this->monday->changeItemColumn((string) $connection->token, [(string) $connection->board_id => null], $round->item_id, $this->estimateColumn($connection), (string) $estimate);
         $this->snapshots->markStale();
 
-        $round->update([
-            'status' => PlanningStatus::Closed, 'final_estimate' => $estimate, 'final_source' => $source, 'decided_by' => $user->id,
-            'decision_note' => filled($note) ? trim($note) : null, 'closed_at' => now(),
-        ]);
+        DB::transaction(function () use ($round, $estimate, $source, $user, $note): void {
+            // Reestimativa: a estimativa anterior do mesmo card nesta planning é substituída e sai da lista e da carga.
+            $round->session->rounds()->where('item_id', $round->item_id)->where('status', PlanningStatus::Closed)->whereKeyNot($round->id)
+                ->update(['status' => PlanningStatus::Canceled]);
+            $round->update([
+                'status' => PlanningStatus::Closed, 'final_estimate' => $estimate, 'final_source' => $source, 'decided_by' => $user->id,
+                'decision_note' => filled($note) ? trim($note) : null, 'closed_at' => now(),
+            ]);
+        });
         Log::info('Estimativa definida na planning poker.', ['item' => $round->item_id, 'estimate' => $estimate, 'source' => $source, 'user' => $user->email]);
 
         try {

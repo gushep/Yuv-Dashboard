@@ -225,7 +225,8 @@ class MondayItemDetailsTest extends TestCase
             ->assertJsonPath('options', [['id' => '5017', 'name' => 'Sprint 17'], ['id' => '5018', 'name' => 'Sprint 18']]);
         $this->getJson('/api/items/55/columns/pessoas/options')->assertOk()
             ->assertJsonPath('options', [['id' => '8', 'name' => 'ana Souza'], ['id' => '9', 'name' => 'Bruno Lima']]);
-        Http::assertSent(fn (Request $request): bool => ($request['variables']['ids'] ?? null) === ['777']);
+        // A consulta de usuários vai sem variáveis (objeto vazio); por isso a leitura converte para array.
+        Http::assertSent(fn (Request $request): bool => (((array) ($request['variables'] ?? []))['ids'] ?? null) === ['777']);
     }
 
     public function test_status_change_rejects_missing_or_unknown_labels(): void

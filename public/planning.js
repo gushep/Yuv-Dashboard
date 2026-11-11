@@ -6,7 +6,7 @@ window.Planning = (() => {
   const POLL_MS = 2500;
   const el = id => document.getElementById(id);
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-  const state = {active:false, data:null, history:null, error:'', busy:false, timer:null, request:0, view:null, openSprint:null, search:'', scopes:{}, note:''};
+  const state = {active:false, data:null, history:null, review:null, error:'', busy:false, timer:null, request:0, view:null, openSprint:null, search:'', scopes:{}, note:''};
 
   const hours = value => value === null || value === undefined ? '—' : `${Number(value).toLocaleString('pt-BR', {maximumFractionDigits:2})}h`;
   const shortDate = value => value ? value.split('-').reverse().slice(0, 2).join('/') : '';
@@ -21,9 +21,13 @@ window.Planning = (() => {
       if (request !== state.request || state.busy) return;
       const wasOpen = Boolean(state.data?.session);
       state.data = data; state.error = '';
-      // Quando a mesa abre, todos vão para ela; quando fecha, voltam às sprints.
-      if (data.session && (!wasOpen || state.view === null)) state.view = 'table';
-      if (!data.session) { if (wasOpen) loadHistory(); state.view = 'lobby'; }
+      // Quando a mesa abre, todos vão para ela; quando fecha, voltam às sprints. Quem está vendo uma planning pelo
+      // olhinho continua nela até voltar.
+      if (state.view !== 'review') {
+        if (data.session && (!wasOpen || state.view === null)) state.view = 'table';
+        if (!data.session) state.view = 'lobby';
+      }
+      if (!data.session && wasOpen) loadHistory();
     } catch (error) {
       if (request === state.request) state.error = error.message;
     }
@@ -62,17 +66,23 @@ window.Planning = (() => {
     el('planning-error').textContent = state.error;
     el('planning-error').hidden = !state.error;
     const data = state.data;
-    const table = state.view === 'table' && data?.session;
-    el('pp-lobby').hidden = Boolean(table);
-    el('pp-table-view').hidden = !table;
-    el('pp-subtitle').textContent = table ? `Planning da ${data.session.sprintName} · conduzida por ${data.session.startedBy || 'Maestro Scrum'}` : 'Planejamento das sprints com o time na mesa';
-    renderHeroActions(data, table);
-    if (table) renderTable(data); else renderLobby(data);
+    const reviewing = state.view === 'review' && state.review;
+    const table = !reviewing && state.view === 'table' && data?.session;
+    el('pp-lobby').hidden = Boolean(table || reviewing);
+    el('pp-table-view').hidden = !(table || reviewing);
+    el('pp-table-view').classList.toggle('reviewing', Boolean(reviewing));
+    el('pp-subtitle').textContent = reviewing ? `Planning da Sprint ${state.review.sprint} · somente leitura`
+      : table ? `Planning da ${data.session.sprintName} · conduzida por ${data.session.startedBy || 'Maestro Scrum'}` : 'Planejamento das sprints com o time na mesa';
+    renderHeroActions(data, table, reviewing);
+    if (reviewing) renderReview(state.review); else if (table) renderTable(data); else renderLobby(data);
   }
 
-  function renderHeroActions(data, table) {
+  function renderHeroActions(data, table, reviewing = false) {
     const buttons = [];
-    if (table) {
+    if (reviewing) {
+      buttons.push('<button type="button" class="pp-ghost" data-view="lobby">Voltar às últimas sprints</button>');
+      if (data?.session?.sprint === state.review.sprint) buttons.push('<button type="button" class="pp-primary" data-view="table">Entrar na mesa</button>');
+    } else if (table) {
       buttons.push('<button type="button" class="pp-ghost" data-view="lobby">Ver últimas sprints</button>');
       if (conduct()) buttons.push(`<button type="button" class="pp-danger" data-close-table ${state.busy ? 'disabled' : ''}>Encerrar planning</button>`);
     } else if (data?.session) {
@@ -91,21 +101,111 @@ window.Planning = (() => {
     else if (data && !conduct()) { banner.hidden = false; banner.innerHTML = 'Nenhuma planning em andamento. Quando o Maestro Scrum abrir a mesa, ela aparece aqui.'; }
     if (!state.history) { el('pp-history').innerHTML = '<p class="pp-muted">Carregando...</p>'; return; }
     if (!state.history.length) { el('pp-history').innerHTML = '<p class="pp-muted">Nenhuma sprint iniciada no cronograma.</p>'; return; }
+    // Horas de cada sprint na mesma tabela da barra superior (Capacidade, Full stack, Bombeiro e Projetos × Planejado e
+    // Realizado, com Disponível); a reserva do Bombeiro vem da tela Consumo de horas.
+    const strip = window.HoursStrip;
+    if (strip && !state.reservesRequested) { state.reservesRequested = true; strip.loadReserves().then(() => { if (state.active) render(); }); }
     el('pp-history').innerHTML = state.history.map(sprint => {
       const open = state.openSprint === sprint.number;
       const usage = sprint.plannedHours > 0 ? Math.round(sprint.executedHours / sprint.plannedHours * 100) : null;
-      return `<div class="pp-sprint ${open ? 'open' : ''}">
-        <button type="button" class="pp-sprint-row" data-sprint="${sprint.number}" aria-expanded="${open}">
-          <span class="pp-sprint-name">${escape(sprint.name)}<small>${shortDate(sprint.start)} a ${shortDate(sprint.end)}</small></span>
-          <span class="pp-sprint-fact"><small>Cards</small>${sprint.cards}</span>
-          <span class="pp-sprint-fact"><small>Planejadas</small>${hours(sprint.plannedHours)}</span>
-          <span class="pp-sprint-fact"><small>Executadas</small>${hours(sprint.executedHours)}</span>
-          <span class="pp-sprint-fact"><small>Executado / planejado</small>${usage === null ? '—' : `${usage}%`}</span>
-          <span class="pp-sprint-caret" aria-hidden="true">▾</span>
-        </button>
+      const table = strip?.tableHtml(sprint.number, {link: false}) || '';
+      return `<div class="pp-sprint ${open ? 'open' : ''} ${sprint.current ? 'current' : ''}">
+        <div class="pp-sprint-head">
+          <button type="button" class="pp-sprint-row" data-sprint="${sprint.number}" aria-expanded="${open}" title="${open ? 'Esconder' : 'Ver'} as tarefas da sprint">
+            <span class="pp-sprint-name">${escape(sprint.name)}${sprint.current ? ' <em class="pp-sprint-tag">em andamento</em>' : ''}<small>${shortDate(sprint.start)} a ${shortDate(sprint.end)} · ${sprint.cards} card(s)</small></span>
+            ${table ? '' : `<span class="pp-sprint-fact"><small>Planejadas</small>${hours(sprint.plannedHours)}</span>
+            <span class="pp-sprint-fact"><small>Executadas</small>${hours(sprint.executedHours)}</span>
+            <span class="pp-sprint-fact"><small>Executado / planejado</small>${usage === null ? '—' : `${usage}%`}</span>`}
+            <span class="pp-sprint-caret" aria-hidden="true">▾</span>
+          </button>
+          <div class="pp-sprint-actions">${sprintAction(sprint, data)}</div>
+        </div>
+        ${table ? `<div class="pp-sprint-hours">${table}</div>` : ''}
         ${open ? renderSprintTasks(sprint) : ''}
       </div>`;
     }).join('');
+  }
+
+  /**
+   * Ação de cada sprint da lista. Em andamento: "Entrar na mesa" até a sprint terminar (o Maestro abre ou reabre a mesa;
+   * o time entra quando ela está aberta). Encerrada: o olhinho mostra como foi a planning, só para leitura.
+   */
+  function sprintAction(sprint, data) {
+    const planning = sprint.planning;
+    // O olhinho abre a mesa da sprint só para leitura; sem planning no app, mostra a carga do time e os cards do Monday.
+    const eye = `<button type="button" class="pp-eye" data-review="${sprint.number}" title="${planning ? `Ver como foi a planning (${planning.estimated} card(s) estimados)` : 'Ver a carga do time e os cards da sprint (planejada fora do app)'}" aria-label="Ver a planning da ${escape(sprint.name)}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button>`;
+    if (!sprint.current) return eye;
+    // Em andamento: o olhinho fica ao lado de "Entrar na mesa" (ver sem entrar na mesa).
+    const peek = eye;
+    if (data?.session?.sprint === sprint.number) return `${peek}<button type="button" class="pp-primary" data-view="table">Entrar na mesa</button>`;
+    if (conduct()) return `${peek}<button type="button" class="pp-primary" data-enter-sprint="${sprint.number}" ${state.busy || data?.session ? 'disabled' : ''} title="${data?.session ? `Encerre a planning da ${escape(data.session.sprintName)} antes` : planning ? 'Reabrir a mesa desta sprint, com as estimativas já feitas' : 'Abrir a mesa desta sprint'}">Entrar na mesa</button>`;
+    return `${peek}<button type="button" class="pp-primary" disabled title="A mesa abre quando o Maestro Scrum entrar">Entrar na mesa</button>`;
+  }
+
+  /**
+   * Olhinho: abre a mesa daquela sprint só para leitura, com a carga do time e cada card estimado (cartas do time,
+   * média, IA e decisão). Nada pode ser jogado nem alterado nesse modo.
+   */
+  async function openReview(sprint) {
+    state.review = {sprint, loading: true};
+    state.view = 'review';
+    render();
+    try {
+      state.review = await mondayRequest(`${base()}/sprints/${sprint}`);
+      state.error = '';
+    } catch (error) {
+      state.error = error.message; state.review = null; state.view = 'lobby';
+    }
+    render();
+  }
+
+  function renderReview(review) {
+    el('pp-table-view').classList.add('reviewing');
+    el('pp-seats').innerHTML = '';
+    el('pp-controls').hidden = true;
+    el('pp-hand-section').hidden = true;
+    if (review.loading) {
+      el('pp-center').innerHTML = '<p class="pp-review-banner">Carregando a planning...</p>';
+      el('pp-load').hidden = true; el('pp-estimated').hidden = true;
+      return;
+    }
+    const name = review.name || `Sprint ${review.sprint}`;
+    const total = review.rounds.reduce((sum, round) => sum + (round.finalEstimate || 0), 0);
+    const section = el('pp-estimated');
+    section.hidden = false;
+    renderLoad({session: {sprintName: name}, round: null, load: review.load || [], reserveHours: review.reserveHours || 0});
+    if (!review.recorded) {
+      // Planejada fora do app: sem cartas nem decisões; os cards da sprint com o Tempo estimado do Monday.
+      const cards = review.cards || [];
+      const estimate = cards.reduce((sum, card) => sum + (card.estimate || 0), 0);
+      el('pp-center').innerHTML = `<p class="pp-review-banner"><strong>Planning da ${escape(name)} · somente leitura</strong>
+        <span>Planejada fora do app: sem cartas nem decisões registradas · ${cards.length} card(s) na sprint · ${hours(estimate)} estimadas no Monday</span></p>`;
+      section.innerHTML = `<h2>Cards da sprint · ${cards.length} card(s) · ${hours(estimate)} <small class="pp-review-hint">Tempo estimado do Monday</small></h2>
+        <div class="pp-estimated-list">${cards.length ? cards.map(card => `<span class="pp-estimated-item">
+          ${card.url ? `<a href="${escape(card.url)}" target="_blank" rel="noopener">${escape(card.name)}</a>` : escape(card.name)}
+          <strong>${card.estimate === null ? '—' : hours(card.estimate)}</strong><small>${escape(card.owner || 'sem responsável')}</small></span>`).join('') : '<p class="pp-muted">Nenhum card nesta sprint.</p>'}</div>`;
+      return;
+    }
+    el('pp-center').innerHTML = `<p class="pp-review-banner"><strong>Planning da ${escape(name)} · somente leitura</strong>
+      <span>${review.rounds.length} card(s) estimados · ${hours(total)}${review.startedBy ? ` · conduzida por ${escape(review.startedBy)}` : ''}${review.open ? ' · mesa aberta agora' : review.closedAt ? ` · encerrada em ${new Date(review.closedAt).toLocaleDateString('pt-BR')}` : ''}</span></p>`;
+    section.innerHTML = `<h2>Estimados nesta planning · ${review.rounds.length} card(s) · ${hours(total)}</h2>
+      <div class="pp-review-body">${reviewCards(review.rounds)}</div>`;
+  }
+
+  /** Cada card estimado com a estimativa final, a IA, a média, quem decidiu, as cartas de cada pessoa e a discussão. */
+  function reviewCards(rounds) {
+    return rounds.length ? rounds.map(round => `<article class="pp-review-card">
+          <header><strong>${round.url ? `<a href="${escape(round.url)}" target="_blank" rel="noopener">${escape(round.name)} ↗</a>` : escape(round.name)}</strong>${round.owner ? `<small>${escape(round.owner)}</small>` : ''}</header>
+          <dl>
+            <div><dt>Estimativa final</dt><dd><b>${hours(round.finalEstimate)}</b> ${round.finalSource === 'ai' ? '(IA)' : '(média do time)'}</dd></div>
+            <div><dt>IA</dt><dd>${round.aiEstimate === null ? '—' : hours(round.aiEstimate)}</dd></div>
+            <div><dt>Média do time</dt><dd>${round.average === null ? '—' : hours(round.average)}</dd></div>
+            <div><dt>Decidido por</dt><dd>${escape(round.decidedBy || '—')}</dd></div>
+          </dl>
+          <p class="pp-review-votes">${round.votes.length ? round.votes.map(vote => `<span>${escape(vote.name)} <b>${vote.hours === null ? 'vazio' : hours(vote.hours)}</b></span>`).join('') : 'Sem cartas registradas.'}</p>
+          ${round.note ? `<p class="pp-review-note">${escape(round.note)}</p>` : ''}
+        </article>`).join('') : '<p class="pp-muted">Nenhum card ficou estimado nesta planning.</p>';
   }
 
   function renderSprintTasks(sprint) {
@@ -208,7 +308,7 @@ window.Planning = (() => {
       const maestro = [];
       if (round.status === 'reading') maestro.push(`<button type="button" class="pp-primary" data-round-action="estimate" ${state.busy ? 'disabled' : ''}>Estimar</button>`);
       if (round.status === 'voting') maestro.push(`<button type="button" class="pp-primary" data-round-action="reveal" ${state.busy || !round.votes ? 'disabled' : ''}>Revelar cartas (${round.votes})</button>`);
-      maestro.push(`<button type="button" class="pp-ghost" data-round-action="cancel" ${state.busy ? 'disabled' : ''}>Tirar carta da mesa</button>`);
+      maestro.push(`<button type="button" class="pp-ghost" data-round-action="cancel" ${state.busy ? 'disabled' : ''} title="Descarta as cartas jogadas e devolve o card para a mão; nada é gravado no card">Interromper e devolver à mão</button>`);
       parts.push(`<div class="pp-maestro"><span>Maestro Scrum</span>${maestro.join('')}</div>`);
     }
     const controls = el('pp-controls');
@@ -233,10 +333,11 @@ window.Planning = (() => {
     const term = state.search.trim().toLowerCase();
     const cards = hand.items.filter(card => card.Id !== data.round?.item.id && !estimated.has(card.Id))
       .filter(card => !term || [card.Nome, card.Tipo, card.Responsavel, card.Cliente].some(value => String(value || '').toLowerCase().includes(term)));
-    const locked = Boolean(data.round) || state.busy;
+    // Com uma carta na mesa, a mão continua liberada: jogar outra interrompe a estimativa atual (com confirmação).
+    const title = data.round ? `Interromper a estimativa de "${data.round.item.name}" e jogar esta carta` : 'Jogar esta carta na mesa';
     el('pp-hand').innerHTML = !hand.available
       ? '<p class="pp-muted">As cartas do Backlog aparecem depois da próxima atualização dos dados do Monday (a cada 15 minutos).</p>'
-      : cards.length ? cards.map(card => `<button type="button" class="pp-hand-card" data-play="${escape(card.Id)}" ${locked ? 'disabled' : ''} title="${locked ? 'Registre ou tire a carta da mesa antes de jogar outra' : 'Jogar esta carta na mesa'}">
+      : cards.length ? cards.map(card => `<button type="button" class="pp-hand-card" data-play="${escape(card.Id)}" data-name="${escape(card.Nome)}" ${state.busy ? 'disabled' : ''} title="${escape(title)}">
           <span class="pp-hand-top"><span>${escape(card.Tipo || 'Card')}</span><span class="pp-prio">${escape(card.Prioridade || '')}</span></span>
           <strong>${escape(card.Nome)}</strong>
           <span class="pp-hand-foot">${escape(card.Cliente || '')}${card.Cliente && card.Responsavel ? ' · ' : ''}${escape(card.Responsavel || '')}</span>
@@ -253,12 +354,12 @@ window.Planning = (() => {
     section.hidden = !load.length;
     if (!load.length) return;
     const owners = String(data.round?.item.owner || '').split(',').map(name => name.trim().toLowerCase()).filter(Boolean);
-    section.innerHTML = `<h2>Carga do time na ${escape(data.session.sprintName)} <small>horas dos cards já na sprint + estimadas nesta planning, contra a capacidade de cada um</small></h2>
-      <div class="pp-load-list">${load.map(person => {
-        const scale = Math.max(person.capacity, person.total, 1);
-        const over = person.capacity > 0 && person.total > person.capacity;
-        const level = person.percent === null ? '' : person.percent > 100 ? 'over' : person.percent >= 90 ? 'full' : '';
-        return `<div class="pp-load-row ${owners.includes(person.name.toLowerCase()) ? 'owner' : ''} ${level}">
+    const sections = teamLoad(load, data.reserveHours || 0);
+    const row = person => {
+      const scale = Math.max(person.capacity, person.total, 1);
+      const over = person.capacity > 0 && person.total > person.capacity;
+      const level = person.percent === null ? '' : person.percent > 100 ? 'over' : person.percent >= 90 ? 'full' : '';
+      return `<div class="pp-load-row ${owners.includes(person.name.toLowerCase()) ? 'owner' : ''} ${level}">
           <span class="pp-load-name">${escape(person.name)}${owners.includes(person.name.toLowerCase()) ? ' <em>responsável pela carta na mesa</em>' : ''}</span>
           <span class="pp-load-bar" role="img" aria-label="${escape(person.name)}: ${hours(person.total)} de ${hours(person.capacity)}">
             <span class="pp-load-sprint" style="width:${person.inSprint / scale * 100}%"></span><span class="pp-load-planned" style="width:${person.planned / scale * 100}%"></span>
@@ -266,7 +367,45 @@ window.Planning = (() => {
           </span>
           <span class="pp-load-value"><strong>${hours(person.total)}</strong> de ${hours(person.capacity)}${person.percent === null ? '' : ` · ${person.percent}%`}<small>${hours(person.inSprint)} na sprint · ${hours(person.planned)} nesta planning</small></span>
         </div>`;
-      }).join('')}</div>`;
+    };
+    // Duas partes no mesmo card: cada time com capacidade, planejado e disponível (em horas e %) e as suas pessoas.
+    const pct = value => value === null ? '—' : `${value}%`;
+    const part = team => `<section class="pp-load-team ${team.key} level-${team.level}" aria-label="${escape(team.label)}">
+        <header class="pp-load-team-head">
+          <h3><span class="team-badge ${team.key}">${escape(team.label)}</span> <small>${escape(team.note)}</small></h3>
+          <dl class="pp-load-stats">
+            <div><dt>Capacidade</dt><dd>${hours(team.capacity)}</dd></div>
+            <div class="planned"><dt>Planejado</dt><dd>${hours(team.planned)} <b>${pct(team.plannedPercent)}</b></dd></div>
+            <div class="available"><dt>${team.available < 0 ? 'Excedido' : 'Disponível'}</dt><dd>${hours(Math.abs(team.available))} <b>${pct(team.availablePercent === null ? null : Math.abs(team.availablePercent))}</b></dd></div>
+          </dl>
+          <span class="pp-load-team-bar" role="img" aria-label="${escape(team.label)}: ${pct(team.plannedPercent)} planejado"><span style="width:${Math.min(100, team.plannedPercent ?? 0)}%"></span></span>
+        </header>
+        <div class="pp-load-list">${team.people.length ? team.people.map(row).join('') : '<p class="pp-load-empty">Ninguém deste time com capacidade na sprint.</p>'}</div>
+      </section>`;
+    section.innerHTML = `<h2>Carga do time na ${escape(data.session.sprintName)} <small>horas dos cards já na sprint + estimadas nesta planning, contra a capacidade de cada time e de cada pessoa</small></h2>
+      <div class="pp-load-teams">${sections.map(part).join('')}</div>`;
+  }
+
+  /**
+   * Resumo por time, pela mesma regra do Capacity: Full stack = capacidade menos a reserva do Bombeiro, sem os cards de
+   * Suporte (que contam no Bombeiro); Projetos = capacidade das pessoas de Projetos e todas as suas horas.
+   * @returns {Array<{key: string, label: string, note: string, capacity: number, planned: number, available: number, plannedPercent: ?number, availablePercent: ?number, level: string, people: Array}>}
+   */
+  function teamLoad(load, reserveHours) {
+    return [['fullstack', 'Full stack'], ['projects', 'Projetos (IA)']].map(([key, label]) => {
+      const people = load.filter(person => person.team === key);
+      const gross = people.reduce((sum, person) => sum + person.capacity, 0);
+      const reserve = key === 'fullstack' ? reserveHours : 0;
+      const capacity = Math.max(0, gross - reserve);
+      const planned = people.reduce((sum, person) => sum + person.total - (key === 'fullstack' ? person.support || 0 : 0), 0);
+      const available = capacity - planned;
+      const plannedPercent = capacity > 0 ? Math.round(planned / capacity * 100) : null;
+      const note = key === 'fullstack'
+        ? (reserve ? `capacidade ${hours(gross)} − Bombeiro ${hours(reserve)} · sem os cards de Suporte` : 'sem desconto do Bombeiro enquanto os times não forem classificados')
+        : 'demandas próprias, fora da sprint e da sustentação';
+      return {key, label, note, capacity, planned, available, plannedPercent, availablePercent: capacity > 0 ? Math.round(available / capacity * 100) : null,
+        level: window.SprintRules.capacityLevel(planned, capacity), people};
+    });
   }
 
   function renderEstimated(data) {
@@ -275,9 +414,26 @@ window.Planning = (() => {
     if (!data.estimated.length) return;
     const total = data.estimated.reduce((sum, item) => sum + (item.finalEstimate || 0), 0);
     section.innerHTML = `<h2>Estimados nesta planning · ${data.estimated.length} card(s) · ${hours(total)}</h2>
-      <div class="pp-estimated-list">${data.estimated.map(item => `<span class="pp-estimated-item">
+      <div class="pp-estimated-list">${data.estimated.map(item => {
+        const onTable = data.round?.item.id === item.itemId;
+        // Reestimar: o card volta para a mesa; a estimativa atual continua valendo até o time registrar a nova.
+        const again = conduct() ? (onTable ? '<em class="pp-reestimating">reestimando na mesa</em>'
+          : `<button type="button" class="pp-reestimate" data-reestimate="${escape(item.itemId)}" data-name="${escape(item.name)}" data-estimate="${escape(hours(item.finalEstimate))}" ${state.busy ? 'disabled' : ''} title="Jogar este card de novo na mesa para o time reestimar">Reestimar</button>`) : '';
+        return `<span class="pp-estimated-item ${onTable ? 'on-table' : ''}">
         ${item.url ? `<a href="${escape(item.url)}" target="_blank" rel="noopener">${escape(item.name)}</a>` : escape(item.name)}
-        <strong>${hours(item.finalEstimate)}</strong><small>${item.finalSource === 'ai' ? 'IA' : 'time'}</small></span>`).join('')}</div>`;
+        <strong>${hours(item.finalEstimate)}</strong><small>${item.finalSource === 'ai' ? 'IA' : 'time'}</small>${again}</span>`;
+      }).join('')}</div>`;
+  }
+
+  /**
+   * Joga um card na mesa. Com outra carta na mesa, pergunta antes: a estimativa atual é interrompida (cartas
+   * descartadas, nada gravado) e o card volta para a mão.
+   */
+  function play(itemId, name, intro = '') {
+    const current = state.data?.round;
+    if (current && !confirm(`${intro}Interromper a estimativa de "${current.item.name}"? As cartas jogadas são descartadas, nada é gravado no card e ele volta para a mão.\n\nDepois, "${name}" vai para a mesa.`)) return;
+    if (!current && intro && !confirm(intro.trim())) return;
+    act(`/sessions/${state.data.session.id}/rounds`, {item: itemId, replace: Boolean(current)});
   }
 
   // ── Modais ───────────────────────────────────────────────────────────────────
@@ -320,13 +476,27 @@ window.Planning = (() => {
     if (view) { state.view = view.dataset.view; if (state.view === 'lobby' && !state.history) loadHistory(); render(); return; }
     if (target.closest('[data-new-sprint]')) { openSprintDialog(); return; }
     if (target.closest('[data-close-table]')) {
-      if (confirm('Encerrar a planning desta sprint? Uma carta que ainda estiver na mesa sai sem gravar nada.')) act(`/sessions/${state.data.session.id}/close`, {});
+      const session = state.data.session, count = new Set(state.data.estimated.map(item => item.itemId)).size;
+      const link = count ? `\n\nOs ${count} card(s) estimados serão ligados à ${session.sprintName} na coluna Sprint do Monday.` : '';
+      if (confirm(`Encerrar a planning da ${session.sprintName}? Uma carta que ainda estiver na mesa sai sem gravar nada.${link}\n\nA mesa pode ser reaberta pelo botão Entrar na mesa até a sprint terminar.`)) {
+        act(`/sessions/${session.id}/close`, {}).then(ok => {
+          if (!ok) return;
+          state.view = 'lobby'; state.history = null; loadHistory();
+          if (count) alert(`Planning encerrada: ${count} card(s) ligados à ${session.sprintName}.`);
+        });
+      }
       return;
     }
+    const enter = target.closest('[data-enter-sprint]');
+    if (enter) { act('/sessions', {sprint: Number(enter.dataset.enterSprint)}).then(ok => { if (ok) { state.view = 'table'; render(); } }); return; }
+    const review = target.closest('[data-review]');
+    if (review) { openReview(Number(review.dataset.review)); return; }
     const sprint = target.closest('[data-sprint]');
     if (sprint) { const number = Number(sprint.dataset.sprint); state.openSprint = state.openSprint === number ? null : number; render(); return; }
-    const play = target.closest('[data-play]');
-    if (play) { act(`/sessions/${state.data.session.id}/rounds`, {item:play.dataset.play}); return; }
+    const card = target.closest('[data-play]');
+    if (card) { play(card.dataset.play, card.dataset.name); return; }
+    const again = target.closest('[data-reestimate]');
+    if (again) { play(again.dataset.reestimate, again.dataset.name, `Reestimar "${again.dataset.name}"? A estimativa atual (${again.dataset.estimate}) continua valendo até o time registrar a nova. `); return; }
     const scope = target.closest('[data-scope]');
     if (scope) { openScope(Number(scope.dataset.scope)); return; }
     if (target.closest('[data-empty-vote]')) { act(`/rounds/${state.data.round.id}/votes`, {hours:null}); return; }
@@ -336,7 +506,7 @@ window.Planning = (() => {
       return;
     }
     const action = target.closest('[data-round-action]')?.dataset.roundAction;
-    if (action === 'cancel' && !confirm('Tirar esta carta da mesa? Nada é gravado no card.')) return;
+    if (action === 'cancel' && !confirm('Interromper esta estimativa? As cartas jogadas são descartadas, nada é gravado no card e ele volta para a mão.')) return;
     if (action) act(`/rounds/${state.data.round.id}/${action}`, {});
   }
 
@@ -373,5 +543,5 @@ window.Planning = (() => {
     el('pp-hand-search').addEventListener('input', event => { state.search = event.target.value; if (state.data?.session) renderHand(state.data); });
   });
 
-  return {enter, leave};
+  return {enter, leave, teamLoad, renderLoad};
 })();

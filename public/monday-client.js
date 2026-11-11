@@ -111,6 +111,8 @@ async function findMondayBoards() {
 /** As colunas do quadro só são consultadas no Monday quando a tela Configurações é aberta, não a cada carregamento. */
 function enterMondaySettings() {
   if (mondayReady && !mondayColumns.length) inspectMonday();
+  if (mondayReady) loadTeamUsers();
+  else renderTeamSettings();
 }
 
 async function inspectMonday() {
@@ -177,10 +179,70 @@ async function saveBoardTabs() {
   }
 }
 
+/**
+ * Times da capacidade nas Configurações: usuários ativos do Monday, cada um em Full stack, Projetos ou sem time.
+ * `teamDraft` guarda a escolha da tela até salvar (nome normalizado => pessoa).
+ */
+const teamState = { users: null, loading: false, error: '', draft: new Map() };
+
+function teamDraftFromSettings() {
+  teamState.draft = new Map(SprintRules.settings.team.map(member => [SprintRules.normalize(member.name), { ...member }]));
+}
+
 function applyMetricSettings(metrics = {}) {
   SprintRules.applySettings(metrics);
   document.getElementById('metric-capacity').value = String(SprintRules.settings.capacityHours);
-  document.getElementById('metric-excluded').value = SprintRules.settings.excludedPeople.join('\n');
+  teamDraftFromSettings();
+  renderTeamSettings();
+}
+
+async function loadTeamUsers() {
+  if (teamState.loading || teamState.users) return;
+  teamState.loading = true; teamState.error = ''; renderTeamSettings();
+  try { teamState.users = (await mondayRequest('/api/monday-users')).users || []; }
+  catch (error) { teamState.error = `Não foi possível buscar os usuários do Monday: ${error.message}`; }
+  finally { teamState.loading = false; renderTeamSettings(); }
+}
+
+function renderTeamSettings() {
+  const list = document.getElementById('team-list');
+  if (!list) return;
+  const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  const active = new Set((teamState.users || []).map(user => SprintRules.normalize(user.name)));
+  // Ativos do Monday + classificados que não estão mais ativos (para poder tirá-los do time).
+  const people = [...(teamState.users || [])];
+  for (const member of teamState.draft.values()) if (!active.has(SprintRules.normalize(member.name))) people.push({ id: member.id, name: member.name, inactive: true });
+  people.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  const search = SprintRules.normalize(document.getElementById('team-search').value);
+  const onlyClassified = document.getElementById('team-only-classified').checked;
+  const groupOf = name => teamState.draft.get(SprintRules.normalize(name))?.group || '';
+  const shown = people.filter(person => (!search || SprintRules.normalize(person.name).includes(search)) && (!onlyClassified || groupOf(person.name)));
+  const counts = { fullstack: 0, projects: 0 };
+  for (const member of teamState.draft.values()) counts[member.group]++;
+  document.getElementById('team-counts').textContent = `Full stack: ${counts.fullstack} · Projetos: ${counts.projects}${teamState.users ? ` · Sem time: ${Math.max(0, teamState.users.length - counts.fullstack - counts.projects)}` : ''}`;
+  const legacy = document.getElementById('team-legacy');
+  legacy.hidden = teamState.draft.size > 0;
+  legacy.textContent = SprintRules.settings.excludedPeople.length
+    ? `Ninguém classificado ainda: até salvar os times, todos contam como Full stack, exceto ${SprintRules.settings.excludedPeople.join(', ')}.`
+    : 'Ninguém classificado ainda: até salvar os times, todos contam como Full stack.';
+  if (teamState.loading && !teamState.users) { list.innerHTML = '<p class="team-empty">Buscando usuários ativos do Monday…</p>'; return; }
+  const notice = teamState.error ? `<p class="team-empty team-error">${escape(teamState.error)} Exibindo só as pessoas já classificadas.</p>` : '';
+  if (!shown.length) { list.innerHTML = `${notice}<p class="team-empty">${people.length ? 'Ninguém encontrado com esse filtro.' : 'Nenhum usuário ativo encontrado. Confira a conexão com o Monday.'}</p>`; return; }
+  list.innerHTML = notice + shown.map(person => {
+    const group = groupOf(person.name);
+    const option = (value, label) => `<label class="team-choice ${value || 'none'}${group === value ? ' selected' : ''}"><input type="radio" name="team-${escape(person.id)}" value="${value}"${group === value ? ' checked' : ''}>${label}</label>`;
+    return `<div class="team-row" role="listitem" data-id="${escape(person.id)}" data-name="${escape(person.name)}"><span class="team-name">${escape(person.name)}${person.inactive ? '<small>inativo no Monday</small>' : ''}</span><span class="team-choices" role="radiogroup" aria-label="Time de ${escape(person.name)}">${option('fullstack', 'Full stack')}${option('projects', 'Projetos (IA)')}${option('', 'Sem time')}</span></div>`;
+  }).join('');
+}
+
+function chooseTeam(event) {
+  const input = event.target.closest('input[type=radio]');
+  if (!input) return;
+  const row = input.closest('.team-row');
+  const key = SprintRules.normalize(row.dataset.name);
+  if (input.value) teamState.draft.set(key, { id: row.dataset.id, name: row.dataset.name, group: input.value });
+  else teamState.draft.delete(key);
+  renderTeamSettings();
 }
 
 async function saveMetricSettings() {
@@ -188,17 +250,23 @@ async function saveMetricSettings() {
   button.disabled = true;
   try {
     const capacityHours = Number(String(document.getElementById('metric-capacity').value).replace(',', '.'));
-    const excludedPeople = document.getElementById('metric-excluded').value.split('\n').map(name => name.trim()).filter(Boolean);
-    const result = await mondayRequest('/api/metric-settings', { capacityHours, excludedPeople });
+    const team = [...teamState.draft.values()].map(({ id, name, group }) => ({ id, name, group }));
+    const result = await mondayRequest('/api/metric-settings', { capacityHours, team });
     applyMetricSettings(result.metrics);
     if (DATA.length) useMondayRows(DATA.slice());
-    mondayMessage('metric-status', 'Regras salvas. Os indicadores já usam os novos valores.', 'success');
+    mondayMessage('metric-status', 'Regras e times salvos. Os indicadores já usam os novos valores.', 'success');
   } catch (error) {
     mondayMessage('metric-status', error.message, 'error');
   } finally {
     button.disabled = false;
   }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('team-list')?.addEventListener('change', chooseTeam);
+  document.getElementById('team-search')?.addEventListener('input', renderTeamSettings);
+  document.getElementById('team-only-classified')?.addEventListener('change', renderTeamSettings);
+});
 
 function scheduleMondayRefresh() {
   clearTimeout(mondayRefreshTimer);
@@ -272,6 +340,7 @@ async function syncMonday(force = true) {
     window.MONDAY_LIVE_STATUS = result.liveStatus || {};
     if (result.rows.length || !['consumption','release'].includes(currentPage)) useMondayRows(result.rows);
     window.Capacity?.onDataUpdated(result);
+    window.HoursStrip?.onDataUpdated();
     // As datas das sprints chegam com o Capacity; com elas a tela Tarefas descobre a sprint ativa.
     if (currentPage === 'raw') renderRaw();
     // As abas Roadmap, Backlog e Visão 360° acompanham o mesmo ciclo de atualização (o servidor decide se busca de novo no Monday).
@@ -313,7 +382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   try {
     const config = await mondayRequest('/api/config');
-    applyMetricSettings(config.metrics);
+    applyMetricSettings({ ...config.metrics, capacityOverrides: config.capacityOverrides });
     document.getElementById('monday-board').value = config.boardId || '';
     document.getElementById('roadmap-board').value = config.roadmapBoardId || '';
     document.getElementById('backlog-board').value = config.backlogBoardId || '';

@@ -27,15 +27,24 @@ class HourConsumptionTest extends TestCase
         $this->postJson('/api/support-reserves', ['sprint' => '17', 'minutes' => 2400])->assertUnauthorized();
     }
 
-    public function test_collective_reserve_defaults_to_forty_hours_and_persists_per_sprint_without_changing_capacity(): void
+    public function test_only_the_scrum_master_changes_the_support_reserve(): void
     {
         $this->actingAs(User::factory()->create());
+
+        $this->postJson('/api/support-reserves', ['sprint' => '17', 'minutes' => 3000])->assertForbidden();
+
+        $this->assertNull(MondayConnection::current()->forecast_settings);
+    }
+
+    public function test_collective_reserve_defaults_to_eighty_hours_and_persists_per_sprint_without_changing_capacity(): void
+    {
+        $this->actingAs(User::factory()->scrumMaster()->create());
         $connection = MondayConnection::current();
         $connection->capacity_overrides = ['17|Ana' => 4800];
         $connection->forecast_settings = ['snapshot' => ['revisions' => ['17|101|Ana' => ['minutes' => 90]]]];
         $connection->save();
 
-        $this->getJson('/api/support-reserves')->assertExactJson(['defaultMinutes' => 2400, 'reserves' => []]);
+        $this->getJson('/api/support-reserves')->assertExactJson(['defaultMinutes' => 4800, 'reserves' => []]);
         $this->postJson('/api/support-reserves', ['sprint' => '17', 'minutes' => 3000])->assertJsonPath('saved', true);
         $this->postJson('/api/support-reserves', ['sprint' => '18', 'minutes' => 0])->assertJsonPath('saved', true);
         $this->getJson('/api/support-reserves')->assertJsonPath('reserves.17', 3000)->assertJsonPath('reserves.18', 0);
@@ -54,7 +63,7 @@ class HourConsumptionTest extends TestCase
     #[TestWith(['17', 600001, 'minutes'])]
     public function test_invalid_reserve_returns_422_without_persisting(string $sprint, int|float $minutes, string $field): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->scrumMaster()->create());
         $connection = MondayConnection::current();
 
         $this->postJson('/api/support-reserves', compact('sprint', 'minutes'))->assertUnprocessable()->assertJsonValidationErrors($field);

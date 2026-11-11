@@ -31,7 +31,7 @@
       <label class="users-switch">
         <input type="checkbox" role="switch" id="users-conduct-planning">
         <span class="users-switch-track" aria-hidden="true"></span>
-        <span class="users-switch-text"><strong>Maestro Scrum</strong><small>Na tela Planning poker: abrir a mesa, jogar os cards, revelar e gravar a estimativa no card. Não joga carta.</small></span>
+        <span class="users-switch-text"><strong>Maestro Scrum</strong><small>Na tela Planning poker: abrir a mesa, jogar os cards, revelar e gravar a estimativa no card. Não joga carta. Também é quem ajusta as horas de cada pessoa no Capacity e a reserva de suporte no Consumo de horas.</small></span>
       </label>
       <label class="users-switch">
         <input type="checkbox" role="switch" id="users-estimate-planning">

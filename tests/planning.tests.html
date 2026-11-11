@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Planning · carga do time · testes</title>
+<link rel="stylesheet" href="../public/planning.css"><link rel="stylesheet" href="../public/teams.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0}</style>
+<main class="main"><div class="content"><div class="pp-game" id="fixture"><section id="pp-load" class="pp-load" hidden></section></div></div></main><pre id="test-result">RUNNING</pre>
+<script>
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+const person = (name, team, inSprint, planned, support, capacity) => ({name, team, inSprint, planned, support, total: inSprint + planned, capacity, percent: capacity ? Math.round((inSprint + planned) / capacity * 100) : null});
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    const dashboard = await (await fetch('../resources/views/dashboard.blade.php')).text();
+    const style = document.createElement('style'); style.textContent = dashboard.match(/<style>([\s\S]*?)<\/style>/)[1]; document.head.prepend(style);
+    await load('../public/sprint-rules.js'); await load('../public/planning.js');
+    // Full stack: 2 × 80h = 160h − Bombeiro 40h = 120h; Ana tem 10h de Suporte, que contam no Bombeiro.
+    const people = [person('Ana', 'fullstack', 60, 10, 10, 80), person('Bruno', 'fullstack', 30, 20, 0, 80), person('Carla', 'projects', 30, 8, 0, 40)];
+    const [fullstack, projects] = Planning.teamLoad(people, 40);
+    check('Full stack: capacidade menos o Bombeiro e planejado sem os cards de Suporte', fullstack.capacity === 120 && fullstack.planned === 110 && fullstack.available === 10 && fullstack.plannedPercent === 92 && fullstack.availablePercent === 8 && fullstack.level === 'yellow');
+    check('Projetos: capacidade e horas próprias', projects.capacity === 40 && projects.planned === 38 && projects.available === 2 && projects.plannedPercent === 95 && projects.availablePercent === 5);
+    check('Sem times classificados (reserva 0): sem desconto do Bombeiro', Planning.teamLoad(people, 0)[0].capacity === 160);
+    const over = Planning.teamLoad([person('Ana', 'fullstack', 100, 0, 0, 80)], 0)[0];
+    check('Acima da capacidade fica vermelho com o excedente', over.available === -20 && over.level === 'red' && over.plannedPercent === 125);
+    Planning.renderLoad({session: {sprintName: 'Sprint 20'}, round: {item: {owner: 'Bruno'}}, reserveHours: 40, load: people});
+    const parts = [...document.querySelectorAll('#pp-load .pp-load-team')];
+    const text = node => node.textContent.replace(/\s+/g, ' ');
+    check('Duas partes no mesmo card, cada uma com as suas pessoas', parts.length === 2 && parts[0].querySelectorAll('.pp-load-row').length === 2 && parts[1].querySelectorAll('.pp-load-row').length === 1 && text(parts[1]).includes('Carla'));
+    const stats = node => [...node.querySelectorAll('.pp-load-stats > div')].map(stat => `${stat.querySelector('dt').textContent} ${stat.querySelector('dd').textContent}`).join(' | ');
+    check('Capacidade, planejado e disponível em horas e %', stats(parts[0]) === 'Capacidade 120h | Planejado 110h 92% | Disponível 10h 8%' && stats(parts[1]) === 'Capacidade 40h | Planejado 38h 95% | Disponível 2h 5%');
+    check('Responsável pela carta continua destacado', parts[0].querySelector('.pp-load-row.owner').textContent.includes('Bruno'));
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

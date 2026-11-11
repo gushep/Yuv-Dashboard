@@ -19,6 +19,9 @@
       <p class="tower-decision" id="tower-decision"></p>
     </section>
     <section class="tower-signals" id="tower-signals" aria-label="Sinais da sprint"></section>
+    <section class="tower-card tower-hours" aria-label="Horas da sprint: planejadas, utilizadas e disponíveis">
+      <div class="team-summary-rows team-summary-compact" id="tower-hours"></div>
+    </section>
     <div class="tower-grid">
       <section class="tower-card tower-burnup">
         <h2>Trajetória da sprint</h2>

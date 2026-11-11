@@ -20,12 +20,14 @@ class MondayService
 
     public function query(string $token, string $query, array $variables = []): array
     {
+        // Sem variáveis, o array vazio iria como lista ([]) e o Monday recusa com HTTP 400: elas precisam ser um objeto.
         $response = Http::timeout(45)
             ->withHeaders(['Authorization' => $token, 'API-Version' => '2026-07'])
-            ->post('https://api.monday.com/v2', ['query' => $query, 'variables' => $variables]);
+            ->post('https://api.monday.com/v2', ['query' => $query, 'variables' => $variables === [] ? new \stdClass : $variables]);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Monday respondeu HTTP '.$response->status().'. Confira o token e as permissões.');
+            $reason = $response->json('errors.0.message');
+            throw new RuntimeException('Monday respondeu HTTP '.$response->status().($reason ? " ({$reason})" : '').'. Confira o token e as permissões.');
         }
         $body = $response->json();
         if (! empty($body['errors'])) {
@@ -572,6 +574,21 @@ GRAPHQL;
     }
 
     /**
+     * Usuários ativos da conta (sem convidados), em ordem alfabética.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    public function activeUsers(string $token): array
+    {
+        $users = $this->query($token, 'query { users(kind: non_guests, limit: 1000) { id name enabled } }')['users'] ?? [];
+        $options = array_map(fn (array $user): array => ['id' => (string) $user['id'], 'name' => (string) $user['name']],
+            array_filter($users, fn (array $user): bool => ($user['enabled'] ?? true) !== false));
+        usort($options, fn (array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+
+        return array_values($options);
+    }
+
+    /**
      * Opções de um campo de Pessoas (usuários da conta) ou de Conectar quadros (itens dos quadros ligados, ex.: Sprints
      * e Épicos), carregadas só quando o campo é editado.
      *
@@ -584,12 +601,7 @@ GRAPHQL;
         $column = collect($item['board']['columns'] ?? [])->firstWhere('id', $columnId)
             ?? throw new RuntimeException('Coluna não encontrada neste quadro.');
         if ($column['type'] === 'people') {
-            $users = $this->query($token, 'query { users(kind: non_guests, limit: 1000) { id name enabled } }')['users'] ?? [];
-            $options = array_map(fn (array $user): array => ['id' => (string) $user['id'], 'name' => (string) $user['name']],
-                array_filter($users, fn (array $user): bool => ($user['enabled'] ?? true) !== false));
-            usort($options, fn (array $a, array $b): int => strcasecmp($a['name'], $b['name']));
-
-            return array_values($options);
+            return $this->activeUsers($token);
         }
         if ($column['type'] === 'board_relation') {
             $settings = json_decode((string) ($column['settings_str'] ?? ''), true) ?: [];

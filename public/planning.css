@@ -22,6 +22,37 @@
 .pp-sprint-caret{color:var(--muted);transition:transform .15s}
 .pp-sprint.open .pp-sprint-caret{transform:rotate(180deg)}
 .pp-sprint-table{border-top:1px solid var(--border)}
+/* Cabeçalho da sprint: linha que abre as tarefas + ação (Entrar na mesa ou olhinho) */
+.pp-sprint-head{display:flex;align-items:center;gap:8px;padding-right:18px}
+.pp-sprint-head .pp-sprint-row{flex:1;min-width:0}
+.pp-sprint-head:has(+.pp-sprint-hours) .pp-sprint-row{grid-template-columns:minmax(160px,1fr) 24px;padding-bottom:6px}
+.pp-sprint-actions{flex:none;display:flex;align-items:center;gap:8px}
+.pp-sprint.current{border-color:color-mix(in srgb,var(--blue) 45%,var(--border))}
+.pp-sprint-tag{margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--blue-bg);color:var(--blue);font-size:10px;font-style:normal;font-weight:700;vertical-align:middle}
+.pp-eye{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text2);cursor:pointer}
+.pp-eye svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pp-eye:hover:not(:disabled){color:var(--blue);border-color:var(--blue);background:var(--blue-bg)}
+.pp-eye:disabled{opacity:.35;cursor:not-allowed}
+/* Revisão (olhinho): um bloco por card estimado */
+.pp-review-body{display:flex;flex-direction:column;gap:10px}
+.pp-review-card{padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--card)}
+.pp-review-card header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:8px}
+.pp-review-card header a{color:var(--text);text-decoration:none}
+.pp-review-card header small{font-size:11px;color:var(--text2)}
+.pp-review-card dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px 12px;margin:0 0 8px}
+.pp-review-card dt{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.pp-review-card dd{margin:0;font-size:13px;color:var(--text)}
+.pp-review-votes{display:flex;flex-wrap:wrap;gap:6px;margin:0;font-size:12px;color:var(--text2)}
+.pp-review-votes span{padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--muted) 12%,var(--card))}
+.pp-review-note{margin:8px 0 0;padding:8px 10px;border-left:3px solid var(--blue);background:var(--blue-bg);font-size:12px;color:var(--text)}
+/* Horas da sprint na mesma tabela da barra superior, só leitura, com rolagem lateral em telas estreitas */
+.pp-sprint-hours{padding:0 18px 12px;overflow-x:auto}
+/* Colunas de largura fixa: as tabelas de todas as sprints ficam alinhadas umas com as outras */
+.pp-sprint-hours .tb-hours-table{display:grid;width:max-content;grid-template-columns:76px repeat(4,156px 112px);cursor:default}
+.pp-sprint-hours .tb-hours-table>span{box-sizing:border-box;min-width:0}
+.pp-sprint-hours .tb-hours-table>span.tb-hours-available,.pp-sprint-hours .tb-hours-table>span.tb-hours-col-available{justify-content:center;text-align:center}
+.pp-sprint-hours .tb-hours-table.static:hover{background:none}
+.pp-sprint-hours .tb-hours-corner{visibility:hidden}
 .pp-sprint-table a{color:var(--blue);text-decoration:none}
 .pp-sprint-table a:hover{text-decoration:underline}
 .pp-sprint-table tfoot td{padding:9px 16px;font-size:12px;font-weight:700;border-top:1px solid var(--border);background:var(--bg)}
@@ -117,6 +148,19 @@
 .pp-game .pp-estimated-item{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:#fff;color:#14213d;font-size:12px}
 .pp-game .pp-estimated-item a{color:#14213d;text-decoration:none;font-weight:600}
 .pp-game .pp-estimated-item small{font-size:10px;font-weight:800;text-transform:uppercase;color:#5b6b80}
+/* Reestimar: o card volta para a mesa; enquanto isso, o estimado fica marcado */
+.pp-game .pp-reestimate{padding:2px 8px;border:1px solid #c8d3e1;border-radius:6px;background:#f4f7fb;color:#1d4ed8;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.pp-game .pp-reestimate:hover:not(:disabled){background:#e7efff;border-color:#1d4ed8}
+.pp-game .pp-reestimate:disabled{opacity:.5;cursor:not-allowed}
+.pp-game .pp-estimated-item.on-table{outline:2px solid #f2c94c}
+/* Olhinho: a mesa da sprint só para leitura; a mesa de jogo vira uma faixa com o resumo */
+.pp-game.reviewing .pp-arena{padding:0;background:none;box-shadow:none}
+.pp-game.reviewing .pp-felt{height:auto;border:0;border-radius:12px;background:#13253c;box-shadow:none}
+.pp-game.reviewing .pp-center{position:static;padding:14px 16px;align-items:flex-start;pointer-events:auto}
+.pp-game .pp-review-banner{display:flex;flex-direction:column;gap:2px;margin:0;color:#e6ebf2;font-size:14px}
+.pp-game .pp-review-banner span{font-size:12px;color:#9fb0c6}
+.pp-game .pp-review-hint{margin-left:6px;font-size:11px;font-weight:500;color:#9fb0c6}
+.pp-game .pp-reestimating{font-size:10.5px;font-style:normal;font-weight:700;color:#a16207}
 
 /* Modais */
 .pp-dialog{width:min(520px,calc(100vw - 32px))}

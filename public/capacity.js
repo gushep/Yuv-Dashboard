@@ -1,7 +1,8 @@
 /* Capacity usa os dados já carregados pelo dashboard; cálculos internos em minutos. */
 window.Capacity = (() => {
   const defaultMinutes = () => window.SprintRules.capacityMinutes();
-  const state = { sprint: null, userSelectedSprint: false, developer: 'all', expanded: new Set(), overrides: {}, loadedOverrides: false, error: '', active: false, loading: false };
+  const state = { sprint: null, userSelectedSprint: false, developer: 'all', expanded: new Set(), overrides: {}, loadedOverrides: false, reserves: {}, defaultReserve: null, error: '', active: false, loading: false };
+  const TEAM_ORDER = { fullstack: 0, projects: 1 };
   const el = id => document.getElementById(id);
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalized = value => String(value ?? '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -70,10 +71,13 @@ window.Capacity = (() => {
     allRows.forEach((row, index) => {
       if (Number(row.Sprint) === Number(sprint)) unique.set(row.Id ? `${row.Id}|${sprint}` : `snapshot-${index}`, row);
     });
-    const groups = new Map(), pending = [], unassigned = [];
+    const groups = new Map(), pending = [], unassigned = [], outside = [];
     for (const row of unique.values()) {
-      const owners = people(row.Responsavel);
-      if (!owners.length) { unassigned.push(row); continue; }
+      const named = people(row.Responsavel);
+      if (!named.length) { unassigned.push(row); continue; }
+      // Só Full stack e Projetos entram nas métricas por pessoa; card só de quem está sem time fica à parte.
+      const owners = named.filter(name => window.SprintRules.teamOf(name) !== null);
+      if (!owners.length) { outside.push(row); continue; }
       const reasons = [];
       if (owners.length > 1) reasons.push('vários responsáveis; sem apontamentos individuais');
       if (row.Id && sprintById.get(String(row.Id))?.size > 1) reasons.push('card em várias sprints; tempo total não separado por sprint');
@@ -83,17 +87,25 @@ window.Capacity = (() => {
       if (!groups.has(owner)) groups.set(owner, []);
       groups.get(owner).push(row);
     }
+    // Quem está classificado conta na capacidade mesmo sem card nesta sprint.
+    const known = new Set([...groups.keys()].map(name => window.SprintRules.normalize(name)));
+    for (const member of window.SprintRules.teamMembers()) if (!known.has(window.SprintRules.normalize(member.name))) groups.set(member.name, []);
     const developers = [...groups.entries()].map(([name, rows]) => {
-      const key = `${sprint}|${name}`;
-      const capacity = Number.isInteger(overrides[key]) ? overrides[key] : defaultMinutes();
+      const saved = window.SprintRules.capacityFor(overrides, sprint, name);
+      const capacity = saved.minutes;
       const elapsed = elapsedMinutes(capacity, dates, today);
-      const result = {name, rows, capacity, elapsed, plannedEstimate:0, completedEstimate:0, missingEstimate:0,
+      const result = {name, team: window.SprintRules.teamOf(name), inheritedFrom: saved.inherited ? saved.fromSprint : null, rows, capacity, elapsed, plannedEstimate:0, completedEstimate:0, missingEstimate:0,
         unplannedEstimate:0, supportEstimate:0, otherEstimate:0, missingUnplannedEstimate:0, totalEstimate:0,
         realPlanned:0, realUnplanned:0, realSupport:0, otherUnplanned:0, registered:0, knownReal:0, missingReal:0,
-        knownPlanned:0, knownSupport:0, knownOther:0};
+        knownPlanned:0, knownSupport:0, knownOther:0, supportAllEstimate:0, supportAllReal:0};
       for (const row of rows) {
         const category = planning(row.Planejada);
         const estimate = minutes(row.EstH), real = minutes(row.RealH);
+        // Suporte de qualquer planejamento: vai para o card do Bombeiro e sai do card do time.
+        if (normalized(row.Tipo) === 'suporte') {
+          if (estimate !== null && !window.SprintRules.isRemoved(row.Status)) result.supportAllEstimate += estimate;
+          if (real !== null) result.supportAllReal += real;
+        }
         if (category === 'planned' && !window.SprintRules.isRemoved(row.Status)) {
           if (estimate === null) result.missingEstimate++;
           else { result.plannedEstimate += estimate; if (isDone(row.Status)) result.completedEstimate += estimate; }
@@ -116,8 +128,108 @@ window.Capacity = (() => {
       result.delivery = result.plannedEstimate > 0 ? result.completedEstimate / result.plannedEstimate * 100 : null;
       result.supportImpact = result.registered > 0 ? result.realSupport / result.registered * 100 : null;
       return result;
-    }).sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
-    return {developers, pending, unassigned, selectedCount:unique.size};
+    }).sort((a,b) => (TEAM_ORDER[a.team] ?? 9) - (TEAM_ORDER[b.team] ?? 9) || a.name.localeCompare(b.name, 'pt-BR'));
+    return {developers, pending, unassigned, outside, selectedCount:unique.size};
+  }
+  /**
+   * Composição da capacidade: total (Full stack + Projetos, como sempre), Full stack descontada a reserva do Bombeiro
+   * (só depois de classificar os times) e Projetos à parte.
+   */
+  /**
+   * Capacidade e horas de cada time. As horas de Full stack e Projetos não incluem os cards de Suporte, que ficam no
+   * card do Bombeiro: assim cada hora conta num lugar só.
+   */
+  function teamTotals(developers, reserveMinutes) {
+    const of = team => developers.filter(dev => dev.team === team);
+    const sum = (list, read) => list.reduce((total, dev) => total + read(dev), 0);
+    const fullstack = of('fullstack'), projects = of('projects');
+    const reserve = window.SprintRules.teamsConfigured() ? reserveMinutes : 0;
+    const fullstackCapacity = sum(fullstack, dev => dev.capacity), projectsCapacity = sum(projects, dev => dev.capacity);
+    const withoutSupport = list => ({estimate: sum(list, dev => dev.totalEstimate - dev.supportAllEstimate), registered: sum(list, dev => dev.registered - dev.supportAllReal)});
+    return {
+      total: fullstackCapacity + projectsCapacity, reserve,
+      fullstack: {people: fullstack.length, capacity: fullstackCapacity, net: Math.max(0, fullstackCapacity - reserve), ...withoutSupport(fullstack)},
+      projects: {people: projects.length, capacity: projectsCapacity, ...withoutSupport(projects)}
+    };
+  }
+  /** Semáforo dos cards (regra única em SprintRules, também usada no Consumo de horas). */
+  const capacityLevel = (used, capacity) => window.SprintRules.capacityLevel(used, capacity);
+  const LEVEL_TEXT = window.SprintRules.LEVEL_TEXT;
+  /** Horas fora dos cards (compartilhados, sem responsável ou só de quem está sem time), sem os de Suporte. */
+  function outsideTotals(result) {
+    const rows = [...result.pending.map(item => item.row), ...result.unassigned, ...result.outside].filter(row => normalized(row.Tipo) !== 'suporte');
+    return {
+      estimate: rows.filter(row => !window.SprintRules.isRemoved(row.Status)).reduce((sum, row) => sum + (minutes(row.EstH) ?? 0), 0),
+      registered: rows.reduce((sum, row) => sum + (minutes(row.RealH) ?? 0), 0)
+    };
+  }
+  /**
+   * Horas de sustentação da sprint, pela mesma regra do Consumo de horas: cards de Tipo Suporte, uma vez por card,
+   * de qualquer responsável (inclusive sem responsável ou sem time).
+   */
+  function supportTotals(rows, sprint) {
+    const unique = new Map();
+    rows.forEach((row, index) => {
+      if (Number(row.Sprint) === Number(sprint) && normalized(row.Tipo) === 'suporte') unique.set(row.Id ? String(row.Id) : `snapshot-${index}`, row);
+    });
+    let registered = 0, estimate = 0;
+    for (const row of unique.values()) {
+      registered += minutes(row.RealH) ?? 0;
+      if (!window.SprintRules.isRemoved(row.Status)) estimate += minutes(row.EstH) ?? 0;
+    }
+    return {cards: unique.size, registered, estimate};
+  }
+  /**
+   * Cards de composição em duas linhas com os mesmos cards: em cima o previsto (Tempo Estimado) e embaixo o registrado
+   * (Tempo Real), cada um contra a capacidade do card. Cada hora conta num card só: Suporte no Bombeiro, o resto no time
+   * de quem é o card; o total soma os três.
+   */
+  function renderTeams(developers, result) {
+    const summary = teamSummary(DATA, state.sprint, result, state.reserves[state.sprint] ?? state.defaultReserve ?? 0);
+    el('cap-teams').innerHTML = summary.html;
+    return summary.totals;
+  }
+  /**
+   * Os mesmos cards para qualquer tela (Capacity e Consumo de horas): recebe as linhas, a sprint, o resultado do
+   * `model` e a reserva do Bombeiro, e devolve o HTML das duas linhas e os totais.
+   */
+  function summaryFor(rows, sprint, dates, overrides, reserveMinutes) {
+    return teamSummary(rows, sprint, model(rows, sprint, dates, overrides), reserveMinutes);
+  }
+  function teamSummary(rows, sprint, result, reserveMinutes) {
+    const developers = result.developers;
+    const totals = teamTotals(developers, reserveMinutes);
+    const configured = window.SprintRules.teamsConfigured();
+    const support = supportTotals(rows, sprint);
+    const outside = outsideTotals(result);
+    const people = count => `${count} pessoa${count === 1 ? '' : 's'}`;
+    const cards = [
+      {label: 'Capacidade da sprint', capacity: totals.total, kind: '',
+        estimate: totals.fullstack.estimate + support.estimate + totals.projects.estimate, registered: totals.fullstack.registered + support.registered + totals.projects.registered,
+        note: `Full stack ${formatMinutes(totals.fullstack.capacity)} (${people(totals.fullstack.people)}) · Projetos ${formatMinutes(totals.projects.capacity)} (${people(totals.projects.people)})`,
+        extra: key => outside[key] ? ` · fora da conta: ${formatMinutes(outside[key])} em cards compartilhados, sem responsável ou sem time` : ''},
+      {label: 'Full stack para a sprint', capacity: totals.fullstack.net, kind: 'fullstack', estimate: totals.fullstack.estimate, registered: totals.fullstack.registered,
+        note: configured ? `Capacidade ${formatMinutes(totals.fullstack.capacity)} − Bombeiro ${formatMinutes(totals.reserve)} · sem os cards de Suporte` : 'Times ainda não classificados nas Configurações: sem desconto do Bombeiro'},
+      {label: 'Bombeiro (sustentação)', capacity: reserveMinutes, kind: 'support', estimate: support.estimate, registered: support.registered,
+        note: `Reserva da Sprint ${sprint} (tela Consumo de horas) · ${support.cards} card(s) de Suporte de qualquer pessoa`},
+      {label: 'Projetos (IA)', capacity: totals.projects.capacity, kind: 'projects', estimate: totals.projects.estimate, registered: totals.projects.registered,
+        note: 'Demandas próprias, fora da sprint e da sustentação'}
+    ];
+    const meter = (card, key) => {
+      const used = card[key], balance = card.capacity - used, over = balance < 0;
+      const percent = card.capacity > 0 ? used / card.capacity * 100 : null;
+      const level = capacityLevel(used, card.capacity);
+      // Caixinha no canto superior direito: horas ainda disponíveis (ou o excedente) contra a capacidade do card.
+      const available = `<span class="team-card-available" title="${over ? 'Horas acima da capacidade' : 'Horas ainda disponíveis'}">${over ? `Excedido ${formatMinutes(-balance)}` : `Disponível ${formatMinutes(balance)}`}</span>`;
+      const notes = [over ? `<b>${formatMinutes(-balance)} acima da capacidade</b>` : '', key === 'estimate' ? card.note : '', card.extra ? card.extra(key).replace(/^ · /, '') : ''].filter(Boolean).join(' · ');
+      return `<div class="team-card ${card.kind} level-${level}" title="${escapeHtml(LEVEL_TEXT[level])}"><div class="team-card-head"><span class="team-card-label" title="${card.label}">${card.label}</span>${available}</div>
+        <strong class="team-card-value"><span class="team-card-used">${formatMinutes(used)}</span> <b>de ${formatMinutes(card.capacity)}${percent === null ? '' : ` · ${formatPct(percent)}`}</b></strong>
+        <span class="team-meter" role="img" aria-label="${escapeHtml(`${card.label}: ${formatMinutes(used)} de ${formatMinutes(card.capacity)}`)}"><span style="width:${Math.min(100, percent ?? (used ? 100 : 0))}%"></span></span>
+        ${notes ? `<small title="${escapeHtml(notes.replace(/<[^>]+>/g, ''))}">${notes}</small>` : ''}</div>`;
+    };
+    const html = [['estimate', 'Previsto', 'horas planejadas · tempo estimado dos cards'], ['registered', 'Registrado', 'horas utilizadas · tempo real apontado']]
+      .map(([key, title, hint]) => `<h3 class="team-summary-title">${title} <small>${hint}</small></h3><div class="team-summary-row">${cards.map(card => meter(card, key)).join('')}</div>`).join('');
+    return {html, totals, support, outside, cards: cards.map(({label, kind, capacity, estimate, registered}) => ({label, kind, capacity, estimate, registered}))};
   }
   function dateLabel(value) {
     if (!value) return '—';
@@ -181,16 +293,30 @@ window.Capacity = (() => {
     if (state.sprint !== null) { sprintSelect.value = String(state.sprint); window.rememberScreenSprint?.('capacity', state.sprint); }
     const dates = window.MONDAY_SPRINT_DATES?.[state.sprint] || null;
     el('cap-dates').textContent = dates ? `${dateLabel(dates.start)} – ${dateLabel(dates.end)}` : 'Datas da sprint não disponíveis';
-    const result = state.sprint === null ? {developers:[],pending:[],unassigned:[]} : model(DATA,state.sprint,dates,state.overrides);
+    const result = state.sprint === null ? {developers:[],pending:[],unassigned:[],outside:[]} : model(DATA,state.sprint,dates,state.overrides);
     const select = el('cap-developer');
     const names = result.developers.map(dev => dev.name);
-    if (state.developer !== 'all' && !names.includes(state.developer)) state.developer = 'all';
-    select.replaceChildren(new Option('Todos os desenvolvedores','all'),...names.map(name => new Option(name,name)));
+    const teamFilters = ['fullstack','projects'].map(team => [`team:${team}`, `Só ${window.SprintRules.teamLabel(team)}`]);
+    if (state.developer !== 'all' && !names.includes(state.developer) && !teamFilters.some(([value]) => value === state.developer)) state.developer = 'all';
+    select.replaceChildren(new Option('Todos os desenvolvedores','all'),...teamFilters.map(([value,label]) => new Option(label,value)),...names.map(name => new Option(name,name)));
     select.value = state.developer;
-    const shown = state.developer === 'all' ? result.developers : result.developers.filter(dev => dev.name === state.developer);
+    const shown = state.developer === 'all' ? result.developers
+      : state.developer.startsWith('team:') ? result.developers.filter(dev => `team:${dev.team}` === state.developer)
+      : result.developers.filter(dev => dev.name === state.developer);
+    const teamTotalsResult = renderTeams(result.developers, result);
+    const canEdit = Boolean(window.CAN_MANAGE_CAPACITY);
     const tbody = el('cap-body');
     tbody.replaceChildren();
+    let currentTeam;
     for (const [index, dev] of shown.entries()) {
+      if (dev.team !== currentTeam) {
+        currentTeam = dev.team;
+        const group = teamTotalsResult[dev.team];
+        const head = document.createElement('tr');
+        head.className = `team-group-row ${dev.team}`;
+        head.innerHTML = `<td colspan="13"><span class="team-badge ${dev.team}">${escapeHtml(window.SprintRules.teamLabel(dev.team))}</span> ${group.people} pessoa(s) · capacidade ${formatMinutes(group.capacity)}${dev.team === 'fullstack' && teamTotalsResult.reserve ? ` · −${formatMinutes(teamTotalsResult.reserve)} Bombeiro = ${formatMinutes(group.net)} para a sprint` : ''}${dev.team === 'projects' ? ' · não atende sustentação nem itens da sprint' : ''}</td>`;
+        tbody.append(head);
+      }
       const tr = document.createElement('tr');
       const initials = dev.name.split(/\s+/).map(part => part[0]).slice(0,2).join('').toUpperCase();
       const balanceFinal = dev.capacity-dev.totalEstimate, balanceNow = dev.capacity-dev.registered;
@@ -203,7 +329,7 @@ window.Capacity = (() => {
       const unplannedCell = dev.knownSupport || dev.knownOther ? `${formatMinutes(dev.realUnplanned)}<br><small>${unplannedParts}</small>` : '—';
       const utilTip = `Registradas: ${formatMinutes(dev.registered)} ÷ capacidade até hoje: ${formatMinutes(dev.elapsed)}. ${realTip}. Segunda a sexta; hoje conta como dia útil completo; sem feriados configurados.`;
       const deliveryTip = `Estimativas concluídas: ${formatMinutes(dev.completedEstimate)} ÷ estimativas planejadas: ${formatMinutes(dev.plannedEstimate)}. ${dev.missingEstimate} item(ns) planejado(s) sem estimativa.${dev.plannedEstimate ? '' : ' Denominador zero: indicador indisponível.'}`;
-      tr.innerHTML = `<td><button class="cap-dev-button" type="button" aria-expanded="${state.expanded.has(dev.name)}"><span class="cap-avatar cap-avatar-${index%4}">${escapeHtml(initials)}</span><span class="cap-dev-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</span><span class="cap-chevron">${state.expanded.has(dev.name)?'⌄':'›'}</span></button></td><td><input class="cap-hours-input" type="number" min="0" max="200" step="0.25" value="${dev.capacity/60}" aria-label="Capacidade em horas de ${escapeHtml(dev.name)} na sprint ${state.sprint}" title="Horas decimais: 1,5 equivale a 1h30">h</td><td class="cap-group-start">${formatMinutes(dev.plannedEstimate)}${missingNote(dev.missingEstimate)}</td><td>${unplannedEstimateCell}</td><td class="cap-total" title="${escapeHtml(`Previstas planejadas ${formatMinutes(dev.plannedEstimate)} + não planejadas ${formatMinutes(dev.unplannedEstimate)}`)}">${formatMinutes(dev.totalEstimate)}${missingNote(missingTotal)}</td><td class="cap-balance ${balanceFinal<0?'cap-negative':''}" title="${escapeHtml(`Disponíveis ${formatMinutes(dev.capacity)} − previstas totais ${formatMinutes(dev.totalEstimate)}`)}">${formatMinutes(balanceFinal)}</td><td class="cap-group-start">${dev.knownPlanned?formatMinutes(dev.realPlanned):'—'}</td><td>${unplannedCell}</td><td class="cap-total" title="${escapeHtml(realTip)}">${dev.knownReal?formatMinutes(dev.registered):'—'}</td><td class="cap-balance ${balanceNow<0?'cap-negative':''}" title="${escapeHtml(`Disponíveis ${formatMinutes(dev.capacity)} − registradas ${formatMinutes(dev.registered)}`)}">${dev.knownReal?formatMinutes(balanceNow):'—'}</td><td class="cap-group-start" title="${escapeHtml(utilTip)}">${percentBar(dev.utilization,'util')}</td><td title="${escapeHtml(deliveryTip)}">${percentBar(dev.delivery,'delivery')}${dev.missingEstimate ? `<small>${dev.missingEstimate} sem estimativa</small>` : ''}</td><td title="${escapeHtml(dev.registered ? `${formatMinutes(dev.realSupport)} ÷ ${formatMinutes(dev.registered)}` : 'Sem horas registradas: denominador zero')}"><span class="cap-impact">${formatPct(dev.supportImpact)}</span></td>`;
+      tr.innerHTML = `<td><button class="cap-dev-button" type="button" aria-expanded="${state.expanded.has(dev.name)}"><span class="cap-avatar cap-avatar-${index%4}">${escapeHtml(initials)}</span><span class="cap-dev-name" title="${escapeHtml(dev.name)}">${escapeHtml(dev.name)}</span><span class="cap-chevron">${state.expanded.has(dev.name)?'⌄':'›'}</span></button><span class="team-badge ${dev.team}">${escapeHtml(window.SprintRules.teamLabel(dev.team))}</span></td><td><input class="cap-hours-input" type="number" min="0" max="200" step="0.25" value="${dev.capacity/60}"${canEdit ? '' : ' disabled'} aria-label="Capacidade em horas de ${escapeHtml(dev.name)} na sprint ${state.sprint}" title="${canEdit ? 'Horas decimais: 1,5 equivale a 1h30. Vale desta sprint em diante, até um novo ajuste.' : 'Somente o Maestro Scrum altera as horas.'}">h${dev.inheritedFrom ? `<small class="cap-inherited" title="Sem ajuste nesta sprint: vale o último valor salvo">herdado da Sprint ${dev.inheritedFrom}</small>` : ''}</td><td class="cap-group-start">${formatMinutes(dev.plannedEstimate)}${missingNote(dev.missingEstimate)}</td><td>${unplannedEstimateCell}</td><td class="cap-total" title="${escapeHtml(`Previstas planejadas ${formatMinutes(dev.plannedEstimate)} + não planejadas ${formatMinutes(dev.unplannedEstimate)}`)}">${formatMinutes(dev.totalEstimate)}${missingNote(missingTotal)}</td><td class="cap-balance ${balanceFinal<0?'cap-negative':''}" title="${escapeHtml(`Disponíveis ${formatMinutes(dev.capacity)} − previstas totais ${formatMinutes(dev.totalEstimate)}`)}">${formatMinutes(balanceFinal)}</td><td class="cap-group-start">${dev.knownPlanned?formatMinutes(dev.realPlanned):'—'}</td><td>${unplannedCell}</td><td class="cap-total" title="${escapeHtml(realTip)}">${dev.knownReal?formatMinutes(dev.registered):'—'}</td><td class="cap-balance ${balanceNow<0?'cap-negative':''}" title="${escapeHtml(`Disponíveis ${formatMinutes(dev.capacity)} − registradas ${formatMinutes(dev.registered)}`)}">${dev.knownReal?formatMinutes(balanceNow):'—'}</td><td class="cap-group-start" title="${escapeHtml(utilTip)}">${percentBar(dev.utilization,'util')}</td><td title="${escapeHtml(deliveryTip)}">${percentBar(dev.delivery,'delivery')}${dev.missingEstimate ? `<small>${dev.missingEstimate} sem estimativa</small>` : ''}</td><td title="${escapeHtml(dev.registered ? `${formatMinutes(dev.realSupport)} ÷ ${formatMinutes(dev.registered)}` : 'Sem horas registradas: denominador zero')}"><span class="cap-impact">${formatPct(dev.supportImpact)}</span></td>`;
       tr.querySelector('.cap-dev-button').addEventListener('click', () => {
         state.expanded.has(dev.name) ? state.expanded.delete(dev.name) : state.expanded.add(dev.name);
         render();
@@ -219,6 +345,7 @@ window.Capacity = (() => {
     }
     renderExtra('cap-pending','Pendências de atribuição',result.pending,true);
     renderExtra('cap-unassigned','Sem responsável',result.unassigned);
+    renderExtra('cap-outside','Cards de pessoas sem time (fora das métricas por pessoa)',result.outside);
     const standardElapsed = elapsedMinutes(defaultMinutes(),dates,todaySaoPaulo());
     el('cap-reference').textContent = `Referência: ${formatMinutes(defaultMinutes())} por dev · até hoje: ${formatMinutes(standardElapsed)}`;
     el('cap-pace').textContent = teamPaceText(result.developers, dates);
@@ -232,6 +359,7 @@ window.Capacity = (() => {
     else warnings.push('Tempo Real é uma coluna numérica de total do card, sem histórico de apontamentos por pessoa ou sprint. As horas exibidas são provisórias; cards compartilhados ou em várias sprints estão fora dos totais individuais.');
     if (result.pending.length) warnings.push(`${result.pending.length} card(s) em Pendências de atribuição, fora dos totais individuais.`);
     if (result.unassigned.length) warnings.push(`${result.unassigned.length} card(s) sem responsável, fora dos totais individuais.`);
+    if (result.outside.length) warnings.push(`${result.outside.length} card(s) só de pessoas sem time (Configurações), fora dos totais individuais.`);
     const missing = result.developers.reduce((sum,dev)=>sum+dev.missingEstimate,0);
     if (missing) warnings.push(`${missing} item(ns) planejado(s) sem estimativa: entrega do planejado considera apenas estimativas informadas.`);
     el('cap-warning').textContent = warnings.join(' ');
@@ -243,19 +371,24 @@ window.Capacity = (() => {
   async function loadOverrides() {
     if (state.loadedOverrides || location.protocol === 'file:') return;
     try {
-      const result = await mondayRequest('/api/capacity');
+      // A reserva de suporte (Bombeiro) de cada sprint sai da capacidade full stack.
+      const [result, reserves] = await Promise.all([mondayRequest('/api/capacity'), mondayRequest('/api/support-reserves')]);
       state.overrides = result.overrides || {};
+      state.reserves = reserves.reserves || {};
+      state.defaultReserve = reserves.defaultMinutes ?? null;
       state.loadedOverrides = true;
       render();
     } catch (error) { state.error = `Não foi possível carregar as capacidades salvas: ${error.message}`; render(); }
   }
   async function saveCapacity(developer, hoursText) {
+    if (!window.CAN_MANAGE_CAPACITY) { state.error = 'Somente o Maestro Scrum altera as horas.'; render(); return; }
     const hours = Number(String(hoursText).replace(',','.'));
     if (!Number.isFinite(hours) || hours < 0 || hours > 200) { state.error = 'Informe uma capacidade entre 0h e 200h.'; render(); return; }
     const value = Math.round(hours * 60);
     try {
       const result = await mondayRequest('/api/capacity',{sprint:state.sprint,developer,minutes:value});
       state.overrides = result.overrides || {};
+      window.SprintRules.applySettings({capacityOverrides: state.overrides});
       state.error = '';
       render();
     } catch (error) { state.error = `Não foi possível salvar a capacidade: ${error.message}`; render(); }
@@ -266,6 +399,8 @@ window.Capacity = (() => {
     if (Number.isInteger(sprintHint)) { state.sprint = sprintHint; state.userSelectedSprint = true; }
     if (!window.MONDAY_LAST_SYNC && location.protocol !== 'file:') state.loading = true;
     render();
+    // Recarrega a cada entrada: a reserva pode ter mudado na tela Consumo de horas.
+    state.loadedOverrides = false;
     loadOverrides();
     if (typeof mondayReady !== 'undefined' && mondayReady && !window.MONDAY_LAST_SYNC) syncMonday(false);
   }
@@ -285,8 +420,9 @@ window.Capacity = (() => {
   function onLoading() { state.loading = true; if (state.active) render(); }
   function onError(message) { state.loading = false; state.error = `Falha ao atualizar os dados: ${message}. Exibindo os últimos dados disponíveis.`; if (state.active) render(); }
   document.addEventListener('DOMContentLoaded', () => {
+    if (!el('cap-sprint')) return;
     el('cap-sprint').addEventListener('change', event => { state.sprint = Number(event.target.value); state.userSelectedSprint = true; state.expanded.clear(); render(); });
     el('cap-developer').addEventListener('change', event => { state.developer = event.target.value; render(); });
   });
-  return {enter,leave,render,onLoading,onDataUpdated,onError,model,minutes,formatMinutes,percentBar,weekdays,elapsedMinutes,todaySaoPaulo};
+  return {enter,leave,render,onLoading,onDataUpdated,onError,model,summaryFor,teamTotals,supportTotals,outsideTotals,capacityLevel,minutes,formatMinutes,percentBar,weekdays,elapsedMinutes,todaySaoPaulo};
 })();

@@ -1,0 +1,190 @@
+/* Times da capacidade (Full stack × Projetos): Configurações, composição nos cards e selos nas tabelas.
+   Usa só as variáveis do tema, então vale também no tema escuro. */
+.team-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.02em;white-space:nowrap;vertical-align:middle;background:color-mix(in srgb,var(--muted) 16%,var(--card));color:var(--text2)}
+.team-badge.fullstack{background:var(--blue-bg);color:var(--blue)}
+.team-badge.projects{background:color-mix(in srgb,var(--purple) 14%,var(--card));color:var(--purple)}
+td .team-badge{margin-left:8px}
+
+/* Configurações */
+.team-settings{margin-top:6px;padding-top:14px;border-top:1px solid var(--border)}
+.team-settings h3{font-size:13px;margin-bottom:6px}
+.team-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px}
+.team-toolbar input[type=search]{flex:1 1 220px;min-width:0;padding:8px 11px;border:1px solid var(--border);border-radius:7px;background:var(--card);color:var(--text);font:inherit;font-size:12px}
+.team-only{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)}
+.team-counts{margin-left:auto;font-size:12px;font-weight:600;color:var(--text2)}
+.team-legacy{margin-bottom:10px;padding:9px 12px;border:1px solid var(--yel-bd,#fde68a);border-radius:8px;background:var(--yel-bg,#fffbeb);color:var(--text);font-size:12px}
+.team-list{max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:9px}
+.team-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.team-row:last-child{border-bottom:0}
+.team-name{display:flex;flex-direction:column;font-size:12px;font-weight:600;color:var(--text);min-width:0}
+.team-name small{font-weight:500;color:var(--red)}
+.team-choices{display:inline-flex;flex-wrap:wrap;gap:4px}
+.team-choice{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--border);border-radius:999px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;background:var(--card)}
+.team-choice input{margin:0;accent-color:var(--blue)}
+.team-choice.fullstack.selected{border-color:var(--blue);background:var(--blue-bg);color:var(--blue)}
+.team-choice.projects.selected{border-color:var(--purple);background:color-mix(in srgb,var(--purple) 14%,var(--card));color:var(--purple)}
+.team-choice.projects input{accent-color:var(--purple)}
+.team-choice.none.selected{border-color:var(--muted);color:var(--text)}
+.team-empty{padding:14px;font-size:12px;color:var(--text2)}
+.team-error{color:var(--red)}
+
+/* Cards de composição (Capacity e Previsibilidade) */
+.team-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:12px 0}
+.team-summary:empty{display:none}
+.team-card{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border:1px solid var(--border);border-left:4px solid var(--muted);border-radius:10px;background:var(--card);box-shadow:var(--shadow)}
+.team-card.fullstack{border-left-color:var(--blue)}
+.team-card.projects{border-left-color:var(--purple)}
+.team-card.support{border-left-color:var(--orange,#ea580c)}
+.team-card.negative{border-left-color:var(--red)}
+.team-card-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text2)}
+.team-card strong{font-size:22px;color:var(--text)}
+.team-card strong small{font-size:12px;font-weight:600;color:var(--text2)}
+.team-card.negative strong{color:var(--red)}
+.team-card>small{font-size:11px;line-height:1.45;color:var(--text2)}
+.team-card>small b{color:var(--red)}
+
+/* Capacity: duas linhas com os mesmos cards (previsto e registrado), cada um com barra contra a capacidade */
+.team-summary-rows{margin:12px 0}
+.team-summary-rows:empty{display:none}
+.team-summary-title{margin:10px 0 6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text)}
+.team-summary-title small{font-size:11px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--text2)}
+.team-summary-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.team-meter{display:block;height:6px;border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--muted) 22%,var(--card))}
+.team-meter>span{display:block;height:100%;border-radius:999px;background:var(--muted)}
+/* Hierarquia: usado um pouco menor; capacidade e % em negrito */
+.team-card .team-card-value{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:inherit}
+.team-card .team-card-used{font-size:18px;font-weight:600;color:var(--text)}
+.team-card .team-card-value b{font-size:15px;font-weight:800;color:var(--text)}
+/* Semáforo: verde com saldo, amarelo perto do limite, vermelho na capacidade ou acima */
+.team-card.level-green{border-left-color:var(--green);background:color-mix(in srgb,var(--green) 5%,var(--card))}
+.team-card.level-yellow{border-left-color:var(--yellow);background:color-mix(in srgb,var(--yellow) 9%,var(--card))}
+.team-card.level-red{border-left-color:var(--red);background:color-mix(in srgb,var(--red) 8%,var(--card))}
+.team-card.level-green .team-meter>span{background:var(--green)}
+.team-card.level-yellow .team-meter>span{background:var(--yellow)}
+.team-card.level-red .team-meter>span{background:var(--red)}
+/* Cabeçalho do card: nome à esquerda e caixinha de horas disponíveis no canto direito */
+.team-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.team-card-head .team-card-label{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.team-card-available{flex:none;padding:2px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;background:var(--card);color:var(--text)}
+.team-card.level-green .team-card-available{border-color:color-mix(in srgb,var(--green) 45%,var(--card));background:color-mix(in srgb,var(--green) 12%,var(--card));color:var(--green)}
+.team-card.level-yellow .team-card-available{border-color:color-mix(in srgb,var(--yellow) 55%,var(--card));background:color-mix(in srgb,var(--yellow) 16%,var(--card));color:var(--yellow)}
+.team-card.level-red .team-card-available{border-color:color-mix(in srgb,var(--red) 50%,var(--card));background:color-mix(in srgb,var(--red) 14%,var(--card));color:var(--red)}
+.team-card.level-yellow .team-card-value b{color:var(--yellow)}
+.team-card.level-red .team-card-value b,.team-card.level-red .team-card-used{color:var(--red)}
+
+/* Composição dentro de um card existente (Consumo de horas, Planning) */
+.team-parts{display:block;margin-top:6px;font-size:11px;line-height:1.45;color:var(--text2)}
+.team-parts.team-alert{color:var(--red);font-weight:600}
+/* Planning · carga do time em duas partes (Full stack e Projetos), no fundo escuro da mesa. Tudo dentro de .pp-game,
+   que o tema escuro mantém como está (a mesa já é escura nos dois temas). */
+.pp-game .pp-load-teams{display:grid;gap:12px}
+.pp-game .pp-load-team{padding:10px 12px 12px;border:1px solid rgba(255,255,255,.08);border-left:4px solid #9fb0c6;border-radius:10px;background:rgba(255,255,255,.03)}
+.pp-game .pp-load-team.level-green{border-left-color:#3fb950}
+.pp-game .pp-load-team.level-yellow{border-left-color:#f2c94c}
+.pp-game .pp-load-team.level-red{border-left-color:#e05252}
+.pp-game .pp-load-team-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 16px;margin-bottom:10px}
+.pp-game .pp-load-team-head h3{margin:0;font-size:13px;color:#e6ebf2}
+.pp-game .pp-load-team-head h3 small{font-size:10.5px;font-weight:500;color:#9fb0c6}
+.pp-game .pp-load-stats{display:flex;gap:18px;margin:0}
+.pp-game .pp-load-stats div{display:flex;flex-direction:column;align-items:flex-end}
+.pp-game .pp-load-stats dt{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#9fb0c6}
+.pp-game .pp-load-stats dd{margin:0;font-size:15px;font-weight:700;color:#e6ebf2}
+.pp-game .pp-load-stats dd b{margin-left:4px;font-size:13px}
+.pp-game .pp-load-team.level-green .pp-load-stats .planned b{color:#3fb950}
+.pp-game .pp-load-team.level-yellow .pp-load-stats .planned b{color:#f2c94c}
+.pp-game .pp-load-team.level-red .pp-load-stats .planned b,.pp-game .pp-load-team.level-red .pp-load-stats .available dd{color:#ff8a8a}
+.pp-game .pp-load-stats .available b{color:#9fb0c6}
+.pp-game .pp-load-team-bar{grid-column:1/-1;display:block;height:8px;border-radius:4px;background:#22344d;overflow:hidden}
+.pp-game .pp-load-team-bar>span{display:block;height:100%;border-radius:4px;background:#9fb0c6}
+.pp-game .pp-load-team.level-green .pp-load-team-bar>span{background:#3fb950}
+.pp-game .pp-load-team.level-yellow .pp-load-team-bar>span{background:#f2c94c}
+.pp-game .pp-load-team.level-red .pp-load-team-bar>span{background:#e05252}
+.pp-game .pp-load-empty{margin:0;font-size:11.5px;color:#9fb0c6}
+@media (max-width:760px){.pp-game .pp-load-team-head{grid-template-columns:1fr}.pp-game .pp-load-stats{justify-content:space-between}.pp-game .pp-load-stats div{align-items:flex-start}}
+
+/* Tabelas por time */
+.team-group-row td{padding:8px 12px;font-size:12px;font-weight:600;color:var(--text2);background:color-mix(in srgb,var(--blue) 5%,var(--card))}
+.team-group-row.projects td{background:color-mix(in srgb,var(--purple) 6%,var(--card))}
+.team-group-row .team-badge{margin:0 6px 0 0}
+.cap-inherited{display:block;margin-top:3px;font-size:10px;color:var(--muted)}
+.cap-hours-input:disabled{opacity:.7;cursor:not-allowed}
+.team-table-title{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0 8px;font-size:13px;color:var(--text)}
+.team-table-title small{font-size:11px;font-weight:500;color:var(--text2)}
+/* Consumo de horas: as duas tabelas no tamanho natural, uma embaixo da outra; a rolagem é a da página. */
+.cons-individual .team-table-title{flex:none;margin:6px 0 2px;font-size:12px}
+.cons-individual [hidden]{display:none!important}
+.cons-card .team-parts{margin-top:4px;font-size:10px;line-height:1.35}
+/*
+ * Padrão dos cards de horas (Capacity, Consumo de horas e Torre de controle): Previsto e Registrado na lateral,
+ * nome e caixinha de disponível em cima, valor e barra lado a lado, notas numa linha (texto completo no tooltip).
+ */
+.team-summary-compact{display:grid;grid-template-columns:128px minmax(0,1fr);gap:6px 10px;align-items:center}
+.team-summary-compact:empty{display:none}
+.team-summary-compact .team-summary-title{margin:0}
+.team-summary-compact .team-summary-title small{display:block;margin-top:2px;font-size:10px;line-height:1.25}
+.team-summary-compact .team-summary-row{gap:10px}
+.team-summary-compact .team-card-value{flex-wrap:nowrap;white-space:nowrap;line-height:1.15}
+.team-summary-compact .team-card .team-card-used{font-size:16px}
+.team-summary-compact .team-card-value b{font-size:14px}
+.team-summary-compact .team-card-label{font-size:10px;letter-spacing:.02em}
+.team-summary-compact .team-card{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:10px;row-gap:3px;padding:6px 12px}
+.team-summary-compact .team-card>.team-card-head,.team-summary-compact .team-card>small{grid-column:1/-1}
+.team-summary-compact .team-card-available{padding:1px 6px;font-size:10px}
+.team-summary-compact .team-card>small{font-size:10px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:700px){.team-summary-compact{grid-template-columns:1fr}}
+/* Resumo de horas dentro da barra superior, em todas as telas (public/hours-strip.js) */
+/* Centralizada na barra; em janelas mais estreitas, ocupa o espaço entre o título e o intervalo de sprints */
+.tb-hours{display:flex;align-items:center;justify-content:center;margin:0 auto;min-width:0;height:100%}
+.tb-hours[hidden]{display:none}
+.tb-hours:not([hidden])+.topbar-right{margin-left:0}
+body.consumption-view .topbar>.tb-hours:not([hidden]){display:flex}
+@media (min-width:1500px){.tb-hours{position:absolute;left:50%;top:0;transform:translateX(-50%)}.tb-hours:not([hidden])+.topbar-right{margin-left:auto}}
+/* Tabela: rótulos das linhas à esquerda, uma coluna por parte da capacidade */
+/* Cabe nos 52px da barra: cabeçalho e duas linhas (Planejado e Realizado); cada parte tem uso + Disponível */
+.tb-hours-table{display:grid;grid-template-columns:auto repeat(4,auto auto);grid-auto-rows:13px;align-items:center;row-gap:2px;padding:3px 2px;border-radius:7px;cursor:pointer;font-size:10.5px;line-height:13px;white-space:nowrap;outline-offset:1px}
+.tb-hours-table:hover{background:color-mix(in srgb,var(--muted) 8%,var(--card))}
+.tb-hours-table>span{padding:0 8px;height:13px}
+/* Separador vertical antes de cada parte (coluna de uso); a coluna Disponível fica colada a ela */
+.tb-hours-table>span.tb-hours-col:not(.tb-hours-col-available),.tb-hours-table>span.tb-hours-cell:not(.tb-hours-available){border-left:1px solid var(--border);padding-left:12px}
+.tb-hours-table>span.tb-hours-col-available,.tb-hours-table>span.tb-hours-available{padding-left:2px;padding-right:12px}
+.tb-hours-col-available{font-size:8.5px;color:var(--muted)}
+.tb-hours-corner{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.tb-hours-col{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);text-align:center}
+.tb-hours-col.fullstack{color:var(--blue)}
+.tb-hours-col.support{color:var(--orange,#ea580c)}
+.tb-hours-col.projects{color:var(--purple)}
+.tb-hours-row{font-size:10px;font-weight:700;color:var(--text2);cursor:help}
+.tb-hours-cell{display:flex;align-items:center;justify-content:center;gap:5px;color:var(--text2)}
+.tb-hours-cell i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.tb-hours-cell b{font-weight:700;color:var(--text)}
+.tb-hours-cell.level-green i{background:var(--green)}
+.tb-hours-cell.level-yellow i{background:var(--yellow)}
+.tb-hours-cell.level-red i{background:var(--red)}
+.tb-hours-cell.level-red b{color:var(--red)}
+.tb-hours-available strong{padding:0 6px;border-radius:3px;font-weight:700;line-height:13px}
+.tb-hours-available.level-green strong{background:color-mix(in srgb,var(--green) 14%,var(--card));color:var(--green)}
+.tb-hours-available.level-yellow strong{background:color-mix(in srgb,var(--yellow) 18%,var(--card));color:var(--yellow)}
+.tb-hours-available.level-red strong{background:color-mix(in srgb,var(--red) 14%,var(--card));color:var(--red)}
+/* Barra estreita: some o subtítulo da tela; abaixo disso, o resumo inteiro (as telas continuam com os cards) */
+@media (max-width:1500px){.topbar:has(.tb-hours:not([hidden])) .topbar-sub{display:none}}
+@media (max-width:1180px){.tb-hours{display:none!important}}
+/* Consumo de horas: a página rola normalmente, então os cards ficam como nas outras telas */
+.cons-teams{flex:none;margin:0}
+#cons-support-projects{flex:none;margin:0 0 6px}
+.cons-composition h2 .team-parts{display:inline;margin:0 0 0 6px;font-weight:500}
+/* Composição e reserva lado a lado: os cards do topo já mostram o Bombeiro contra a reserva */
+.cons-mid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:10px;flex:none;align-items:stretch}
+/* Composição empilhada: título, barra e legenda, cada um na largura toda do card */
+.cons-mid .cons-composition{grid-template-columns:minmax(0,1fr);align-content:center;row-gap:6px}
+.cons-mid .cons-composition>*{grid-column:1}
+.cons-mid .cons-legend{justify-content:space-between}
+.cons-mid .cons-reserve{grid-template-columns:auto minmax(0,1fr) auto;gap:12px;padding:6px 12px}
+.cons-mid .cons-reserve strong{font-size:16px;white-space:nowrap}
+.cons-mid .cons-reserve p{margin-top:2px}
+.cons-mid .cons-composition{padding:6px 12px}
+@media (max-width:1100px){.cons-mid{grid-template-columns:1fr}}
+
+@media (max-width:640px){
+  .team-counts{margin-left:0;width:100%}
+  .team-row{flex-direction:column;align-items:flex-start}
+}

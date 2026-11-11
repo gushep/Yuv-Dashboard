@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Torre de controle · testes</title>
+<link rel="stylesheet" href="../public/teams.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0}</style>
+<main class="main"><div class="content" id="fixture"></div></main><pre id="test-result">RUNNING</pre>
+<script>
+window.DATA = [];
+window.MONDAY_SPRINT_DATES = {17: {start: '2026-09-28', end: '2026-10-09'}};
+// Reserva do Bombeiro salva para a sprint 17: 8h.
+window.mondayRequest = async path => {
+  if (path === '/api/support-reserves') return {reserves: {17: 480}, defaultMinutes: 4800};
+  throw new Error(`Rota inesperada: ${path}`);
+};
+const row = (Id, Responsavel, Tipo, EstH, RealH) => ({Id, Nome: `Card ${Id}`, Responsavel, Tipo, Planejada: 'Planejada', EstH, RealH, Status: 'Em progresso', Sprint: 17});
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    document.getElementById('fixture').innerHTML = await (await fetch('../resources/views/control-tower.blade.php')).text();
+    document.getElementById('tower-content').hidden = false;
+    await load('../public/sprint-rules.js'); await load('../public/capacity.js'); await load('../public/control-tower.js');
+    SprintRules.applySettings({team: [{id: '1', name: 'Ana', group: 'fullstack'}, {id: '2', name: 'Carla', group: 'projects'}], capacityOverrides: {'17|Carla': 2400}});
+    DATA.push(row('1', 'Ana', 'Melhoria', 20, 10), row('2', 'Ana', 'Suporte', 5, 9), row('3', 'Carla', 'Melhoria', 38, 12));
+    await ControlTower.loadReserves();
+    ControlTower.renderHours(17);
+    const rows = [...document.querySelectorAll('#tower-hours .team-summary-row')];
+    const text = index => rows[index].textContent.replace(/\s+/g, ' ');
+    check('Duas linhas com os quatro cards do Capacity', rows.length === 2 && rows.every(node => node.querySelectorAll('.team-card').length === 4));
+    check('Planejadas: total, Full stack sem o Bombeiro, Bombeiro e Projetos', text(0).includes('63h de 120h') && text(0).includes('20h de 72h') && text(0).includes('5h de 8h') && text(0).includes('38h de 40h'));
+    check('Utilizadas e disponíveis', text(1).includes('31h de 120h') && text(1).includes('Disponível 62h') && text(1).includes('9h de 8h') && text(1).includes('1h acima da capacidade'));
+    const levels = index => [...rows[index].querySelectorAll('.team-card')].map(card => card.className.match(/level-(\w+)/)[1]).join();
+    check('Semáforo do Capacity', levels(0) === 'green,green,green,yellow' && levels(1) === 'green,green,red,green');
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

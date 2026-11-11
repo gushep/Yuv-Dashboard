@@ -1,6 +1,6 @@
 <div class="page" id="page-planning" data-url="{{ route('planning.show') }}" data-history-url="{{ route('planning.history') }}">
   <header class="cap-hero">
-    <div class="cap-heading"><img src="{{ asset('yuv-logo.png') }}" alt="YUV"><span class="cap-divider"></span><div><h1>Planning poker</h1><p id="pp-subtitle">Planejamento das sprints com o time na mesa</p></div></div>
+    <div class="cap-heading"><img src="{{ asset('yuv-logo.png') }}" alt="YUV"><span class="cap-divider"></span><div><h1>Sprint Planning</h1><p id="pp-subtitle">Planejamento das sprints com o time na mesa</p></div></div>
     <div class="pp-hero-actions" id="pp-hero-actions"></div>
   </header>
   <p id="planning-error" class="cap-message cap-error" role="alert" hidden></p>

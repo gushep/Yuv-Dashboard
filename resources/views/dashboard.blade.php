@@ -39,6 +39,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .nav-item.active{color:var(--blue);border-left-color:var(--blue);background:var(--blue-bg);font-weight:600}
 .nav-item:focus-visible,.sidebar-action:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
 .nav-item svg,.sidebar-action svg{width:20px;height:20px;flex-shrink:0}
+/* Botão do tour da tela, sempre no canto direito da barra superior */
+.tb-tour{display:inline-flex;align-items:center;gap:6px;flex:none;margin-left:12px;padding:5px 11px;border:1px solid var(--border);border-radius:999px;background:var(--card);color:var(--text2);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.tb-tour[hidden]{display:none}
+.tb-tour svg{width:16px;height:16px}
+.tb-tour:hover{color:var(--blue);border-color:var(--blue);background:var(--blue-bg)}
+.tb-tour:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media(max-width:640px){.tb-tour span{display:none}.tb-tour{padding:5px 7px}}
+/* Telas que escondem o título e o intervalo de sprints da barra: o botão continua no canto direito */
+body:is(.capacity-view,.consumption-view,.release-view) .topbar>.tb-tour{margin-left:auto}
+/* Telas em construção do Gerenciamento Ágil */
+.under-construction{display:flex;flex-direction:column;align-items:center;gap:8px;max-width:560px;margin:48px auto;padding:36px 28px;border:1px dashed var(--border);border-radius:14px;background:var(--card);text-align:center}
+.under-construction svg{width:52px;height:52px;color:var(--orange,#ea580c)}
+.under-construction h2{margin:0;font-size:18px;color:var(--text)}
+.under-construction p{margin:0;font-size:13px;line-height:1.5;color:var(--text2)}
+.under-construction small{font-size:11px;color:var(--muted)}
+/* Grupo recolhível do menu (Gerenciamento Ágil): título com seta e itens recuados */
+.nav-group-toggle .nav-chevron{width:16px;height:16px;margin-left:auto;transition:transform .15s}
+.nav-group.open>.nav-group-toggle .nav-chevron{transform:rotate(180deg)}
+.nav-group.has-active>.nav-group-toggle{color:var(--blue);font-weight:600}
+.nav-sub[hidden]{display:none}
+.nav-sub .nav-item{padding-left:34px;font-size:12.5px}
+.nav-sub .nav-item svg{width:18px;height:18px}
 .nav-group-label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;padding:14px 18px 4px}
 .sidebar-footer{padding:6px 0 10px;border-top:1px solid var(--border)}
 .sidebar-footer form{margin:0}
@@ -70,6 +92,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .sidebar{transform:translateX(0);width:var(--sidebar-rail-w);transition:width .18s ease,box-shadow .18s ease}
   .sidebar:is(:hover,:has(:focus-visible)):not(.suppressed){width:var(--sidebar-w);box-shadow:var(--shadow-md);transition-delay:.12s}
   .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) :is(.logo-text span,.nav-label,.sidebar-version){display:none}
+  .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) .nav-sub .nav-item{padding-left:20px}
   .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) .sidebar-logo{padding:0 10px}
   .sidebar:is(:not(:hover):not(:has(:focus-visible)),.suppressed) .sidebar-brand-image{width:44px}
   .main{margin-left:var(--sidebar-rail-w)}
@@ -249,6 +272,9 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="{{ URL::versioned('capacity.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('forecast.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('consumption.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('teams.css') }}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
+<link rel="stylesheet" href="{{ URL::versioned('tour.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('release.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('control-tower.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('kpi-table.css') }}">
@@ -290,12 +316,49 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <span class="nav-label">Dashboard</span>
     </button>
     @endcan
-    @can('access-screen', 'sprint')
-    <button type="button" class="nav-item" onclick="navigate('sprint')" id="nav-sprint">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-      <span class="nav-label">Sprints</span>
-    </button>
-    @endcan
+    @php($agileScreens = ['sprint', 'planning', 'daily-scrum', 'sprint-review', 'sprint-retrospective'])
+    @if(collect($agileScreens)->contains(fn ($screen) => auth()->user()->can('access-screen', $screen)))
+    {{-- Gerenciamento Ágil: os eventos do Scrum num grupo recolhível; abre sozinho quando a tela aberta é dele. --}}
+    <div class="nav-group" id="nav-group-agile" data-screens="{{ implode(',', $agileScreens) }}">
+      <button type="button" class="nav-item nav-group-toggle" aria-expanded="false" aria-controls="nav-agile-items" onclick="toggleNavGroup(this.parentElement)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/><path d="M12 8v4l3 2"/></svg>
+        <span class="nav-label">Gerenciamento Ágil</span>
+        <svg class="nav-chevron nav-label" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="nav-sub" id="nav-agile-items" hidden>
+        @can('access-screen', 'sprint')
+        <button type="button" class="nav-item" onclick="navigate('sprint')" id="nav-sprint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <span class="nav-label">Sprints</span>
+        </button>
+        @endcan
+        @can('access-screen', 'planning')
+        <button type="button" class="nav-item" onclick="navigate('planning')" id="nav-planning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="11" height="15" rx="2"/><path d="M8 6V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-7"/><path d="M7.5 11v5M5 13.5h5"/></svg>
+          <span class="nav-label">Sprint Planning</span>
+        </button>
+        @endcan
+        @can('access-screen', 'daily-scrum')
+        <button type="button" class="nav-item" onclick="navigate('daily-scrum')" id="nav-daily-scrum">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>
+          <span class="nav-label">Daily Scrum</span>
+        </button>
+        @endcan
+        @can('access-screen', 'sprint-review')
+        <button type="button" class="nav-item" onclick="navigate('sprint-review')" id="nav-sprint-review">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M7 12l3-3 2 2 4-4"/></svg>
+          <span class="nav-label">Sprint Review</span>
+        </button>
+        @endcan
+        @can('access-screen', 'sprint-retrospective')
+        <button type="button" class="nav-item" onclick="navigate('sprint-retrospective')" id="nav-sprint-retrospective">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M9 12l2 2 4-4"/></svg>
+          <span class="nav-label">Sprint Retrospective</span>
+        </button>
+        @endcan
+      </div>
+    </div>
+    @endif
     @can('access-screen', 'epicos')
     <button type="button" class="nav-item" onclick="navigate('epicos')" id="nav-epicos">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg>
@@ -312,12 +375,6 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <button type="button" class="nav-item" onclick="navigate('raw')" id="nav-raw">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
       <span class="nav-label">Tarefas</span>
-    </button>
-    @endcan
-    @can('access-screen', 'planning')
-    <button type="button" class="nav-item" onclick="navigate('planning')" id="nav-planning">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="11" height="15" rx="2"/><path d="M8 6V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-7"/><path d="M7.5 11v5M5 13.5h5"/></svg>
-      <span class="nav-label">Planning poker</span>
     </button>
     @endcan
     @can('access-screen', 'bombeiro')
@@ -382,6 +439,10 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <span class="nav-label">Baixar app Android</span>
     </a>
     @endif
+    <button type="button" class="sidebar-action" id="tour-button" onclick="Tour.start()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"/></svg>
+      <span class="nav-label">Tour das novidades</span>
+    </button>
     <button type="button" class="sidebar-action theme-toggle" onclick="Theme.toggle()" aria-pressed="{{ auth()->user()->theme === App\Theme::Dark ? 'true' : 'false' }}">
       <svg class="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       <svg class="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
@@ -401,7 +462,13 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div><div class="topbar-title" id="tb-title">Dashboard</div><div class="topbar-sub" id="tb-sub">aguardando dados do Monday</div></div>
+    <div class="tb-hours" id="tb-hours" role="group" aria-label="Horas da sprint: previsto e registrado contra a capacidade" hidden></div>
     <div class="topbar-right" id="tb-right"></div>
+    {{-- Tour guiado da tela aberta (public/screen-tours.js); o "Tour das novidades" continua no menu lateral. --}}
+    <button type="button" class="tb-tour" id="tb-tour" onclick="Tour.startScreen()" title="Tour guiado desta tela" aria-label="Tour guiado desta tela" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+      <span>Tour</span>
+    </button>
   </div>
   <div class="content">
 
@@ -599,6 +666,9 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     @include('control-tower')
     @include('burndown')
     @include('planning')
+    @include('under-construction', ['screen' => 'daily-scrum', 'title' => 'Daily Scrum', 'subtitle' => 'O alinhamento diário do time', 'description' => 'Aqui o time vai acompanhar o andamento diário da sprint: o que avançou, o que vem a seguir e os impedimentos.'])
+    @include('under-construction', ['screen' => 'sprint-review', 'title' => 'Sprint Review', 'subtitle' => 'A revisão do que foi entregue na sprint', 'description' => 'Aqui o time vai apresentar o que foi entregue na sprint e registrar o retorno de quem participou da revisão.'])
+    @include('under-construction', ['screen' => 'sprint-retrospective', 'title' => 'Sprint Retrospective', 'subtitle' => 'O que manter e o que melhorar na próxima sprint', 'description' => 'Aqui o time vai registrar o que funcionou, o que melhorar e as ações combinadas para a próxima sprint.'])
     @include('users')
 
     <!-- SEM ACESSO -->
@@ -614,11 +684,13 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
           <span id="cap-dates">Datas não disponíveis</span>
         </div>
       </header>
-      <div class="cap-info"><span class="cap-info-icon" aria-hidden="true">i</span><strong id="cap-reference"></strong><span id="cap-calendar"></span><label class="cap-dev-filter">Dev <select id="cap-developer" aria-label="Filtrar desenvolvedor"><option value="all">Todos</option></select></label><span id="cap-last-sync" role="status">Carregando dados...</span></div><p id="cap-pace" class="cap-pace" role="status"></p>
+      <div class="cap-info"><span class="cap-info-icon" aria-hidden="true">i</span><strong id="cap-reference"></strong><span id="cap-calendar"></span><label class="cap-dev-filter">Dev <select id="cap-developer" aria-label="Filtrar desenvolvedor ou time"><option value="all">Todos</option></select></label><span id="cap-last-sync" role="status">Carregando dados...</span></div>
+      <section class="team-summary-rows team-summary-compact" id="cap-teams" aria-label="Capacidade da sprint: previsto e registrado"></section>
+      <p id="cap-pace" class="cap-pace" role="status"></p>
       <div id="cap-error" class="cap-message cap-error" role="status" hidden></div>
       <details id="cap-quality" class="cap-quality" hidden><summary id="cap-warning-summary"></summary><div id="cap-warning" class="cap-message cap-warning"></div></details>
       <div class="cap-table-scroll"><table class="cap-table"><thead><tr class="cap-groups">
-        <th rowspan="2">Desenvolvedor</th><th rowspan="2" title="Edite a capacidade desta pessoa e sprint; o valor é salvo ao sair do campo">Disponíveis ✎</th>
+        <th rowspan="2">Desenvolvedor</th><th rowspan="2" id="cap-hours-head" title="Capacidade da pessoa nesta sprint. Sem valor salvo, vale o da última sprint salva; sem nenhum, o padrão das Configurações. Só o Maestro Scrum altera.">Disponíveis ✎</th>
         <th colspan="4" class="cap-group-start cap-group-estimate">Horas previstas <small>tempo estimado</small></th>
         <th colspan="4" class="cap-group-start cap-group-real">Horas registradas <small>tempo real</small></th>
         <th colspan="3" class="cap-group-start cap-group-kpi">Indicadores</th>
@@ -632,6 +704,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <p class="cap-note">Entrega do planejado considera as estimativas das tarefas concluídas, e não o tempo real gasto.</p>
       <section id="cap-pending" class="cap-extra" hidden></section>
       <section id="cap-unassigned" class="cap-extra" hidden></section>
+      <section id="cap-outside" class="cap-extra" hidden></section>
     </div>
 
     <!-- PAINEL DO BOMBEIRO -->
@@ -745,9 +818,19 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
         <p>Valem para todas as telas. Concluído é somente "Implementado"; "Aguardando Deploy" e "QA - Aprovado" contam como feitos, não entregues; cancelados, descontinuados e despriorizados saem do total da sprint.</p>
         <div class="settings-grid">
           <label class="settings-field">Capacidade padrão por pessoa (horas por sprint)<input id="metric-capacity" type="number" min="0" max="200" step="0.5"></label>
-          <label class="settings-field">Pessoas fora das métricas individuais (uma por linha, ex.: QA)<textarea id="metric-excluded" rows="3"></textarea></label>
         </div>
-        <div class="settings-actions"><button type="button" id="metric-save" onclick="saveMetricSettings()">Salvar regras</button></div>
+        <div class="team-settings" id="team-settings">
+          <h3>Times da capacidade</h3>
+          <p><strong>Full stack</strong> atende os itens da sprint e a sustentação (a reserva do Bombeiro sai da capacidade dele). <strong>Projetos (IA)</strong> atende demandas próprias: aparece no total e nas telas, mas fica fora da conta da sprint. Quem fica <strong>sem time</strong> não entra em nenhuma métrica por pessoa (ex.: QA, gestores); os cards dele continuam nos totais da sprint. As horas de cada pessoa são ajustadas no Capacity.</p>
+          <div class="team-toolbar">
+            <input type="search" id="team-search" placeholder="Buscar pessoa" aria-label="Buscar pessoa">
+            <label class="team-only"><input type="checkbox" id="team-only-classified"> Só quem tem time</label>
+            <span class="team-counts" id="team-counts" aria-live="polite"></span>
+          </div>
+          <div class="team-legacy" id="team-legacy" hidden></div>
+          <div class="team-list" id="team-list" role="list" aria-label="Usuários ativos do Monday e seus times"></div>
+        </div>
+        <div class="settings-actions"><button type="button" id="metric-save" onclick="saveMetricSettings()">Salvar regras e times</button></div>
         <div class="settings-message" id="metric-status" aria-live="polite"></div>
       </div>
       <div class="settings-card">
@@ -766,6 +849,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
   <button type="button" id="carousel-next" aria-label="Próximo painel" title="Próximo painel">›</button>
   <label for="carousel-interval">Trocar a cada <select id="carousel-interval" aria-label="Intervalo de troca"><option value="15">15 s</option><option value="30" selected>30 s</option><option value="45">45 s</option><option value="60">60 s</option><option value="90">90 s</option></select></label>
   <button type="button" id="carousel-fullscreen" title="Abrir tela cheia">⛶ Tela cheia</button>
+  {{-- Na apresentação a barra superior some: o tour da tela fica aqui. --}}
+  <button type="button" id="carousel-tour" onclick="Tour.startScreen('carousel')" title="Tour guiado da apresentação">? Tour</button>
   <button type="button" id="carousel-exit">Sair</button>
   <span id="carousel-status" role="status">Troca automática a cada 30 segundos</span>
 </div>
@@ -955,6 +1040,8 @@ function trendHtml(cur,ref,higherIsBetter=true){
 let currentPage='dashboard', currentSprint=null, timeInited=false;
 /** Telas liberadas para o usuário logado; o servidor também bloqueia as APIs de cada tela. */
 const ALLOWED_SCREENS=@json(auth()->user()->screenValues());
+// Maestro Scrum: ajusta as horas do Capacity e a reserva de suporte (a API confere de novo).
+window.CAN_MANAGE_CAPACITY=@json(auth()->user()->can('manage-capacity'));
 function canAccessScreen(page){return ALLOWED_SCREENS.includes(page);}
 /** Endereço de cada tela (definido em App\Screen): recarregar, voltar e compartilhar o link mantêm a tela aberta. */
 const SCREEN_SLUGS=@json(\App\Screen::slugs());
@@ -1011,11 +1098,15 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   setActiveNav(`nav-${page}`);
   if(page==='sprint'&&sp!==null) document.getElementById('sprintSel').value=String(sp);
   document.getElementById('page-'+page)?.classList.add('active');
-  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Tarefas','tarefas das sprints · detalhe, status e evidências'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar'],burndown:['Burndown','quanto falta implementar na sprint, dia a dia'],planning:['Planning poker','estimativa em horas dos cards do Backlog do quadro Tarefas']};
+  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Tarefas','tarefas das sprints · detalhe, status e evidências'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar'],burndown:['Burndown','quanto falta implementar na sprint, dia a dia'],planning:['Sprint Planning','planning poker · estimativa em horas dos cards do Backlog do quadro Tarefas'],'daily-scrum':['Daily Scrum','Gerenciamento Ágil · em construção'],'sprint-review':['Sprint Review','Gerenciamento Ágil · em construção'],'sprint-retrospective':['Sprint Retrospective','Gerenciamento Ágil · em construção']};
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
   document.getElementById('tb-right').textContent=sp?`S${sp}`:sprintRangeLabel();
+  window.HoursStrip?.render();
+  // Botão do tour da tela, no canto direito da barra superior: aparece quando a tela aberta tem tour.
+  const tourButton=document.getElementById('tb-tour');
+  if(tourButton){const has=Boolean(window.ScreenTours?.has(page));tourButton.hidden=!has;tourButton.title=has?`Tour guiado da tela ${t}`:'';tourButton.setAttribute('aria-label',tourButton.title||'Tour guiado desta tela');}
   dismissSidebar();
   if(page==='dashboard') renderDashboard();
   else if(page==='sprint'&&SPRINTS.includes(sp)) renderSprint(sp);
@@ -1041,7 +1132,28 @@ function setActiveNav(id){
   document.querySelectorAll('.nav-item').forEach(e=>{e.classList.remove('active');e.removeAttribute('aria-current');});
   const ni=document.getElementById(id);
   if(ni){ni.classList.add('active');ni.setAttribute('aria-current','page');}
+  // Tela de um grupo (ex.: Gerenciamento Ágil): o grupo abre e o título dele fica marcado.
+  document.querySelectorAll('.nav-group').forEach(group=>{
+    const inside=Boolean(ni&&group.contains(ni));
+    group.classList.toggle('has-active',inside);
+    if(inside) toggleNavGroup(group,true);
+  });
 }
+/** Abre ou fecha um grupo do menu lateral; a escolha fica guardada no navegador. */
+function toggleNavGroup(group,open){
+  const items=group.querySelector('.nav-sub'), toggle=group.querySelector('.nav-group-toggle');
+  const next=open??items.hidden;
+  items.hidden=!next;
+  toggle.setAttribute('aria-expanded',String(next));
+  group.classList.toggle('open',next);
+  try{localStorage.setItem(`sprint-metrics-nav-${group.id}`,next?'1':'0');}catch{}
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.nav-group').forEach(group=>{
+    let saved=null;try{saved=localStorage.getItem(`sprint-metrics-nav-${group.id}`);}catch{}
+    if(saved==='1') toggleNavGroup(group,true);
+  });
+});
 /** Sprint ativa mais recente: a que contém hoje; sem ela, a última já iniciada; sem datas, a de maior número. */
 function defaultSprint(){
   const today=SprintRules.today(), dates=window.MONDAY_SPRINT_DATES||{};
@@ -1545,8 +1657,9 @@ function renderTimeIndividual(dev,rows,spFilter){
   const spRows=SPRINTS.map(s=>({s,...devStats(dev,DATA.filter(x=>x.Sprint===s))}));
   const totalItems=rows.length;
   const pctOfTeam=pct(st.tot,totalItems);
-  const sprintCount=spFilter==='all'?SPRINTS.length:1;
-  const cap=SprintRules.settings.capacityHours*sprintCount;
+  // Capacidade da pessoa em cada sprint do filtro (a salva no Capacity, a herdada ou o padrão).
+  const capOf=s=>SprintRules.capacityFor(undefined,s,dev).minutes/60;
+  const cap=spFilter==='all'?SPRINTS.reduce((sum,s)=>sum+capOf(s),0):capOf(spFilter);
   const ocup=pct(st.allocH,cap);
   const gap=f1(cap-st.allocH);
   const initials=dev.split(' ').filter((_,i,a)=>i===0||i===a.length-1).map(x=>x[0]).join('');
@@ -1584,7 +1697,7 @@ function renderTimeIndividual(dev,rows,spFilter){
     mk('tDevVolume',{type:'bar',data:{labels:L,datasets:[{label:'Itens',data:spRows.map(x=>x.tot),backgroundColor:'rgba(29,110,245,.5)',borderRadius:4}]},options:{...bOpts()}});
     mk('tDevHoursEvo',{type:'bar',data:{labels:L,datasets:[
       {label:'Horas registradas',data:spRows.map(x=>x.allocH),backgroundColor:'rgba(13,148,136,.6)',borderRadius:4},
-      {label:`Capacidade (${SprintRules.settings.capacityHours}h)`,data:SPRINTS.map(()=>SprintRules.settings.capacityHours),type:'line',borderColor:'#dc2626',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
+      {label:'Capacidade da pessoa',data:SPRINTS.map(s=>capOf(s)),type:'line',borderColor:'#dc2626',borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
     ]},options:{...bOpts('h')}});
     mk('tDevReworkEvo',{type:'bar',data:{labels:L,datasets:[
       {label:'Retrabalho (%)',data:spRows.map(x=>x.reworkPct),backgroundColor:spRows.map(x=>x.reworkPct>10?'rgba(220,38,38,.7)':'rgba(124,58,237,.6)'),borderRadius:4},
@@ -1987,6 +2100,7 @@ window.addEventListener('popstate',()=>{
 <script src="{{ URL::versioned('sprint-panel.js') }}"></script>
 <script src="{{ URL::versioned('panel-carousel.js') }}"></script>
 <script src="{{ URL::versioned('capacity.js') }}"></script>
+<script src="{{ URL::versioned('hours-strip.js') }}"></script>
 <script src="{{ URL::versioned('forecast.js') }}"></script>
 <script src="{{ URL::versioned('consumption.js') }}"></script>
 <script src="{{ URL::versioned('release.js') }}"></script>
@@ -1999,6 +2113,9 @@ window.addEventListener('popstate',()=>{
 <script src="{{ URL::versioned('bulk-edit.js') }}"></script>
 <script src="{{ URL::versioned('task-views.js') }}"></script>
 <script src="{{ URL::versioned('pipeline-export.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+<script src="{{ URL::versioned('screen-tours.js') }}"></script>
+<script src="{{ URL::versioned('tour.js') }}"></script>
 @can('create-tickets')
 <button type="button" id="nt-fab" class="nt-fab" aria-label="Nova solicitação" aria-expanded="false" title="Nova solicitação" data-user="{{ auth()->user()->name }}" onclick="NewTicket.toggleChat()">
   <svg class="nt-fab-chat" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.2 3.6c-.5.4-1.3.1-1.3-.6V16A2.5 2.5 0 0 1 4 13.5z"/><path d="M12 6.5v6M9 9.5h6" class="nt-fab-plus"/></svg>
