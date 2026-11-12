@@ -24,7 +24,7 @@ class SupportTicketTest extends TestCase
         $connection = MondayConnection::current();
         $connection->board_id = '123';
         $connection->token = 'token-secreto';
-        $connection->column_map = ['Sprint' => 'task_sprint', 'Status' => 'task_status', 'Tipo' => 'task_type', 'Prioridade' => 'task_priority'];
+        $connection->column_map = ['Sprint' => 'task_sprint', 'Status' => 'task_status', 'Tipo' => 'task_type', 'Prioridade' => 'task_priority', 'Planejada' => 'color_planned'];
         $connection->save();
         // Sprint 17 de 28/09 a 09/10; sprint 18 de 13/10 a 24/10 (há um fim de semana prolongado entre elas).
         Http::preventStrayRequests();
@@ -98,6 +98,7 @@ class SupportTicketTest extends TestCase
                 'task_status' => ['label' => 'Backlog'],
                 'task_priority' => ['label' => 'Alta'],
                 'task_sprint' => ['item_ids' => [5017]],
+                'color_planned' => ['label' => 'Não Planejado'],
                 'text_desc' => 'Cliente X não consegue emitir o relatório mensal.',
                 'text_client' => 'Transportadora Alfa',
             ]);
@@ -222,6 +223,17 @@ class SupportTicketTest extends TestCase
     /**
      * @return array{title: string, client: string, description: string, priority: string}
      */
+    public function test_ticket_is_refused_when_the_planned_column_has_no_unplanned_label(): void
+    {
+        $this->today('2026-10-01');
+        Http::fake(['api.monday.com/v2' => Http::response($this->columnsResponse(plannedLabels: ['2' => 'Planejada']))]);
+
+        $this->actingAs(User::factory()->withScreens(Screen::Firefighter)->canCreateTickets()->create())
+            ->postJson('/api/tickets', $this->ticket())->assertUnprocessable()
+            ->assertJsonPath('error', 'A coluna Planejada não tem o rótulo "Não Planejado".');
+        Http::assertNotSent(fn (Request $request): bool => str_contains((string) $request['query'], 'create_item'));
+    }
+
     private function ticket(): array
     {
         return ['title' => 'Erro ao emitir relatório', 'client' => 'Transportadora Alfa', 'description' => 'Cliente X não consegue emitir o relatório mensal.', 'priority' => 'Alta'];
@@ -231,7 +243,7 @@ class SupportTicketTest extends TestCase
      * @param  array<string, string>  $typeLabels
      * @return array<string, mixed>
      */
-    private function columnsResponse(array $typeLabels = ['0' => 'Bug', '9' => 'Suporte'], bool $withClient = true): array
+    private function columnsResponse(array $typeLabels = ['0' => 'Bug', '9' => 'Suporte'], bool $withClient = true, array $plannedLabels = ['1' => 'Não Planejado', '2' => 'Planejada']): array
     {
         $status = fn (array $labels): string => json_encode(['labels' => $labels], JSON_UNESCAPED_UNICODE);
 
@@ -241,6 +253,7 @@ class SupportTicketTest extends TestCase
             ['id' => 'task_priority', 'title' => 'Prioridade', 'type' => 'status', 'settings_str' => $status(['0' => 'Crítica', '2' => 'Alta', '5' => 'Baixa', '7' => 'Média', '12' => 'Baixa'])],
             ['id' => 'task_type', 'title' => 'Tipo', 'type' => 'status', 'settings_str' => $status($typeLabels)],
             ['id' => 'task_sprint', 'title' => 'Sprint', 'type' => 'board_relation', 'settings_str' => '{"boardIds":[456]}'],
+            ['id' => 'color_planned', 'title' => 'Planejada', 'type' => 'status', 'settings_str' => $status($plannedLabels)],
             ['id' => 'text_desc', 'title' => 'Descrição', 'type' => 'text', 'settings_str' => '{}'],
             ...($withClient ? [['id' => 'text_client', 'title' => 'Cliente', 'type' => 'text', 'settings_str' => '{}']] : []),
         ]]]]];

@@ -1,6 +1,8 @@
 /* Sprint Retrospective: mesma identidade da Sprint Planning e da Daily (tokens do tema, semáforo, botões pp-*). */
 .rt-live{align-items:center}
 .rt-live[hidden]{display:none}
+.rt-live .cer-bar{margin:0}
+.rt-attendance{margin-top:4px}
 .rt-live .pp-primary{margin-left:auto}
 .rt-dot{width:8px;height:8px;flex:none;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 25%,transparent)}
 .rt-small{padding:5px 10px;font-size:11.5px}

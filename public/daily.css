@@ -139,6 +139,15 @@
 .daily-retro-form textarea{padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:var(--card);color:var(--text);font:inherit;font-size:12.5px}
 .daily-action-buttons.row{flex-direction:row}
 
+/* Histórico das Dailies da sprint */
+.daily-history-rows{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.daily-history-row{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,240px);gap:12px;align-items:center;width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.daily-history-row:hover{border-color:var(--blue)}
+.daily-history-row.selected{border-color:var(--blue);background:var(--blue-bg)}
+.daily-history-row strong{font-size:13px}
+.daily-history-actions{font-size:11.5px;color:var(--text2);text-align:right}
+@media (max-width:700px){.daily-history-row{grid-template-columns:1fr}.daily-history-actions{text-align:left}}
+
 /* Conclusão */
 .daily-done-dialog{width:min(640px,calc(100vw - 32px))}
 .daily-done-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 12px;margin:0 0 10px}

@@ -58,7 +58,7 @@ class RetrospectiveService
         ['title' => '↔️ Divergir para convergir', 'text' => 'Registrar divergências sem forçar consenso imediato.'],
     ];
 
-    public function __construct(private MondaySnapshotService $snapshots, private PlanningService $planning) {}
+    public function __construct(private MondaySnapshotService $snapshots, private PlanningService $planning, private SprintReviewService $reviews) {}
 
     // ── Tela inicial ─────────────────────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ class RetrospectiveService
     {
         $today = SprintRules::today();
         $sprints = $this->sprints($connection)->filter(fn (array $sprint): bool => $sprint['start'] <= $today)->take(self::HISTORY_SPRINTS)->values();
-        $retros = Retrospective::query()->whereIn('sprint', $sprints->pluck('number'))->with(['facilitator', 'cards', 'topics', 'actions'])->get()->keyBy('sprint');
+        $retros = Retrospective::query()->whereIn('sprint', $sprints->pluck('number'))->with(['facilitator', 'cards', 'topics', 'actions', 'participants.user'])->get()->keyBy('sprint');
         $actions = RetrospectiveAction::query()->with(['retrospective.facilitator', 'responsible', 'closer', 'events.user'])->get();
         $open = $this->openRetro();
         $presented = $actions->map(fn (RetrospectiveAction $action): array => $this->presentAction($action, $user, $today, $open))
@@ -85,7 +85,9 @@ class RetrospectiveService
             'actions' => $presented->all(),
             'open' => $open ? [
                 'sprint' => $open->sprint, 'sprintName' => $open->sprint_name, 'facilitator' => $open->facilitator?->name,
-                'present' => $this->presentParticipants($open)->count(), 'step' => $open->step, 'stepName' => self::STEPS[$open->step]['name'],
+                'present' => $this->presentParticipants($open)->map(fn (RetrospectiveParticipant $participant): ?string => $participant->user?->name)->filter()->values()->all(),
+                'elapsedSeconds' => array_sum($this->stepSeconds($open)),
+                'step' => $open->step, 'stepName' => self::STEPS[$open->step]['name'],
             ] : null,
             'sprints' => $sprints->map(fn (array $sprint): array => [
                 ...$sprint, 'current' => $sprint['start'] <= $today && $sprint['end'] >= $today,
@@ -139,7 +141,7 @@ class RetrospectiveService
             ?? throw new RuntimeException("Sprint {$sprint} não encontrada no cronograma de sprints do Monday.");
         $retro = Retrospective::query()->where('sprint', $sprint)->first();
 
-        return ['sprint' => $info, 'sprintGoal' => $this->planning->goal($sprint), 'dailyStats' => $this->dailyStats($sprint), 'retro' => $retro ? $this->present($retro, $user) : null];
+        return ['sprint' => $info, 'sprintGoal' => $this->planning->goal($sprint), 'dailyStats' => $this->dailyStats($sprint), 'review' => $this->reviews->summaryFor($sprint), 'retro' => $retro ? $this->present($retro, $user) : null];
     }
 
     /**
@@ -549,6 +551,8 @@ class RetrospectiveService
             'cards' => ['keep' => $cards->where('column', 'keep')->count(), 'improve' => $cards->where('column', 'improve')->count(), 'try' => $cards->where('column', 'try')->count()],
             'focus' => $retro->topics->whereNotNull('focus')->count(),
             'actions' => $this->actionKpis($retro->actions, $today),
+            'attendees' => $retro->participants->map(fn (RetrospectiveParticipant $participant): ?string => $participant->user?->name)->filter()->sort()->values()->all(),
+            'durationSeconds' => array_sum($this->stepSeconds($retro)),
         ];
     }
 
@@ -608,7 +612,10 @@ class RetrospectiveService
             ])->all(),
             'metrics' => $retro->metrics,
             'dailyStats' => $this->dailyStats($retro->sprint),
+            // Resultado da Sprint Review da mesma sprint (aceite das entregas e objetivo), para a etapa Dados.
+            'review' => $this->reviews->summaryFor($retro->sprint),
             'participants' => $retro->isOpen() ? $this->presentParticipants($retro)->map(fn (RetrospectiveParticipant $participant): array => ['id' => $participant->user_id, 'name' => $participant->user?->name])->values()->all() : [],
+            'attendees' => $retro->participants()->with('user')->get()->map(fn (RetrospectiveParticipant $participant): ?string => $participant->user?->name)->filter()->sort()->values()->all(),
             'users' => $retro->isOpen() ? User::query()->orderBy('name')->get(['id', 'name'])->map(fn (User $person): array => ['id' => $person->id, 'name' => $person->name])->all() : [],
             'serverNow' => now()->toIso8601String(),
             'stepStartedAt' => $retro->step_started_at?->toIso8601String(),

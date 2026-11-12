@@ -10,10 +10,6 @@ window.ScreenTours = (() => {
     {element: '#tb-hours', title: 'Horas da sprint na barra superior', description: 'Resumo das horas da sprint em andamento: para Capacidade, Full stack, Bombeiro e Projetos, o <strong>Planejado</strong> e o <strong>Realizado</strong> contra a capacidade, com a coluna <strong>Disponível</strong> e a cor do semáforo. Clique para abrir o Capacity.'},
     {element: '#tb-tour', title: 'Tour desta tela', description: 'Este botão abre o tour da tela em que você está. As novidades da versão ficam no menu lateral, em <strong>Tour das novidades</strong>.'}
   ];
-  const underConstruction = (name, what) => () => [
-    {title: name, description: `${what} Esta tela faz parte do menu <strong>Gerenciamento Ágil</strong>, junto com Sprints e Sprint Planning, e ainda está <strong>em construção</strong>.`},
-    {element: '#nav-group-agile', title: 'Gerenciamento Ágil', description: 'Os eventos do Scrum ficam juntos neste grupo do menu lateral: Sprints, Sprint Planning, Daily Scrum, Sprint Review e Sprint Retrospective.'}
-  ];
 
   /** Título e passos de cada tela (valor usado em navigate()). */
   const TOURS = {
@@ -179,7 +175,12 @@ window.ScreenTours = (() => {
       {element: '#daily-actions', title: 'Feito e Reabrir', description: '<strong>Feito</strong> pede a resolução e registra a conclusão e o tempo de resolução. Com card vinculado, a resolução pode ir como comentário no card do Monday (permissão "Atualizar cards"); se o Monday falhar, dá para tentar de novo. <strong>Reabrir</strong> volta às pendências e guarda a conclusão anterior.'},
       {element: '#daily-retro', title: 'Ações das retrospectivas', description: 'As ações combinadas nas retrospectivas que ainda estão abertas, de qualquer sprint, com prazo e sinal de resultado. Aparecem em todas as Dailies até serem concluídas; só o responsável e o facilitador da retro concluem.'}
     ]},
-    'sprint-review': {title: 'Sprint Review', steps: underConstruction('Sprint Review', 'Aqui o time vai apresentar o que foi entregue na sprint e registrar o retorno de quem participou da revisão.')},
+    'sprint-review': {title: 'Sprint Review', steps: () => [
+      {title: 'Sprint Review', description: 'A revisão do que a sprint entregou, com o time na sala. Começa no último dia da sprint (ou antes, se ela já foi fechada no Monday), e quem inicia, conduz e marca o aceite das entregas é o Maestro Scrum.'},
+      {element: '#rv-kpis', title: 'Resultado das reviews', description: 'Reviews encerradas, % de aceite das entregas apresentadas, entregas com ajustes, feedbacks (e quantos viraram demanda no Funil de Demandas) e em quantas sprints o objetivo foi atingido.'},
+      {element: '#rv-history', title: 'Últimas sprints', description: 'Por sprint: quem esteve e quanto durou, o objetivo, as entregas por aceite e os feedbacks. <strong>Iniciar review</strong> abre a sala, <strong>Entrar na review</strong> leva para a que está em andamento e o <strong>olhinho</strong> mostra como foi, só para leitura.'},
+      {title: 'Na sala', description: 'Seis etapas com cronômetro (60 min, com alerta por etapa): abertura, resultado da sprint (o Maestro marca se o objetivo foi atingido), demonstração (a entrega da vez fica no palco para todos, com o escopo do card e o aceite), o que não foi entregue (motivo e destino), feedbacks (viram demanda no Funil só quando alguém clicar, com a permissão "Atualizar cards") e próximos passos. Encerrar congela o resultado, que também aparece na retrospectiva.'}
+    ]},
     'sprint-retrospective': {title: 'Sprint Retrospective', steps: () => [
       {title: 'Sprint Retrospective', description: 'A retrospectiva da sprint com o time na sala e as ações acompanhadas até o fim. A retro só começa depois que a sprint é fechada no Monday (caixa "Concluído?" do cronograma de sprints), e quem inicia e conduz é o Maestro Scrum.'},
       {element: '#rt-kpis', title: 'Ações das retros', description: 'Ações de todas as retros: em andamento, atrasadas (prazo vencido), concluídas (e quantas atingiram o sinal de resultado), taxa de conclusão e o total. Clique num card para filtrar a lista.'},

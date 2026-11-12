@@ -5,6 +5,7 @@ use App\Http\Controllers\FeatureRequestController;
 use App\Http\Controllers\MondayController;
 use App\Http\Controllers\PlanningController;
 use App\Http\Controllers\RetrospectiveController;
+use App\Http\Controllers\SprintReviewController;
 use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\ThemeController;
 use App\Http\Controllers\UserController;
@@ -97,6 +98,23 @@ Route::middleware('auth')->group(function () {
     });
 
     // Daily Scrum (Daily Hub): ações da Daily para quem tem a tela; publicar no card exige "Atualizar cards" (conferido no serviço).
+    Route::middleware('screen:sprint-review')->prefix('/api/review')->name('review.')->group(function () {
+        Route::get('/', [SprintReviewController::class, 'show'])->name('show');
+        Route::get('/room', [SprintReviewController::class, 'room'])->name('room');
+        Route::get('/sprints/{sprint}', [SprintReviewController::class, 'review'])->whereNumber('sprint')->name('sprint');
+        Route::post('/reviews', [SprintReviewController::class, 'start'])->name('start');
+        Route::whereNumber(['review', 'feedback'])->group(function () {
+            Route::post('/reviews/{review}/step', [SprintReviewController::class, 'step'])->name('step');
+            Route::post('/reviews/{review}/focus', [SprintReviewController::class, 'focus'])->name('focus');
+            Route::post('/reviews/{review}/decide', [SprintReviewController::class, 'decide'])->name('decide');
+            Route::post('/reviews/{review}/goal', [SprintReviewController::class, 'goal'])->name('goal');
+            Route::post('/reviews/{review}/feedbacks', [SprintReviewController::class, 'addFeedback'])->name('feedbacks.store');
+            Route::post('/reviews/{review}/close', [SprintReviewController::class, 'close'])->name('close');
+            Route::post('/feedbacks/{feedback}/delete', [SprintReviewController::class, 'deleteFeedback'])->name('feedbacks.delete');
+            Route::post('/feedbacks/{feedback}/demand', [SprintReviewController::class, 'createDemand'])->name('feedbacks.demand');
+        });
+    });
+
     Route::middleware('screen:sprint-retrospective')->prefix('/api/retro')->name('retro.')->group(function () {
         Route::get('/', [RetrospectiveController::class, 'show'])->name('show');
         Route::get('/room', [RetrospectiveController::class, 'room'])->name('room');
@@ -126,6 +144,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('screen:daily-scrum')->prefix('/api/daily')->name('daily.')->group(function () {
         Route::get('/', [DailyController::class, 'show'])->name('show');
         Route::post('/actions', [DailyController::class, 'store'])->name('actions.store');
+        Route::post('/presence', [DailyController::class, 'presence'])->name('presence');
         Route::whereNumber('action')->group(function () {
             Route::post('/actions/{action}/complete', [DailyController::class, 'complete'])->name('actions.complete');
             Route::post('/actions/{action}/reopen', [DailyController::class, 'reopen'])->name('actions.reopen');

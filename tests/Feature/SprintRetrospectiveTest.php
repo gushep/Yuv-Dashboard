@@ -132,6 +132,7 @@ class SprintRetrospectiveTest extends TestCase
         $this->actingAs($retro->facilitator);
 
         $this->travel(13)->minutes();
+        $this->getJson(route('retro.show'))->assertJsonPath('open.elapsedSeconds', 780)->assertJsonPath('open.present', []);
         $this->postJson(route('retro.step', $retro), ['step' => 4])->assertOk()
             ->assertJsonPath('retro.step', 4)
             ->assertJsonPath('retro.steps.3.seconds', 780)
@@ -175,7 +176,8 @@ class SprintRetrospectiveTest extends TestCase
             ->assertJsonPath('kpis.open', 1)
             ->assertJsonPath('actions.0.description', 'Testar dump parcial')
             ->assertJsonPath('sprints.1.retro.status', 'closed')
-            ->assertJsonPath('sprints.1.retro.actions.total', 1);
+            ->assertJsonPath('sprints.1.retro.actions.total', 1)
+            ->assertJsonPath('sprints.1.retro.attendees', [$retro->facilitator->name]);
         $this->getJson(route('retro.review', 19))->assertOk()->assertJsonPath('retro.metrics.delivered', 62)->assertJsonPath('retro.canConduct', false);
         $this->postJson(route('retro.cards.store', $retro), ['column' => 'keep', 'text' => 'Depois'])->assertUnprocessable()->assertJsonPath('error', 'Esta retro já foi encerrada.');
     }

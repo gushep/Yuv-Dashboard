@@ -7,13 +7,17 @@ use App\Support\SprintRules;
 use RuntimeException;
 
 /**
- * Abertura de tickets de suporte no Monday pelo botão Novo Ticket: Tipo Suporte, Status Backlog e na sprint atual.
+ * Abertura de tickets de suporte no Monday pelo botão Novo Ticket: Tipo Suporte, Status Backlog, Não Planejado e na
+ * sprint atual.
  */
 class SupportTicketService
 {
     public const TYPE = 'Suporte';
 
     public const STATUS = 'Backlog';
+
+    /** Rótulo da coluna Planejada para o ticket (o reconhecimento ignora acento e maiúsculas). */
+    public const UNPLANNED = 'Não Planejado';
 
     public function __construct(private MondayService $monday, private MondaySnapshotService $snapshots) {}
 
@@ -49,6 +53,10 @@ class SupportTicketService
             $columns['priority'] => ['label' => $ticket['priority']],
             $columns['sprint'] => ['item_ids' => [(int) $sprint['itemId']]],
         ];
+        // Suporte entra na sprint sem ter sido planejado: marcado como não planejado, como os demais cards de sustentação.
+        if ($columns['planned'] !== null) {
+            $values[$columns['planned']['id']] = ['label' => $columns['planned']['label']];
+        }
         foreach (['description' => $ticket['description'], 'client' => $ticket['client']] as $field => $text) {
             $column = $columns[$field];
             if ($column !== null && $text !== '') {
@@ -86,7 +94,7 @@ class SupportTicketService
     /**
      * Colunas usadas pelo ticket, conferindo que o quadro tem os rótulos fixos (Suporte e Backlog).
      *
-     * @return array{type: string, status: string, priority: string, sprint: string, description: ?array{id: string, type: string}, client: array{id: string, type: string}, priorities: list<string>}
+     * @return array{planned: ?array{id: string, label: string}, type: string, status: string, priority: string, sprint: string, description: ?array{id: string, type: string}, client: array{id: string, type: string}, priorities: list<string>}
      */
     private function columns(MondayConnection $connection): array
     {
@@ -108,7 +116,16 @@ class SupportTicketService
         // Cliente é obrigatório no ticket; sem a coluna, o formulário já avisa antes de alguém preencher.
         $client = $this->textColumn($columns->all(), ['cliente']) ?? throw new RuntimeException('O quadro não tem a coluna de texto Cliente.');
 
+        // Coluna Planejada (quando mapeada): o ticket entra com o rótulo de não planejado ("Não Planejado").
+        $planned = null;
+        if (! empty($map['Planejada'])) {
+            $label = collect($labels($map['Planejada']))->first(fn (string $label): bool => str_starts_with(SprintRules::normalize($label), 'nao planejad'))
+                ?? throw new RuntimeException('A coluna Planejada não tem o rótulo "'.self::UNPLANNED.'".');
+            $planned = ['id' => $map['Planejada'], 'label' => $label];
+        }
+
         return [
+            'planned' => $planned,
             'type' => $map['Tipo'], 'status' => $map['Status'], 'priority' => $map['Prioridade'], 'sprint' => $map['Sprint'],
             'description' => $this->textColumn($columns->all(), ['descrição', 'descricao']),
             'client' => $client,

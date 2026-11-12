@@ -9,6 +9,8 @@
     </div>
   </header>
   <p id="daily-error" class="cap-message cap-error" role="alert" hidden></p>
+  {{-- Quem está na Daily agora e o tempo (de hoje); em Dailies anteriores, quem esteve e quanto durou --}}
+  <div id="daily-presence"></div>
 
   {{-- Indicador macro da sprint: objetivo, progresso, horas, tendência e XP do time --}}
   <section class="daily-macro" id="daily-macro" aria-label="Sprint em resumo"></section>
@@ -48,6 +50,12 @@
     <div class="daily-board-head"><h2>🔁 Ações das retrospectivas <small id="daily-retro-count"></small></h2></div>
     <p class="daily-note">Lembradas todos os dias até serem concluídas. Só o responsável e o facilitador da retro concluem.</p>
     <div class="daily-actions" id="daily-retro-actions"></div>
+  </section>
+
+  {{-- Histórico das Dailies da sprint: presentes, duração e responsabilidades de cada dia --}}
+  <section class="daily-todo daily-history" id="daily-history">
+    <div class="daily-board-head"><h2>📅 Dailies da sprint <small id="daily-history-count"></small></h2></div>
+    <div id="daily-history-list"></div>
   </section>
 
   {{-- Conclusão: resolução e, com card, publicação opcional no Monday --}}

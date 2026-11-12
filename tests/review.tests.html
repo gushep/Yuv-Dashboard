@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Sprint Review · testes</title>
+<link rel="stylesheet" href="../public/capacity.css"><link rel="stylesheet" href="../public/planning.css"><link rel="stylesheet" href="../public/retro.css"><link rel="stylesheet" href="../public/review.css"><link rel="stylesheet" href="../public/ceremony.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0}</style>
+<main class="main"><div class="content" id="fixture"></div></main><pre id="test-result">RUNNING</pre>
+<script>
+var currentPage = 'sprint-review';
+function canAccessScreen() { return false; }
+window.confirm = () => true;
+window.Retro = {metricsFor: () => ({delivered: 14, plannedPct: 58, plannedDone: 11, planned: 19, unplanned: 1, support: 2, registeredMinutes: 92 * 60, plannedMinutes: 340 * 60})};
+const item = (id, name, kind, extra = {}) => ({id, name, kind, url: '', type: 'Funcionalidade', epic: 'Datavision', owner: 'Igor Rossi', status: kind === 'delivered' ? 'Implementado' : 'Pronto para começar', estimate: 4, real: 3, planned: true, description: 'Listar as câmeras ainda não configuradas.', verdict: null, notes: null, reason: null, destination: null, ...extra});
+const steps = [['Abertura', 5], ['Resultado da sprint', 5], ['Demonstração', 30], ['Não entregue', 5], ['Feedbacks', 10], ['Próximos passos', 5]].map(([name, minutes], index) => ({name, minutes, seconds: index < 2 ? minutes * 60 : index === 2 ? 600 : 0}));
+const roomReview = {id: 3, sprint: 20, sprintName: 'Sprint 20', status: 'open', facilitator: {id: 1, name: 'Gustavo'}, canConduct: true, canCreateDemands: true, me: {id: 1, name: 'Gustavo'},
+  step: 2, steps, elapsedSeconds: 1200, startedAt: '2026-11-24T17:00:00Z', closedAt: null, currentItemId: '902', sprintGoal: 'Entregar o Datavision por equipamento.', goalResult: 'partial', goalNote: null,
+  items: [item('901', 'Tela de Resultados', 'delivered', {verdict: 'accepted'}), item('902', 'Discovery das câmeras', 'delivered'), item('903', 'JC400AD duração', 'delivered', {epic: null, type: 'Suporte', planned: false}), item('904', 'Relatório de velocidade', 'pending', {epic: null, type: 'Melhoria'})],
+  feedbacks: [{id: 7, type: 'idea', typeLabel: 'Nova ideia', text: 'Mapa por região', givenBy: 'Paulo', author: 'Gustavo', item: null, demand: {status: null, id: null, url: null, error: null}, canDelete: true},
+    {id: 8, type: 'improvement', typeLabel: 'Melhoria', text: 'Filtro por cliente', givenBy: 'Marina', author: 'Gustavo', item: {id: '902', name: 'Discovery das câmeras'}, demand: {status: 'created', id: '5501', url: '', error: null}, canDelete: false}],
+  metrics: null, participants: [{id: 1, name: 'Gustavo'}, {id: 2, name: 'Igor Rossi'}], attendees: ['Gustavo', 'Igor Rossi'], users: [{id: 1, name: 'Gustavo'}, {id: 2, name: 'Igor Rossi'}]};
+const overview = {canFacilitate: true, kpis: {reviews: 2, presented: 30, accepted: 26, adjust: 3, rejected: 1, rate: 87, feedbacks: 12, demands: 7, goalHit: 1, goalDecided: 2}, open: null,
+  sprints: [
+    {number: 20, name: 'Sprint 20', start: '2026-11-10', end: '2026-11-24', completed: false, current: true, startable: false, review: null},
+    {number: 19, name: 'Sprint 19', start: '2026-10-27', end: '2026-11-10', completed: true, current: false, startable: true, review: null},
+    {number: 18, name: 'Sprint 18', start: '2026-10-13', end: '2026-10-27', completed: true, current: false, startable: true, review: {id: 1, status: 'closed', date: '2026-10-27', facilitator: 'Gustavo', step: 5, stepName: 'Próximos passos',
+      attendees: ['Gustavo', 'Igor'], durationSeconds: 3300, goalResult: 'yes', delivered: 15, verdicts: {accepted: 12, adjust: 3, rejected: 0, skipped: 0}, feedbacks: 9, demands: 6}},
+  ]};
+let room = {review: null, canFacilitate: true};
+const requests = [];
+window.mondayRequest = async (path, body) => {
+  requests.push([String(path), body]);
+  if (path === '/api/review') return overview;
+  if (path === '/api/review/room') return room;
+  if (path === '/api/review/sprints/19') return {sprint: overview.sprints[1], sprintGoal: 'Estabilizar o Datavision.', items: [item('801', 'Entrega antiga', 'delivered'), item('802', 'Ficou aberto', 'pending')], review: null};
+  if (path === '/api/review/reviews') { room = {review: roomReview, canFacilitate: true}; return room; }
+  return room;
+};
+const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    const dashboard = await (await fetch('../resources/views/dashboard.blade.php')).text();
+    const style = document.createElement('style'); style.textContent = dashboard.match(/<style>([\s\S]*?)<\/style>/)[1]; document.head.prepend(style);
+    const blade = html => html.replace(/\{\{--[\s\S]*?--\}\}/g, '').replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, '../public/$1').replace(/\{\{[\s\S]*?\}\}/g, '');
+    document.getElementById('fixture').innerHTML = blade(await (await fetch('../resources/views/review.blade.php')).text());
+    const page = document.getElementById('page-sprint-review'); page.dataset.url = '/api/review'; page.dataset.roomUrl = '/api/review/room'; page.classList.add('active');
+    for (const src of ['sprint-rules', 'capacity', 'ceremony', 'review']) await load(`../public/${src}.js`);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    const text = id => document.getElementById(id).textContent.replace(/\s+/g, ' ');
+
+    Review.enter(); await tick(30);
+    const kpis = [...document.querySelectorAll('#rv-kpis .rt-kpi')].map(kpi => `${kpi.querySelector('span').textContent} ${kpi.querySelector('strong').textContent}`);
+    check('Resultado das reviews: reviews, aceite, ajustes, feedbacks e objetivo', kpis.join(' | ') === 'Reviews 2 | Aceite das entregas 87% | Com ajustes 3 | Feedbacks 12 | Objetivo da sprint 1 de 2');
+    const rows = [...document.querySelectorAll('#rv-history .rt-row')];
+    check('Sprint em andamento: Iniciar desabilitado até o último dia ou o fechamento no Monday', rows[0].querySelector('[data-start]').disabled && rows[0].querySelector('[data-start]').title.includes('último dia da sprint (24/11)'));
+    check('Sprint já fechada sem review libera Iniciar; review feita mostra presentes, objetivo e aceite', !rows[1].querySelector('[data-start]').disabled
+      && rows[2].textContent.includes('Objetivo atingido') && rows[2].textContent.includes('12 aceita(s)') && rows[2].textContent.includes('👥 2 · ⏱ 55 min') && rows[2].textContent.includes('6 virou(aram) demanda'));
+
+    rows[1].querySelector('[data-readonly]').click(); await tick(30);
+    check('Olhinho sem review no app: resultado, entregas e planejados abertos', text('rv-step').includes('Entrega antiga') && text('rv-step').includes('Ficou aberto') && text('rv-step').includes('58%') && text('rv-room-top').includes('Review feita fora do app'));
+    document.querySelector('[data-view="lobby"]').click(); await tick(30);
+
+    document.querySelectorAll('#rv-history .rt-row')[1].querySelector('[data-start]').click(); await tick(30);
+    check('Iniciar abre a sala com 6 etapas, presentes e cronômetro', requests.some(([path, body]) => path === '/api/review/reviews' && body.sprint === 19) && document.querySelectorAll('#rv-stepper button').length === 6
+      && text('rv-room-top').includes('2 na sala') && /Review 20:0\d de 60:00/.test(text('rv-room-top')));
+    check('Demonstração: fila por épico e a entrega da vez no palco, com o escopo do card', [...document.querySelectorAll('.rv-queue h4')].map(h => h.textContent).join() === 'Datavision · 2,Suporte · 1'
+      && document.querySelector('.rv-q[aria-current="true"]').textContent.includes('Discovery das câmeras') && text('rv-step').includes('Listar as câmeras ainda não configuradas.') && document.querySelector('.rv-q.accepted'));
+    document.querySelector('[data-verdict="adjust"]').click(); await tick(30);
+    check('Aceite: o Maestro marca e a entrega vai para o servidor', requests.some(([path, body]) => path === '/api/review/reviews/3/decide' && body.item_id === '902' && body.verdict === 'adjust'));
+    document.querySelector('.rv-stage-nav .pp-primary[data-focus]').click(); await tick(30);
+    check('Próxima entrega muda o palco para todos', requests.some(([path, body]) => path === '/api/review/reviews/3/focus' && body.item_id === '903'));
+    document.getElementById('rv-stage-feedback').value = 'Pedir filtro por cliente';
+    document.querySelector('[data-stage-feedback]').click(); await tick(30);
+    check('Feedback direto do palco, ligado à entrega', requests.some(([path, body]) => path === '/api/review/reviews/3/feedbacks' && body.text === 'Pedir filtro por cliente' && body.item_id === '902'));
+
+    roomReview.step = 3; document.querySelector('#rv-stepper [data-step="3"]').click(); await tick(30);
+    const reason = document.querySelector('[data-decide-field="reason"]'); reason.value = 'capacity'; reason.dispatchEvent(new Event('change', {bubbles: true})); await tick(30);
+    check('Não entregue: motivo registrado sem mudar o Monday', requests.some(([path, body]) => path === '/api/review/reviews/3/decide' && body.item_id === '904' && body.reason === 'capacity'));
+
+    roomReview.step = 4; document.querySelector('#rv-stepper [data-step="4"]').click(); await tick(30);
+    check('Feedbacks: criar demanda só quando alguém clica, e só uma vez', document.querySelectorAll('[data-demand]').length === 1 && document.querySelector('[data-demand="7"]') && text('rv-step').includes('Virou demanda #5501'));
+    document.querySelector('[data-demand="7"]').click(); await tick(30);
+    check('Criar demanda chama o servidor para o feedback', requests.some(([path]) => path === '/api/review/feedbacks/7/demand'));
+
+    roomReview.step = 5; room = {review: null, canFacilitate: true};
+    Review.leave(); Review.enter(); await tick(30);
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

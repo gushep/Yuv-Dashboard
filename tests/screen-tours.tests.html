@@ -13,7 +13,7 @@ const text = async path => (await fetch(path)).text();
     const screens = Object.keys(ScreenTours.TOURS);
     check(`Tours carregados (${screens.length})`, screens.length > 15);
     // Os #ids dos passos existem nas views (HTML estático ou contêiner que o JS preenche).
-    const views = (await Promise.all(['dashboard', 'control-tower', 'burndown', 'planning', 'forecast', 'consumption', 'release', 'users', 'under-construction', 'daily', 'retro']
+    const views = (await Promise.all(['dashboard', 'control-tower', 'burndown', 'planning', 'forecast', 'consumption', 'release', 'users', 'daily', 'retro', 'review']
       .map(view => text(`../resources/views/${view}.blade.php`)))).join('\n');
     const absent = screens.flatMap(screen => ScreenTours.steps(screen).map(step => step.element).filter(Boolean)
       .map(selector => selector.match(/^#([\w-]+)/)?.[1]).filter(Boolean).filter(id => !views.includes(`id="${id}"`)).map(id => `${screen}:#${id}`));

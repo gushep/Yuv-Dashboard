@@ -27,6 +27,14 @@ class DailyController extends Controller
         return $this->attempt(fn (): array => $this->daily->state($this->connection(), $request->user(), isset($data['sprint']) ? (int) $data['sprint'] : null, $data['date'] ?? null));
     }
 
+    /** Presença na Daily de hoje (a tela chama a cada poucos segundos): quem está na tela e o tempo da Daily. */
+    public function presence(Request $request): JsonResponse
+    {
+        $data = $request->validate(['sprint' => ['required', 'integer', 'min:1']]);
+
+        return $this->attempt(fn (): array => ['presence' => $this->daily->presence($this->connection(), $request->user(), (int) $data['sprint'])]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([

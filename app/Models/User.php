@@ -84,6 +84,12 @@ class User extends Authenticatable
         return $this->can_conduct_planning && $this->canAccessScreen(Screen::Planning);
     }
 
+    /** Facilitador da Sprint Review (conduz e marca o aceite das entregas): o Maestro Scrum, com acesso à tela. */
+    public function canFacilitateReviews(): bool
+    {
+        return $this->can_conduct_planning && $this->canAccessScreen(Screen::SprintReview);
+    }
+
     /** Facilitador da retrospectiva: o Maestro Scrum, com acesso à tela Sprint Retrospective. */
     public function canFacilitateRetrospectives(): bool
     {

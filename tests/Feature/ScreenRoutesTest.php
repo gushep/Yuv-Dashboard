@@ -51,14 +51,14 @@ class ScreenRoutesTest extends TestCase
         $this->get('/tarefas')->assertOk()->assertSee('<span class="nav-label">Tarefas</span>', false);
     }
 
-    public function test_agile_management_menu_groups_sprints_sprint_planning_and_the_scrum_events_under_construction(): void
+    public function test_agile_management_menu_groups_sprints_sprint_planning_and_the_scrum_events(): void
     {
         $this->actingAs(User::factory()->create());
 
         $this->get('/')->assertOk()
             ->assertSeeInOrder(['Gerenciamento Ágil', "navigate('sprint')", 'Sprints', "navigate('planning')", 'Sprint Planning', "navigate('daily-scrum')", 'Daily Scrum', "navigate('sprint-review')", 'Sprint Review', "navigate('sprint-retrospective')", 'Sprint Retrospective'], false)
             ->assertSee('id="page-daily-scrum"', false)->assertSee('id="page-sprint-review"', false)->assertSee('id="page-sprint-retrospective"', false)
-            ->assertSee('Em construção')
+            ->assertDontSee('Em construção')
             ->assertDontSee('<span class="nav-label">Planning poker</span>', false);
     }
 

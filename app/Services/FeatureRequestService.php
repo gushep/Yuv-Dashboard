@@ -137,6 +137,37 @@ class FeatureRequestService
     }
 
     /**
+     * Demanda criada a partir de um feedback da Sprint Review: só título, solicitante, descrição, status de entrada e data
+     * do registro. Os demais campos (origem, tipo, módulo, severidade) ficam para a triagem do Funil, como no Monday.
+     *
+     * @return array{id: string, url: string}
+     */
+    public function createFromFeedback(MondayConnection $connection, string $title, string $requester, string $description): array
+    {
+        ['columns' => $columns] = $this->board($connection);
+        if (! in_array(self::STATUS, $this->labels($columns['status'], 'status'), true)) {
+            throw new RuntimeException('A coluna Status do Funil de Demandas não tem o rótulo "'.self::STATUS.'".');
+        }
+        $values = [
+            $columns['requester']['id'] => $requester,
+            $columns['description']['id'] => $columns['description']['type'] === 'long_text' ? ['text' => $description] : $description,
+            $columns['status']['id'] => ['label' => self::STATUS],
+        ];
+        if ($columns['date'] !== null) {
+            $values[$columns['date']['id']] = ['date' => now()->toDateString()];
+        }
+        $created = $this->monday->query((string) $connection->token, 'mutation ($board: ID!, $name: String!, $values: JSON!) { create_item(board_id: $board, item_name: $name, column_values: $values) { id url } }', [
+            'board' => (string) $connection->roadmap_board_id, 'name' => $title, 'values' => json_encode($values, JSON_UNESCAPED_UNICODE),
+        ])['create_item'] ?? null;
+        if (empty($created['id'])) {
+            throw new RuntimeException('O Monday não confirmou a criação da demanda.');
+        }
+        $this->snapshots->markStale();
+
+        return ['id' => (string) $created['id'], 'url' => (string) ($created['url'] ?? '')];
+    }
+
+    /**
      * Evidência anexada na coluna Evidências da demanda.
      */
     public function attachEvidence(MondayConnection $connection, string $itemId, UploadedFile $file): void

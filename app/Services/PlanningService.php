@@ -62,7 +62,8 @@ class PlanningService
             'canConduct' => $canConduct,
             'canEstimate' => $this->estimates($user, $session),
             'me' => ['id' => $user->id, 'name' => $user->name],
-            'session' => ['id' => $session->id, 'sprint' => $session->sprint, 'sprintName' => $session->sprint_name, 'startedBy' => $session->starter?->name, 'goal' => $session->goal],
+            'session' => ['id' => $session->id, 'sprint' => $session->sprint, 'sprintName' => $session->sprint_name, 'startedBy' => $session->starter?->name, 'goal' => $session->goal,
+                'elapsedSeconds' => $session->durationSeconds()],
             'round' => $round ? [...$this->presentRound($round, $votes, $user), 'estimators' => collect($seats)->where('role', 'estimator')->count()] : null,
             'seats' => $seats,
             'estimated' => $estimated->map(fn (PlanningRound $closed): array => [
@@ -144,7 +145,7 @@ class PlanningService
         $rows = collect($snapshot['rows'] ?? [])->reject(fn (array $row): bool => SprintRules::isRemoved($row['Status'] ?? null))->groupBy('Sprint');
         // Mesa mais recente de cada sprint e quantos cards ficaram estimados nela.
         $sessions = PlanningSession::query()->withCount(['rounds as estimated_count' => fn ($query) => $query->where('status', PlanningStatus::Closed)])
-            ->orderBy('id')->get()->keyBy('sprint');
+            ->with('participants.user')->orderBy('id')->get()->keyBy('sprint');
 
         return collect($snapshot['sprints'] ?? [])
             ->filter(fn (array $sprint): bool => $sprint['start'] <= $today)
@@ -165,7 +166,10 @@ class PlanningService
                     'tasks' => $tasks->all(),
                     // Em andamento: dá para entrar (ou reabrir) a mesa até a sprint terminar; encerrada: só ver como foi.
                     'current' => $sprint['end'] >= $today,
-                    'planning' => $session ? ['open' => $session->status === PlanningSession::OPEN, 'estimated' => (int) $session->estimated_count, 'goal' => $session->goal] : null,
+                    'planning' => $session ? [
+                        'open' => $session->status === PlanningSession::OPEN, 'estimated' => (int) $session->estimated_count, 'goal' => $session->goal,
+                        'attendees' => $this->attendees($session), 'durationSeconds' => $session->durationSeconds(),
+                    ] : null,
                 ];
             })->values()->all();
     }
@@ -203,6 +207,8 @@ class PlanningService
             'goal' => $sessions->last()?->goal,
             'closedAt' => $sessions->last()?->closed_at?->toIso8601String(),
             'open' => $sessions->last()?->status === PlanningSession::OPEN,
+            'attendees' => $sessions->last() ? $this->attendees($sessions->last()->load('participants.user')) : [],
+            'durationSeconds' => $sessions->last()?->durationSeconds(),
             'cards' => $cards,
             'load' => $this->load($connection, $sprint, $rounds),
             'reserveHours' => $connection->teamRules()->configured() ? round($connection->supportReserveMinutes($sprint) / 60, 2) : 0.0,
@@ -235,12 +241,13 @@ class PlanningService
             }
             $previous = PlanningSession::query()->where('sprint', $option['number'])->latest('id')->lockForUpdate()->first();
             if ($previous !== null) {
-                $previous->update(['status' => PlanningSession::OPEN, 'closed_at' => null]);
+                // Reaberta: o tempo das aberturas anteriores fica somado e a nova abertura começa a contar agora.
+                $previous->update(['status' => PlanningSession::OPEN, 'closed_at' => null, 'open_seconds' => $previous->opened_at ? $previous->open_seconds : $previous->durationSeconds(), 'opened_at' => now()]);
 
                 return $previous;
             }
 
-            return PlanningSession::create(['sprint' => $option['number'], 'sprint_name' => $option['name'], 'status' => PlanningSession::OPEN, 'started_by' => $user->id]);
+            return PlanningSession::create(['sprint' => $option['number'], 'sprint_name' => $option['name'], 'status' => PlanningSession::OPEN, 'opened_at' => now(), 'started_by' => $user->id]);
         });
     }
 
@@ -261,7 +268,7 @@ class PlanningService
         DB::transaction(function () use ($session, $goal): void {
             $session->rounds()->whereIn('status', PlanningStatus::open())->update(['status' => PlanningStatus::Canceled, 'closed_at' => now()]);
             // O objetivo fica na mesa da sprint (uma só, reaberta quando preciso) e é lido pelo histórico e pelo Daily Hub.
-            $session->update(['status' => PlanningSession::CLOSED, 'closed_at' => now(), 'goal' => trim($goal)]);
+            $session->update(['status' => PlanningSession::CLOSED, 'closed_at' => now(), 'goal' => trim($goal), 'open_seconds' => $session->durationSeconds(), 'opened_at' => null]);
         });
     }
 
@@ -456,6 +463,16 @@ class PlanningService
         $round->update(['status' => PlanningStatus::Canceled, 'closed_at' => now()]);
     }
 
+    /**
+     * Quem esteve na mesa da sprint (em qualquer abertura), em ordem alfabética.
+     *
+     * @return list<string>
+     */
+    private function attendees(PlanningSession $session): array
+    {
+        return $session->participants->map(fn (PlanningParticipant $participant): ?string => $participant->user?->name)->filter()->sort()->values()->all();
+    }
+
     public function openSession(): ?PlanningSession
     {
         return PlanningSession::query()->where('status', PlanningSession::OPEN)->latest('id')->first();
@@ -591,7 +608,7 @@ class PlanningService
         return User::query()->whereIn('id', $ids)->get(['id', 'name', 'screens', 'can_estimate_planning'])
             ->sortBy(fn (User $seat): string => mb_strtolower($seat->name))
             ->map(fn (User $seat): array => [
-                'id' => $seat->id, 'name' => $seat->name, 'isMe' => $seat->id === $user->id,
+                'id' => $seat->id, 'name' => $seat->name, 'isMe' => $seat->id === $user->id, 'online' => $present->contains($seat->id),
                 'role' => match (true) {
                     $seat->id === $session->started_by => 'conductor',
                     $this->estimates($seat, $session) => 'estimator',

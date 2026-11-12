@@ -11,7 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * Daily Scrum de uma sprint num dia. É criada quando a primeira ação do dia é registrada.
+ * Daily Scrum de uma sprint num dia. É criada quando a primeira pessoa abre a Daily do dia (ou registra a primeira
+ * ação); o tempo da Daily vai da primeira entrada até a última saída de quem esteve na tela.
  *
  * @property Carbon $date
  */
@@ -37,6 +38,14 @@ class DailyScrum extends Model
     public function actions(): HasMany
     {
         return $this->hasMany(DailyAction::class);
+    }
+
+    /**
+     * @return HasMany<DailyParticipant, $this>
+     */
+    public function participants(): HasMany
+    {
+        return $this->hasMany(DailyParticipant::class);
     }
 
     /**

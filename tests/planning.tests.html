@@ -27,6 +27,17 @@ const person = (name, team, inSprint, planned, support, capacity) => ({name, tea
     const stats = node => [...node.querySelectorAll('.pp-load-stats > div')].map(stat => `${stat.querySelector('dt').textContent} ${stat.querySelector('dd').textContent}`).join(' | ');
     check('Capacidade, planejado e disponível em horas e %', stats(parts[0]) === 'Capacidade 120h | Planejado 110h 92% | Disponível 10h 8%' && stats(parts[1]) === 'Capacidade 40h | Planejado 38h 95% | Disponível 2h 5%');
     check('Responsável pela carta continua destacado', parts[0].querySelector('.pp-load-row.owner').textContent.includes('Bruno'));
+
+    // Presentes e tempo das cerimônias (mesmo formato na Planning, na Daily e na Retro).
+    await load('../public/ceremony.js');
+    check('Cronômetro e duração', Ceremony.clock(65) === '1:05' && Ceremony.clock(3725) === '1:02:05' && Ceremony.duration(20) === 'menos de 1 min' && Ceremony.duration(840) === '14 min' && Ceremony.duration(3900) === '1h 05min');
+    const bar = document.createElement('div');
+    bar.innerHTML = Ceremony.barHtml({present: ['Ana', 'Bruno', 'Carla'], seconds: 3720, label: 'Planning'});
+    check('Barra da sala: presentes agora e o tempo, sem previsto', text(bar).includes('3 na sala') && text(bar).includes('Planning 1:02:00') && !bar.querySelector('.cer-alert'));
+    bar.innerHTML = Ceremony.barHtml({present: [], seconds: 1000, label: 'Daily', targetMinutes: 15});
+    check('Com previsto: alerta quando passa', text(bar).includes('ninguém na sala agora') && text(bar).includes('de 15:00') && bar.querySelector('.cer-alert'));
+    bar.innerHTML = Ceremony.attendanceHtml(['A', 'B', 'C', 'D', 'E', 'F', 'G'], 2400);
+    check('Histórico: até 5 rostos, o resto em +N, contagem e duração', bar.querySelectorAll('.cer-av').length === 6 && bar.querySelector('.cer-av-more').textContent === '+2' && text(bar).includes('👥 7 · ⏱ 40 min'));
     document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
   } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
 })();

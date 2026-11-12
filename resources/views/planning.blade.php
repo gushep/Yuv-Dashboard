@@ -14,6 +14,8 @@
 
   {{-- Mesa da planning --}}
   <div id="pp-table-view" class="pp-game" hidden>
+    {{-- Presentes na mesa e o tempo da planning (no modo leitura: quem esteve e quanto durou) --}}
+    <div id="pp-room-bar" hidden></div>
     <div class="pp-arena">
       <div class="pp-felt">
         <div id="pp-seats"></div>

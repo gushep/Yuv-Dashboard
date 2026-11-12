@@ -85,7 +85,9 @@ class DailyScrumTest extends TestCase
             ->assertJsonPath('actions.0.status', 'pending');
         $this->postJson(route('daily.actions.store'), ['sprint' => 20, 'description' => 'Destravar o relatório', 'item_id' => '901'])->assertOk()
             ->assertJsonPath('actions.1.item', ['id' => '901', 'name' => 'Relatório de jornada', 'url' => 'https://monday.com/boards/123/pulses/901'])
-            ->assertJsonPath('dailies', [['date' => '2026-11-12', 'actions' => 2]]);
+            ->assertJsonPath('dailies.0.date', '2026-11-12')
+            ->assertJsonPath('dailies.0.actions', 2)
+            ->assertJsonCount(1, 'dailies');
 
         $this->assertSame(1, DailyScrum::count());
         $this->assertSame(DailyActionEvent::OPENED, DailyAction::first()->events()->value('type'));
@@ -266,6 +268,40 @@ class DailyScrumTest extends TestCase
             ->assertJsonPath('dailies.0.date', '2026-11-05')
             ->assertJsonPath('dailies.0.actions.0.description', 'Pendência da 19')
             ->assertJsonPath('dailies.0.actions.0.resolution', 'Resolvido na hora.');
+    }
+
+    public function test_the_daily_counts_who_was_there_from_the_first_entry_to_the_last_exit(): void
+    {
+        $ana = User::factory()->withScreens(Screen::DailyScrum)->create(['name' => 'Ana']);
+        $bruno = User::factory()->withScreens(Screen::DailyScrum)->create(['name' => 'Bruno']);
+
+        $this->actingAs($ana)->getJson(route('daily.show'))->assertOk()
+            ->assertJsonPath('presence.present', ['Ana'])->assertJsonPath('presence.live', true);
+        $this->travel(5)->minutes();
+        $this->actingAs($bruno)->postJson(route('daily.presence'), ['sprint' => 20])->assertOk()
+            ->assertJsonPath('presence.present', ['Bruno'])
+            ->assertJsonPath('presence.attendees', ['Ana', 'Bruno'])
+            ->assertJsonPath('presence.seconds', 300);
+        $this->travel(9)->minutes();
+        $this->actingAs($bruno)->postJson(route('daily.presence'), ['sprint' => 20])->assertOk()->assertJsonPath('presence.seconds', 840);
+
+        // Todos saíram: a Daily fica com 14 minutos e não conta mais (consultado pelo histórico, que não conta presença).
+        $this->travel(20)->minutes();
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->create())->getJson(route('planning.review', 20))->assertOk()
+            ->assertJsonPath('dailies.0.attendees', ['Ana', 'Bruno'])
+            ->assertJsonPath('dailies.0.present', [])
+            ->assertJsonPath('dailies.0.seconds', 840)
+            ->assertJsonPath('dailies.0.live', false);
+        $this->assertSame(1, DailyScrum::count());
+    }
+
+    public function test_looking_at_a_past_sprint_does_not_count_as_presence(): void
+    {
+        $this->actingAs(User::factory()->withScreens(Screen::DailyScrum)->create());
+
+        $this->postJson(route('daily.presence'), ['sprint' => 19])->assertOk()->assertJsonPath('presence', null);
+        $this->getJson(route('daily.show', ['sprint' => 19]))->assertOk()->assertJsonPath('presence', null)->assertJsonPath('dailies', []);
+        $this->assertSame(0, DailyScrum::count());
     }
 
     public function test_elapsed_time_reads_in_days_hours_and_minutes(): void

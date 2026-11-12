@@ -100,7 +100,29 @@ class PlanningPokerTest extends TestCase
             ->assertJsonPath('sprints.0.planning', null)
             ->assertJsonPath('sprints.1.number', 18)
             ->assertJsonPath('sprints.1.current', false)
-            ->assertJsonPath('sprints.1.planning', ['open' => false, 'estimated' => 2, 'goal' => null]);
+            ->assertJsonPath('sprints.1.planning.open', false)
+            ->assertJsonPath('sprints.1.planning.estimated', 2)
+            ->assertJsonPath('sprints.1.planning.goal', null);
+    }
+
+    public function test_the_planning_time_adds_up_every_time_the_table_is_opened_and_lists_who_was_there(): void
+    {
+        $master = User::factory()->withScreens(Screen::Planning)->scrumMaster()->create(['name' => 'Gustavo']);
+        $estimator = User::factory()->withScreens(Screen::Planning)->estimator()->create(['name' => 'Ana']);
+        $this->actingAs($master)->postJson(route('planning.sessions.store'), ['sprint' => 19])->assertOk();
+        $session = PlanningSession::sole();
+        $this->actingAs($estimator)->getJson(route('planning.show'))->assertOk();
+
+        $this->travel(30)->minutes();
+        $this->actingAs($master)->postJson(route('planning.sessions.close', $session), ['goal' => 'Objetivo'])->assertOk();
+        // Reaberta mais tarde: o intervalo com a mesa fechada não conta, só os 10 minutos da nova abertura.
+        $this->travel(15)->minutes();
+        $this->postJson(route('planning.sessions.store'), ['sprint' => 19])->assertOk()->assertJsonPath('session.elapsedSeconds', 1800);
+        $this->travel(10)->minutes();
+
+        $this->getJson(route('planning.history'))->assertOk()
+            ->assertJsonPath('sprints.0.planning.durationSeconds', 2400)
+            ->assertJsonPath('sprints.0.planning.attendees', ['Ana', 'Gustavo']);
     }
 
     public function test_review_shows_how_the_planning_of_a_sprint_went_without_the_replaced_estimates(): void
@@ -556,7 +578,7 @@ class PlanningPokerTest extends TestCase
         $this->travel(PlanningService::PRESENCE_SECONDS + 5)->seconds();
         $bruno = User::factory()->withScreens(Screen::Planning)->create(['name' => 'Bruno']);
         $this->actingAs($bruno)->getJson(route('planning.show'))->assertOk()->assertJsonPath('seats', [
-            ['id' => $bruno->id, 'name' => 'Bruno', 'isMe' => true, 'role' => 'watcher', 'played' => false, 'hours' => null],
+            ['id' => $bruno->id, 'name' => 'Bruno', 'isMe' => true, 'online' => true, 'role' => 'watcher', 'played' => false, 'hours' => null],
         ]);
         $this->assertSame(2, $session->participants()->count());
     }

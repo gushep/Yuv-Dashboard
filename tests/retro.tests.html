@@ -28,7 +28,7 @@ const overview = {canFacilitate: true, today: '2026-11-12',
     {number: 20, name: 'Sprint 20', start: '2026-11-10', end: '2026-11-24', completed: false, current: true, retro: null},
     {number: 19, name: 'Sprint 19', start: '2026-10-27', end: '2026-11-10', completed: true, current: false, retro: null},
     {number: 18, name: 'Sprint 18', start: '2026-10-13', end: '2026-10-27', completed: true, current: false, retro: {id: 1, status: 'closed', date: '2026-10-28', facilitator: 'Gustavo', step: 6, stepName: 'Plano de ação', cards: {keep: 5, improve: 7, try: 3}, focus: 2,
-      actions: {open: 1, late: 1, done: 1, signalReached: 1, dropped: 1, total: 4, rate: 33}}},
+      actions: {open: 1, late: 1, done: 1, signalReached: 1, dropped: 1, total: 4, rate: 33}, attendees: ['Gustavo', 'Igor', 'Rafael'], durationSeconds: 2820}},
   ]};
 const steps = [['Abertura', 3], ['Ações anteriores', 5], ['Dados da sprint', 7], ['Visão do time', 12], ['Discussão', 10], ['Foco', 3], ['Plano de ação', 5]].map(([name, minutes], index) => ({name, minutes, seconds: index < 3 ? minutes * 60 : index === 3 ? 13 * 60 + 20 : 0}));
 const roomRetro = {id: 7, sprint: 19, sprintName: 'Sprint 19', status: 'open', facilitator: {id: 1, name: 'Gustavo'}, canConduct: true, me: {id: 1, name: 'Gustavo'},
@@ -66,7 +66,7 @@ const load = src => new Promise((resolve, reject) => { const script = document.c
     const blade = html => html.replace(/\{\{--[\s\S]*?--\}\}/g, '').replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, '../public/$1').replace(/\{\{[\s\S]*?\}\}/g, '');
     document.getElementById('fixture').innerHTML = blade(await (await fetch('../resources/views/retro.blade.php')).text());
     const page = document.getElementById('page-sprint-retrospective'); page.dataset.url = '/api/retro'; page.dataset.roomUrl = '/api/retro/room'; page.classList.add('active');
-    for (const src of ['sprint-rules', 'capacity', 'retro']) await load(`../public/${src}.js`);
+    for (const src of ['sprint-rules', 'capacity', 'ceremony', 'retro']) await load(`../public/${src}.js`);
     document.dispatchEvent(new Event('DOMContentLoaded'));
     SprintRules.applySettings({team: [{id: '1', name: 'Ana', group: 'fullstack'}, {id: '2', name: 'Bruno', group: 'fullstack'}]});
     const text = id => document.getElementById(id).textContent.replace(/\s+/g, ' ');
@@ -90,6 +90,7 @@ const load = src => new Promise((resolve, reject) => { const script = document.c
     check('Histórico: sprint em andamento com Iniciar desabilitado até fechar no Monday', rows[0].querySelector('[data-start]').disabled && rows[0].querySelector('[data-start]').title.includes('fechada no Monday'));
     check('Histórico: sprint fechada sem retro libera Iniciar; retro feita mostra cartas, focos e ações', !rows[1].querySelector('[data-start]').disabled && rows[2].textContent.includes('Manter 5') && rows[2].textContent.includes('2 foco(s)') && rows[2].textContent.includes('4 ação(ões)') && rows[2].querySelector('[data-review]'));
 
+    check('Histórico da retro: quem esteve e quanto durou', rows[2].textContent.includes('👥 3 · ⏱ 47 min') && rows[2].querySelector('[title="Presentes: Gustavo, Igor, Rafael"]') && !rows[1].querySelector('.cer-attendance'));
     // Olhinho de sprint sem retro no app: só os dados
     rows[1].querySelector('[data-review]').click(); await tick(30);
     check('Olhinho sem retro mostra os dados da sprint', !document.getElementById('rt-room').hidden && text('rt-step').includes('Entregas') && text('rt-step').includes('Retro feita fora do app') === false && text('rt-room-top').includes('Retro feita fora do app'));

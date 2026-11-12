@@ -349,6 +349,7 @@ async function syncMonday(force = true) {
     window.Consumption?.onDataUpdated(result);
     window.Daily?.onDataUpdated(result);
     window.Retro?.onDataUpdated(result);
+    window.Review?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);
     if (canAccessScreen('control-tower')) window.ControlTower?.refreshAlerts();
     window.Burndown?.refresh();

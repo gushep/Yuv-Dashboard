@@ -20,7 +20,7 @@ window.Planning = (() => {
       const data = await mondayRequest(el('page-planning').dataset.url);
       if (request !== state.request || state.busy) return;
       const wasOpen = Boolean(state.data?.session);
-      state.data = data; state.error = '';
+      state.data = data; state.error = ''; state.fetchedAt = Date.now();
       // Quando a mesa abre, todos vão para ela; quando fecha, voltam às sprints. Quem está vendo uma planning pelo
       // olhinho continua nela até voltar.
       if (state.view !== 'review') {
@@ -50,7 +50,7 @@ window.Planning = (() => {
     let ok = true;
     try {
       state.data = await mondayRequest(base() + path, body);
-      state.error = '';
+      state.error = ''; state.fetchedAt = Date.now();
       state.view = state.data.session ? 'table' : 'lobby';
     } catch (error) {
       state.error = error.message; ok = false;
@@ -121,6 +121,7 @@ window.Planning = (() => {
           <div class="pp-sprint-actions">${sprintAction(sprint, data)}</div>
         </div>
         ${sprint.planning?.goal ? `<p class="pp-sprint-goal"><strong>🎯 Objetivo da Sprint</strong>${escape(sprint.planning.goal)}</p>` : ''}
+        ${sprint.planning && window.Ceremony ? `<p class="pp-sprint-attendance">${Ceremony.attendanceHtml(sprint.planning.attendees || [], sprint.planning.durationSeconds, {live: sprint.planning.open})}</p>` : ''}
         ${table ? `<div class="pp-sprint-hours">${table}</div>` : ''}
         ${open ? renderSprintTasks(sprint) : ''}
       </div>`;
@@ -163,6 +164,9 @@ window.Planning = (() => {
 
   function renderReview(review) {
     el('pp-table-view').classList.add('reviewing');
+    const bar = el('pp-room-bar');
+    bar.hidden = Boolean(review.loading || !review.recorded);
+    bar.innerHTML = review.recorded && window.Ceremony ? `<div class="cer-bar">${Ceremony.attendanceHtml(review.attendees || [], review.durationSeconds, {live: review.open})}</div>` : '';
     el('pp-seats').innerHTML = '';
     el('pp-controls').hidden = true;
     el('pp-hand-section').hidden = true;
@@ -223,7 +227,21 @@ window.Planning = (() => {
   }
 
   // ── Mesa ─────────────────────────────────────────────────────────────────────
+  /** Presentes na mesa agora e o tempo da planning (somando as aberturas da mesa). */
+  function renderRoomBar(data) {
+    const bar = el('pp-room-bar');
+    if (!bar) return;
+    bar.hidden = false;
+    bar.innerHTML = window.Ceremony ? Ceremony.barHtml({present: data.seats.filter(seat => seat.online).map(seat => seat.name), seconds: roomSeconds(data), label: 'Planning'}) : '';
+  }
+  const roomSeconds = data => (data.session?.elapsedSeconds || 0) + (Date.now() - (state.fetchedAt || Date.now())) / 1000;
+  function tickClock() {
+    const clock = el('pp-room-bar')?.querySelector('[data-cer-clock]');
+    if (clock && state.data?.session && state.view === 'table') clock.textContent = Ceremony.clock(roomSeconds(state.data));
+  }
+
   function renderTable(data) {
+    renderRoomBar(data);
     renderSeats(data);
     renderCenter(data);
     renderControls(data);
@@ -549,11 +567,14 @@ window.Planning = (() => {
     loadHistory();
     clearInterval(state.timer);
     state.timer = setInterval(() => { if (!document.hidden && !state.busy) load(); }, POLL_MS);
+    clearInterval(state.clockTimer);
+    state.clockTimer = setInterval(tickClock, 1000);
   }
 
   function leave() {
     state.active = false;
     clearInterval(state.timer);
+    clearInterval(state.clockTimer);
     state.timer = null;
   }
 

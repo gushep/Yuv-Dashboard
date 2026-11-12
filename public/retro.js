@@ -81,6 +81,15 @@ window.Retro = (() => {
       <p class="rt-note">${frozen ? '🔒 Indicadores congelados no encerramento da retro.' : 'Calculados com as mesmas regras do Dashboard e do Capacity; ficam congelados quando a retro for encerrada.'}</p>`;
   }
 
+  /** Resultado da Sprint Review da mesma sprint: aceite das entregas, objetivo e feedbacks. */
+  function reviewHtml(review) {
+    if (!review) return '';
+    const v = review.verdicts, presented = v.accepted + v.adjust + v.rejected;
+    const goal = {yes: 'objetivo atingido', partial: 'objetivo parcial', no: 'objetivo não atingido'}[review.goalResult];
+    const parts = [presented ? `${v.accepted} de ${presented} entregas aceitas${v.adjust ? ` · ${v.adjust} com ajustes` : ''}${v.rejected ? ` · ${v.rejected} não aceita(s)` : ''}` : 'nenhuma entrega avaliada', goal, `${review.feedbacks} feedback(s)${review.demands ? `, ${review.demands} virou(aram) demanda` : ''}`].filter(Boolean);
+    return `<div class="rt-goal neutral"><span>Sprint Review${review.status === 'open' ? ' (em andamento)' : ''}</span><p>${escape(parts.join(' · '))}</p></div>`;
+  }
+
   // ── Cronômetro ───────────────────────────────────────────────────────────────
   const clock = seconds => `${Math.floor(Math.max(0, seconds) / 60)}:${String(Math.floor(Math.max(0, seconds) % 60)).padStart(2, '0')}`;
   /** Tempo da etapa atual e da retro, contando desde a última consulta da sala. */
@@ -200,7 +209,9 @@ window.Retro = (() => {
     if (!data) { el('rt-history').innerHTML = '<p class="pp-muted">Carregando...</p>'; return; }
     const banner = el('rt-open-banner');
     banner.hidden = !data.open;
-    if (data.open) banner.innerHTML = `<span class="rt-dot" aria-hidden="true"></span><span><strong>Retro da ${escape(data.open.sprintName)} em andamento</strong> · facilitador ${escape(data.open.facilitator || '—')} · ${data.open.present} na sala · etapa ${data.open.step + 1} de 7 (${escape(data.open.stepName)})</span><button type="button" class="pp-primary" data-view="room">Entrar na retro</button>`;
+    if (data.open) banner.innerHTML = `<span class="rt-dot" aria-hidden="true"></span><span><strong>Retro da ${escape(data.open.sprintName)} em andamento</strong> · facilitador ${escape(data.open.facilitator || '—')} · etapa ${data.open.step + 1} de 7 (${escape(data.open.stepName)})</span>
+      ${window.Ceremony ? Ceremony.barHtml({present: data.open.present || [], seconds: data.open.elapsedSeconds || 0, label: 'Retro', targetMinutes: TOTAL_MINUTES}) : ''}
+      <button type="button" class="pp-primary" data-view="room">Entrar na retro</button>`;
     const k = data.kpis;
     const card = (filter, kind, label, value, detail, bar = null) => `<button type="button" class="rt-kpi ${kind}" data-filter="${filter}" aria-pressed="${state.filter === filter}"><span>${label}</span><strong>${value}</strong><small>${detail}</small>${bar === null ? '' : `<span class="rt-bar" aria-hidden="true"><b style="width:${bar}%"></b></span>`}</button>`;
     const retros = data.sprints.filter(sprint => sprint.retro).length;
@@ -257,7 +268,8 @@ window.Retro = (() => {
       : a?.total ? `<small><b>${a.total} ação(ões)</b> · ${a.done} concluída(s) · ${a.open} em andamento${a.late ? ` · ${a.late} atrasada(s)` : ''}${a.dropped ? ` · ${a.dropped} descartada(s)` : ''}</small><span class="rt-bar" aria-hidden="true"><b style="width:${a.rate ?? 0}%"></b></span>`
       : retro ? '<small>Nenhuma ação registrada</small>' : '<small>—</small>';
     return `<article class="rt-row ${retro ? '' : 'none'}">
-      <div><h3>${escape(sprint.name)}</h3><div class="rt-when">${day(sprint.start)} – ${day(sprint.end)}${retro ? ` · retro ${day(retro.date)}` : ''}</div></div>
+      <div><h3>${escape(sprint.name)}</h3><div class="rt-when">${day(sprint.start)} – ${day(sprint.end)}${retro ? ` · retro ${day(retro.date)}` : ''}</div>
+        ${retro && window.Ceremony ? `<div class="rt-attendance">${Ceremony.attendanceHtml(retro.attendees || [], retro.durationSeconds, {live: retro.status === 'open'})}</div>` : ''}</div>
       <div class="rt-counts">${counts}</div>
       <div class="rt-prog">${progress}</div>
       <div class="rt-row-buttons">${eye}${action}</div>
@@ -323,6 +335,7 @@ window.Retro = (() => {
       : `<button type="button" class="rt-vote-goal ${kind}" data-goal-vote="${key}" aria-pressed="${votes.mine === key}" ${state.busy ? 'disabled' : ''}>${label} <b>${votes[key]}</b></button>`;
     return `${stepHead('O que os dados mostram', readOnly ? 'Indicadores da sprint' : 'Calculados automaticamente da sprint')}
       ${metricsHtml(retro.metrics || metricsFor(retro.sprint, retro.dailyStats), Boolean(retro.metrics))}
+      ${reviewHtml(retro.review)}
       <div class="rt-goal"><span>Objetivo da sprint (da Sprint Planning)</span><p>${retro.sprintGoal ? escape(retro.sprintGoal) : '<em>Sem objetivo registrado na planning.</em>'}</p></div>
       <div class="rt-goal-votes"><span>O time atingiu o objetivo?</span>${vote('yes', 'Sim', 'green')}${vote('partial', 'Parcial', 'yellow')}${vote('no', 'Não', 'red')}</div>
       ${retro.canConduct && !readOnly ? `<label class="rt-field">Contexto observado (facilitador)<textarea id="rt-context" data-draft rows="2" maxlength="4000">${draft('rt-context', retro.context)}</textarea></label>
@@ -447,11 +460,13 @@ window.Retro = (() => {
       el('rt-room-top').innerHTML = `<span class="rt-chip">Retro feita fora do app</span><span class="pp-muted">${day(review.sprint.start)} a ${day(review.sprint.end)}</span>`;
       el('rt-step').innerHTML = `${stepHead(`Dados da ${escape(review.sprint.name)}`, 'Indicadores calculados com as mesmas regras do Dashboard')}
         ${metricsHtml(metricsFor(review.sprint.number, review.dailyStats), false)}
+        ${reviewHtml(review.review)}
         <div class="rt-goal"><span>Objetivo da sprint (da Sprint Planning)</span><p>${review.sprintGoal ? escape(review.sprintGoal) : '<em>Sem objetivo registrado na planning.</em>'}</p></div>`;
       return;
     }
     el('rt-room-top').innerHTML = `<span class="rt-chip ${retro.status === 'open' ? 'blue' : 'green'}">${retro.status === 'open' ? 'Em andamento' : 'Encerrada'}</span>
-      <span class="pp-muted">Facilitador ${escape(retro.facilitator?.name || '—')} · ${day(retro.startedAt)}${retro.closedAt ? ` · ${Math.round(retro.elapsedSeconds / 60)} min de retro` : ''}</span>`;
+      <span class="pp-muted">Facilitador ${escape(retro.facilitator?.name || '—')} · ${day(retro.startedAt)}</span>
+      ${window.Ceremony ? Ceremony.attendanceHtml(retro.attendees || [], retro.elapsedSeconds, {live: retro.status === 'open'}) : ''}`;
     el('rt-step').innerHTML = STEP_RENDERERS.map(renderer => `<div class="rt-review-block">${renderer(retro, true)}</div>`).join('');
   }
 

@@ -4,11 +4,13 @@ namespace App\Services;
 
 use App\Models\DailyAction;
 use App\Models\DailyActionEvent;
+use App\Models\DailyParticipant;
 use App\Models\DailyScrum;
 use App\Models\MondayConnection;
 use App\Models\User;
 use App\Support\SprintRules;
 use Carbon\CarbonInterface;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -23,6 +25,9 @@ use Throwable;
  */
 class DailyService
 {
+    /** Quem consultou a Daily nos últimos segundos está presente (a tela consulta a presença a cada 10 segundos). */
+    public const PRESENCE_SECONDS = 30;
+
     public function __construct(private MondayService $monday, private MondaySnapshotService $snapshots, private PlanningService $planning, private RetrospectiveService $retrospectives) {}
 
     /**
@@ -40,7 +45,13 @@ class DailyService
         $sprints = collect($snapshot['sprints'] ?? [])->sortByDesc('start')->values();
         $sprint ??= (int) ($sprints->first(fn (array $item): bool => $item['start'] <= $today && $item['end'] >= $today)['number']
             ?? $sprints->first(fn (array $item): bool => $item['start'] <= $today)['number'] ?? 0);
-        $dailies = DailyScrum::query()->where('sprint', $sprint)->withCount('actions')->orderBy('date')->get();
+        // Abrir a Daily de hoje da sprint atual já conta presença (e cria a Daily do dia, se for a primeira pessoa).
+        if ($date === $today) {
+            $this->join($snapshot, $user, $sprint);
+        }
+        $dailies = DailyScrum::query()->where('sprint', $sprint)->withCount(['actions', 'actions as done_count' => fn ($query) => $query->where('status', DailyAction::DONE)])
+            ->with('participants.user')->orderBy('date')->get();
+        $selected = $dailies->first(fn (DailyScrum $daily): bool => $daily->date->toDateString() === $date);
         $actions = DailyAction::query()->where('sprint', $sprint)
             ->whereHas('daily', fn ($query) => $query->whereDate('date', '<=', $date))
             ->with(['daily', 'responsible', 'opener', 'closer', 'events.user'])->orderBy('opened_at')->get();
@@ -52,7 +63,10 @@ class DailyService
             'date' => $date,
             'today' => $today,
             'goal' => $this->planning->goal($sprint),
-            'dailies' => $dailies->map(fn (DailyScrum $daily): array => ['date' => $daily->date->toDateString(), 'actions' => $daily->actions_count])->all(),
+            'dailies' => $dailies->map(fn (DailyScrum $daily): array => [
+                'date' => $daily->date->toDateString(), 'actions' => $daily->actions_count, 'done' => $daily->done_count, ...$this->presenceOf($daily),
+            ])->all(),
+            'presence' => $selected ? $this->presenceOf($selected) : null,
             'actions' => $actions->map(fn (DailyAction $action): array => $this->present($action))->all(),
             'users' => User::query()->orderBy('name')->get(['id', 'name'])->map(fn (User $person): array => ['id' => $person->id, 'name' => $person->name])->all(),
             'statusAges' => $this->statusAges($snapshot, $connection, $sprint, min($date, $today)),
@@ -61,6 +75,74 @@ class DailyService
             'retroActions' => $this->retrospectives->openActions($user),
             'syncedAt' => $snapshot['syncedAt'] ?? null,
         ];
+    }
+
+    /**
+     * Presença na Daily de hoje: quem está com a tela aberta agora, quem já passou por ela e o tempo da Daily. A tela
+     * chama a cada poucos segundos enquanto está na Daily de hoje da sprint atual.
+     *
+     * @return array{present: list<string>, attendees: list<string>, startedAt: ?string, seconds: int, live: bool}|null
+     */
+    public function presence(MondayConnection $connection, User $user, int $sprint): ?array
+    {
+        $daily = $this->join($this->snapshots->latest($connection, PHP_INT_MAX), $user, $sprint);
+
+        return $daily ? $this->presenceOf($daily) : null;
+    }
+
+    /**
+     * Coloca a pessoa na Daily de hoje, só quando a sprint é a atual (Dailies de sprints passadas são só consulta).
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function join(array $snapshot, User $user, int $sprint): ?DailyScrum
+    {
+        $today = SprintRules::today();
+        $current = collect($snapshot['sprints'] ?? [])->contains(fn (array $item): bool => (int) $item['number'] === $sprint && $item['start'] <= $today && $item['end'] >= $today);
+        if (! $current) {
+            return null;
+        }
+        $daily = $this->todayDaily($sprint, $user);
+        // Gravação atômica: duas abas ou duas pessoas ao mesmo tempo não duplicam a presença; a primeira entrada fica.
+        DailyParticipant::query()->upsert(
+            [['daily_scrum_id' => $daily->id, 'user_id' => $user->id, 'first_seen_at' => now(), 'last_seen_at' => now(), 'created_at' => now(), 'updated_at' => now()]],
+            ['daily_scrum_id', 'user_id'], ['last_seen_at', 'updated_at'],
+        );
+
+        return $daily;
+    }
+
+    /** A Daily de hoje da sprint, criada pela primeira pessoa que abre a tela ou registra uma ação. */
+    private function todayDaily(int $sprint, User $user): DailyScrum
+    {
+        $today = SprintRules::today();
+        $find = fn (): ?DailyScrum => DailyScrum::query()->where('sprint', $sprint)->whereDate('date', $today)->first();
+        try {
+            return $find() ?? DailyScrum::query()->create(['sprint' => $sprint, 'date' => $today, 'created_by' => $user->id]);
+        } catch (UniqueConstraintViolationException) {
+            return $find();
+        }
+    }
+
+    /**
+     * Presentes e tempo de uma Daily: começa na primeira entrada e termina na última saída; enquanto alguém está na tela,
+     * o tempo continua contando.
+     *
+     * @return array{present: list<string>, attendees: list<string>, startedAt: ?string, seconds: int, live: bool}
+     */
+    public function presenceOf(DailyScrum $daily): array
+    {
+        $people = $daily->relationLoaded('participants') ? $daily->participants : $daily->participants()->with('user')->get();
+        if ($people->isEmpty()) {
+            return ['present' => [], 'attendees' => [], 'startedAt' => null, 'seconds' => 0, 'live' => false];
+        }
+        $cut = now()->subSeconds(self::PRESENCE_SECONDS);
+        $present = $people->filter(fn (DailyParticipant $person): bool => $person->last_seen_at->gte($cut));
+        $start = $people->min('first_seen_at');
+        $end = $present->isNotEmpty() ? now() : $people->max('last_seen_at');
+        $names = fn ($list): array => $list->map(fn (DailyParticipant $person): ?string => $person->user?->name)->filter()->sort()->values()->all();
+
+        return ['present' => $names($present), 'attendees' => $names($people), 'startedAt' => $start->toIso8601String(), 'seconds' => (int) $start->diffInSeconds($end, true), 'live' => $present->isNotEmpty()];
     }
 
     /**
@@ -78,9 +160,7 @@ class DailyService
         }
 
         $action = DB::transaction(function () use ($user, $sprint, $description, $responsibleId, $item): DailyAction {
-            $today = SprintRules::today();
-            $daily = DailyScrum::query()->where('sprint', $sprint)->whereDate('date', $today)->lockForUpdate()->first()
-                ?? DailyScrum::query()->create(['sprint' => $sprint, 'date' => $today, 'created_by' => $user->id]);
+            $daily = $this->todayDaily($sprint, $user);
             $action = $daily->actions()->create([
                 'sprint' => $sprint, 'description' => trim($description), 'responsible_id' => $responsibleId,
                 ...($item ?? []), 'status' => DailyAction::PENDING, 'opened_by' => $user->id, 'opened_at' => now(),
@@ -317,9 +397,10 @@ class DailyService
     public function history(int $sprint): array
     {
         return DailyScrum::query()->where('sprint', $sprint)->orderBy('date')
-            ->with(['actions' => fn ($query) => $query->orderBy('opened_at'), 'actions.daily', 'actions.responsible', 'actions.opener', 'actions.closer', 'actions.events.user'])
+            ->with(['actions' => fn ($query) => $query->orderBy('opened_at'), 'actions.daily', 'actions.responsible', 'actions.opener', 'actions.closer', 'actions.events.user', 'participants.user'])
             ->get()->map(fn (DailyScrum $daily): array => [
                 'date' => $daily->date->toDateString(),
+                ...$this->presenceOf($daily),
                 'actions' => $daily->actions->map(fn (DailyAction $action): array => $this->present($action))->all(),
             ])->all();
     }

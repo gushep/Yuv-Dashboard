@@ -102,7 +102,7 @@ window.Daily = (() => {
       if (state.date) url.searchParams.set('date', state.date);
       const data = await mondayRequest(url.pathname + url.search);
       if (request !== state.request) return;
-      state.data = data; state.sprint = data.sprint; state.date = data.date; state.error = '';
+      state.data = data; state.sprint = data.sprint; state.date = data.date; state.error = ''; state.presenceAt = Date.now();
       window.rememberScreenSprint?.('daily-scrum', data.sprint);
     } catch (error) {
       if (request === state.request) state.error = error.message;
@@ -117,7 +117,7 @@ window.Daily = (() => {
     try {
       const base = el('page-daily-scrum').dataset.url.replace(/\/$/, '');
       state.data = await mondayRequest(`${base}${path}`, {...body, date: state.date});
-      state.error = '';
+      state.error = ''; state.presenceAt = Date.now();
     } catch (error) {
       state.error = error.message; ok = false;
     } finally {
@@ -149,6 +149,63 @@ window.Daily = (() => {
     renderBoard(mine, data);
     renderTodo(data, cards);
     renderRetroActions(data);
+    renderPresence(data);
+    renderHistory(data);
+  }
+
+  // ── Presentes e tempo ────────────────────────────────────────────────────────
+  const DAILY_MINUTES = 15;
+  const PRESENCE_MS = 10000;
+  const isToday = data => data.date === data.today;
+  const liveSeconds = presence => (presence?.seconds || 0) + (presence?.live ? (Date.now() - state.presenceAt) / 1000 : 0);
+
+  /** Hoje: quem está na tela e o tempo da Daily contra 15 min. Dias anteriores: quem esteve e quanto durou. */
+  function renderPresence(data) {
+    const box = el('daily-presence');
+    if (!box || !window.Ceremony) return;
+    const presence = data.presence;
+    if (isToday(data) && presence) {
+      box.innerHTML = Ceremony.barHtml({present: presence.present, seconds: liveSeconds(presence), label: 'Daily', targetMinutes: DAILY_MINUTES, live: presence.live});
+    } else if (presence) {
+      box.innerHTML = `<div class="cer-bar">${Ceremony.attendanceHtml(presence.attendees, presence.seconds)}</div>`;
+    } else {
+      box.innerHTML = isToday(data) ? '' : '<div class="cer-bar"><span class="cer-attendance empty">Sem registro de presença nesta Daily</span></div>';
+    }
+  }
+
+  /** Lista das Dailies da sprint, da mais recente para a mais antiga; clicar abre a Daily daquele dia. */
+  function renderHistory(data) {
+    const list = el('daily-history-list');
+    if (!list || !window.Ceremony) return;
+    const dailies = [...data.dailies].reverse();
+    el('daily-history-count').textContent = dailies.length ? `${dailies.length} Daily(s)` : '';
+    list.innerHTML = dailies.length ? `<ul class="daily-history-rows">${dailies.map(daily => `<li>
+        <button type="button" class="daily-history-row ${daily.date === data.date ? 'selected' : ''}" data-daily-date="${daily.date}">
+          <strong>${daily.date === data.today ? `Hoje (${day(daily.date)})` : day(daily.date)}</strong>
+          ${Ceremony.attendanceHtml(daily.attendees || [], daily.seconds, {live: daily.live})}
+          <span class="daily-history-actions">${daily.actions ? `${daily.actions} responsabilidade(s) · ${daily.done} resolvida(s)` : 'nenhuma responsabilidade aberta'}</span>
+        </button></li>`).join('')}</ul>` : '<p class="daily-empty">Nenhuma Daily registrada nesta sprint.</p>';
+  }
+
+  /** Enquanto a Daily de hoje está aberta, avisa a presença e atualiza quem está na tela a cada 10 segundos. */
+  async function pingPresence() {
+    if (!state.active || !state.data || !isToday(state.data) || document.hidden) return;
+    try {
+      const base = el('page-daily-scrum').dataset.url.replace(/\/$/, '');
+      const result = await mondayRequest(`${base}/presence`, {sprint: state.sprint});
+      if (!state.data || !result.presence) return;
+      state.data.presence = result.presence;
+      state.presenceAt = Date.now();
+      const today = state.data.dailies.find(daily => daily.date === state.data.today);
+      if (today) Object.assign(today, result.presence); else state.data.dailies.push({date: state.data.today, actions: 0, done: 0, ...result.presence});
+      renderPresence(state.data);
+      renderHistory(state.data);
+    } catch { /* a presença é só apoio; a Daily segue funcionando */ }
+  }
+
+  function tickPresence() {
+    const clock = el('daily-presence')?.querySelector('[data-cer-clock]');
+    if (clock && state.data?.presence?.live && isToday(state.data)) clock.textContent = Ceremony.clock(liveSeconds(state.data.presence));
   }
 
   /** Ações abertas das retrospectivas (de qualquer sprint), abaixo das responsabilidades; concluir pede o resultado. */
@@ -426,6 +483,8 @@ window.Daily = (() => {
     if (target.closest('[data-close]')) { target.closest('dialog')?.close(); return; }
     const dev = target.closest('[data-daily-dev]');
     if (dev) { state.dev = dev.dataset.dailyDev; render(); return; }
+    const pickDate = target.closest('[data-daily-date]');
+    if (pickDate) { state.date = pickDate.dataset.dailyDate; load(); el('page-daily-scrum').scrollIntoView({behavior: 'smooth', block: 'start'}); return; }
     const move = target.closest('[data-daily-step]');
     if (move) { step(Number(move.dataset.dailyStep)); return; }
     const filter = target.closest('[data-daily-filter]');
@@ -486,6 +545,7 @@ window.Daily = (() => {
     const open = actions.filter(action => action.status === 'pending').length;
     return `<h2 class="pp-dailies-title">Dailies · ${dailies.length} Daily(s) · ${actions.length} responsabilidade(s) · ${open} pendente(s)</h2>
       <div class="pp-dailies">${dailies.map(daily => `<section class="pp-daily"><h3>Daily de ${day(daily.date)} <small>${daily.actions.length} responsabilidade(s)</small></h3>
+        ${window.Ceremony && (daily.attendees?.length || daily.seconds) ? `<p class="pp-daily-attendance">${Ceremony.attendanceHtml(daily.attendees || [], daily.seconds, {live: daily.live})}</p>` : ''}
         <ul>${daily.actions.map(action => `<li class="${action.status}">
           <strong>${action.status === 'done' ? '✅' : '⏳'} ${escape(action.description)}</strong>
           <span>👤 ${escape(action.responsible?.name || 'Sem responsável')}${action.item ? ` · 🔗 ${escape(action.item.name)}` : ''}${action.status === 'done' ? ` · resolvida em ${escape(action.elapsed)}` : ' · pendente'}${action.reopened ? ` · reaberta ${action.reopened}x` : ''}${action.publishStatus === 'published' ? ' · publicada no Monday' : ''}</span>
@@ -499,8 +559,11 @@ window.Daily = (() => {
     render();
     window.HoursStrip?.loadReserves().then(() => render());
     load();
+    clearInterval(state.presenceTimer); clearInterval(state.clockTimer);
+    state.presenceTimer = setInterval(pingPresence, PRESENCE_MS);
+    state.clockTimer = setInterval(tickPresence, 1000);
   }
-  function leave() { state.active = false; el('daily-done-dialog')?.close(); }
+  function leave() { state.active = false; clearInterval(state.presenceTimer); clearInterval(state.clockTimer); el('daily-done-dialog')?.close(); }
   function onDataUpdated() { if (state.active) render(); }
 
   document.addEventListener('DOMContentLoaded', () => {

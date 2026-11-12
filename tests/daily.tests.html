@@ -18,7 +18,8 @@ DATA[1].Prioridade = 'Baixa'; DATA[2].Prioridade = 'Crítica';
 const state = {
   sprint: 20, date: '2026-11-12', today: '2026-11-12', goal: 'Entregar o relatório de jornada.',
   sprints: [{number: 20, name: 'Sprint 20', start: '2026-11-10', end: '2026-11-21'}],
-  dailies: [{date: '2026-11-11', actions: 1}, {date: '2026-11-12', actions: 1}],
+  dailies: [{date: '2026-11-11', actions: 1, done: 1, present: [], attendees: ['Ana', 'Bruno', 'Gustavo'], seconds: 840, live: false}, {date: '2026-11-12', actions: 1, done: 0, present: ['Ana', 'Bruno'], attendees: ['Ana', 'Bruno'], seconds: 600, live: true}],
+  presence: {present: ['Ana', 'Bruno'], attendees: ['Ana', 'Bruno'], startedAt: '2026-11-12T12:20:00Z', seconds: 1000, live: true},
   users: [{id: 1, name: 'Ana'}, {id: 2, name: 'Bruno'}],
   statusAges: {'1': {since: '2026-11-10', workingDays: 2}, '7': {since: null, workingDays: null}},
   canPublish: true,
@@ -48,7 +49,7 @@ const load = src => new Promise((resolve, reject) => { const script = document.c
     const blade = html => html.replace(/\{\{--[\s\S]*?--\}\}/g, '').replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, '../public/$1').replace(/\{\{[\s\S]*?\}\}/g, '');
     document.getElementById('fixture').innerHTML = blade(await (await fetch('../resources/views/daily.blade.php')).text());
     const page = document.getElementById('page-daily-scrum'); page.dataset.url = '/api/daily'; page.classList.add('active');
-    for (const src of ['sprint-rules', 'capacity', 'hours-strip', 'kpi-table', 'daily']) await load(`../public/${src}.js`);
+    for (const src of ['sprint-rules', 'capacity', 'hours-strip', 'kpi-table', 'ceremony', 'daily']) await load(`../public/${src}.js`);
     document.dispatchEvent(new Event('DOMContentLoaded'));
     SprintRules.applySettings({team: [{id: '1', name: 'Ana', group: 'fullstack'}, {id: '2', name: 'Bruno', group: 'fullstack'}]});
 
@@ -109,6 +110,10 @@ const load = src => new Promise((resolve, reject) => { const script = document.c
     const created = requests.find(([path]) => path === '/api/daily/actions');
     check('Nova ação na Daily de hoje, com responsável e card opcional', created && created[1].sprint === 20 && created[1].description === 'Revisar o escopo do mapa' && created[1].responsible_id === '1' && created[1].item_id === null);
 
+    check('Daily de hoje: quem está na tela e o tempo contra 15 min, com alerta quando passa', text('daily-presence').includes('2 na sala') && /Daily 16:4\d de 15:00/.test(text('daily-presence')) && text('daily-presence').includes('passou de 15 min'));
+    const historyRows = [...document.querySelectorAll('.daily-history-row')];
+    check('Lista das Dailies da sprint com presentes, duração e responsabilidades (a mais recente primeiro)', historyRows.length === 2 && historyRows[0].textContent.includes('Hoje (12/11)') && historyRows[0].textContent.includes('até agora')
+      && historyRows[1].textContent.includes('👥 3 · ⏱ 14 min') && historyRows[1].textContent.includes('1 resolvida(s)') && historyRows[1].querySelector('[title="Presentes: Ana, Bruno, Gustavo"]'));
     check('Ações das retros abertas no fim da Daily, com atraso; só responsável e facilitador concluem', text('daily-retro').includes('2 aberta(s) · 1 atrasada(s)') && text('daily-retro').includes('Retro da Sprint 18')
       && text('daily-retro').includes('3 dia(s) atrasada') && !document.querySelector('[data-retro-done="31"]').disabled && document.querySelector('[data-retro-done="32"]').disabled);
     document.querySelector('[data-retro-done="31"]').click(); await tick();
