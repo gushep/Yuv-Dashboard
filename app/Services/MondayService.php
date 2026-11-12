@@ -904,9 +904,19 @@ GRAPHQL;
      */
     public function postComment(string $token, array $boardIds, string $itemId, string $text, string $author): string
     {
-        $this->boardItem($token, $boardIds, 'query ($ids: [ID!]!) { items(ids: $ids) { id board { id } } }', ['ids' => [$itemId]]);
         $paragraphs = $text === '' ? '<p>Evidências anexadas.</p>' : '<p>'.nl2br(e($text), false).'</p>';
-        $body = $paragraphs.'<p><em>Enviado por '.e($author).' pelo Yuv Sprint Metrics</em></p>';
+
+        return $this->postHtmlComment($token, $boardIds, $itemId, $paragraphs, $author);
+    }
+
+    /**
+     * Publica no card um comentário já em HTML (negrito, quebras e emojis), montado pelo próprio app com os textos
+     * escapados. Assina com quem enviou pelo dashboard, como o postComment.
+     */
+    public function postHtmlComment(string $token, array $boardIds, string $itemId, string $html, string $author): string
+    {
+        $this->boardItem($token, $boardIds, 'query ($ids: [ID!]!) { items(ids: $ids) { id board { id } } }', ['ids' => [$itemId]]);
+        $body = $html.'<p><em>Enviado por '.e($author).' pelo Yuv Sprint Metrics</em></p>';
         $update = $this->query($token, 'mutation ($item: ID!, $body: String!) { create_update(item_id: $item, body: $body) { id } }', ['item' => $itemId, 'body' => $body]);
         $updateId = (string) ($update['create_update']['id'] ?? '');
         if (! ctype_digit($updateId)) {
@@ -1199,8 +1209,9 @@ GRAPHQL;
 
     /**
      * Datas de cada sprint e o número da sprint de cada item do quadro de sprints (usado para ler o log de atividades).
+     * `completed` vem da caixa "Concluído?" do cronograma (a sprint fechada no Monday), que libera a retrospectiva.
      *
-     * @return array{dates: list<array{number: int, name: string, start: string, end: string, source: string}>, items: array<string, int>}
+     * @return array{dates: list<array{number: int, name: string, start: string, end: string, source: string, completed: bool}>, items: array<string, int>}
      */
     private function sprintDates(array $taskBoard, string $token, string $sprintColumnId): array
     {
@@ -1210,7 +1221,7 @@ GRAPHQL;
         if (! $boardId) {
             return ['dates' => [], 'items' => []];
         }
-        $query = 'query ($board: [ID!]!) { boards(ids: $board) { items_page(limit: 500) { items { id name column_values { id type ... on TimelineValue { from to } } } } } }';
+        $query = 'query ($board: [ID!]!) { boards(ids: $board) { items_page(limit: 500) { items { id name column_values { id type ... on TimelineValue { from to } ... on CheckboxValue { checked } } } } } }';
         $data = $this->query($token, $query, ['board' => [(string) $boardId]]);
         $dates = [];
         $sprintItems = [];
@@ -1219,15 +1230,16 @@ GRAPHQL;
                 continue;
             }
             $sprintItems[(string) $item['id']] = (int) $matches[1];
-            foreach ($item['column_values'] ?? [] as $value) {
-                if (($value['type'] ?? '') === 'timeline' && ! empty($value['from']) && ! empty($value['to'])) {
-                    $dates[] = [
-                        'number' => (int) $matches[1], 'name' => $item['name'],
-                        'start' => substr($value['from'], 0, 10), 'end' => substr($value['to'], 0, 10),
-                        'source' => 'Cronograma do sprint no Monday',
-                    ];
-                    break;
-                }
+            $values = collect($item['column_values'] ?? []);
+            $timeline = $values->first(fn (array $value): bool => ($value['type'] ?? '') === 'timeline' && ! empty($value['from']) && ! empty($value['to']));
+            if ($timeline !== null) {
+                $completion = $values->first(fn (array $value): bool => ($value['type'] ?? '') === 'checkbox' && ($value['id'] ?? '') === 'sprint_completion');
+                $dates[] = [
+                    'number' => (int) $matches[1], 'name' => $item['name'],
+                    'start' => substr($timeline['from'], 0, 10), 'end' => substr($timeline['to'], 0, 10),
+                    'source' => 'Cronograma do sprint no Monday',
+                    'completed' => (bool) ($completion['checked'] ?? false),
+                ];
             }
         }
 

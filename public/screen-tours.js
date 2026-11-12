@@ -168,9 +168,25 @@ window.ScreenTours = (() => {
       {element: '#users-save', title: 'Salvar', description: 'Cadastra ou salva a pessoa.'},
       {element: '#users-body', title: 'Cadastrados', description: 'Quem já tem acesso, com as telas e as ações de editar.'}
     ]},
-    'daily-scrum': {title: 'Daily Scrum', steps: underConstruction('Daily Scrum', 'Aqui o time vai acompanhar o andamento diário da sprint: o que avançou, o que vem a seguir e os impedimentos.')},
+    'daily-scrum': {title: 'Daily Scrum', steps: () => [
+      {title: 'Daily Scrum', description: 'A Daily pessoa por pessoa, rápida e objetiva: o que está impedido, em andamento e o que vem, com as horas de cada um e as responsabilidades que saem da Daily para destravar. Cards, status e horas vêm do Monday.'},
+      {element: '#daily-sprint', title: 'Sprint e Daily', description: 'Escolha a sprint e a Daily. A de hoje recebe novas responsabilidades; as anteriores ficam para consulta.'},
+      {element: '#daily-macro', title: 'A sprint em resumo', description: 'O objetivo da sprint, os cards por situação, as horas do time, a <strong>tendência</strong> (o que falta nos cards abertos contra a capacidade dos dias úteis restantes: 🟢 no prazo, 🟡 apertado, 🔴 risco de atraso) e o <strong>XP</strong> das entregas: 10 por entrega, +5 no alvo do estimado e +8 adiantada.'},
+      {element: '#daily-faces', title: 'O time', description: 'Um rosto por pessoa, com o time dela; a marcação vermelha mostra quantos cards impedidos ela tem. Clique no rosto ou use ← e → para passar a vez.'},
+      {element: '#daily-person', title: 'A pessoa da vez', description: 'Capacidade, planejado, consumido, saldo, cards que já estouraram o estimado, a tendência dela e o XP das entregas.'},
+      {element: '#daily-board', title: 'Kanban da pessoa', description: 'Os cards em <strong>Impedido</strong>, <strong>Em andamento</strong>, <strong>Próximos</strong> e <strong>Finalizado</strong> (só Implementado), com prioridade, status real do Monday e horas reais × estimadas: ⚠️ perto do limite a partir de 80%, 🔥 estourado acima de 100%; nas entregas, ⚡ adiantada, 🎯 no alvo ou 🐢 acima. Nos impedidos aparece há quanto tempo estão parados. Só leitura; <strong>＋ responsabilidade</strong> já abre o registro ligado ao card.'},
+      {element: '#daily-todo', title: 'Responsabilidades da Daily', description: 'O que sai da Daily para destravar, agrupado por responsável. O que ficou pendente continua aparecendo nas próximas Dailies, sem duplicar.'},
+      {element: '#daily-actions', title: 'Feito e Reabrir', description: '<strong>Feito</strong> pede a resolução e registra a conclusão e o tempo de resolução. Com card vinculado, a resolução pode ir como comentário no card do Monday (permissão "Atualizar cards"); se o Monday falhar, dá para tentar de novo. <strong>Reabrir</strong> volta às pendências e guarda a conclusão anterior.'},
+      {element: '#daily-retro', title: 'Ações das retrospectivas', description: 'As ações combinadas nas retrospectivas que ainda estão abertas, de qualquer sprint, com prazo e sinal de resultado. Aparecem em todas as Dailies até serem concluídas; só o responsável e o facilitador da retro concluem.'}
+    ]},
     'sprint-review': {title: 'Sprint Review', steps: underConstruction('Sprint Review', 'Aqui o time vai apresentar o que foi entregue na sprint e registrar o retorno de quem participou da revisão.')},
-    'sprint-retrospective': {title: 'Sprint Retrospective', steps: underConstruction('Sprint Retrospective', 'Aqui o time vai registrar o que funcionou, o que melhorar e as ações combinadas para a próxima sprint.')}
+    'sprint-retrospective': {title: 'Sprint Retrospective', steps: () => [
+      {title: 'Sprint Retrospective', description: 'A retrospectiva da sprint com o time na sala e as ações acompanhadas até o fim. A retro só começa depois que a sprint é fechada no Monday (caixa "Concluído?" do cronograma de sprints), e quem inicia e conduz é o Maestro Scrum.'},
+      {element: '#rt-kpis', title: 'Ações das retros', description: 'Ações de todas as retros: em andamento, atrasadas (prazo vencido), concluídas (e quantas atingiram o sinal de resultado), taxa de conclusão e o total. Clique num card para filtrar a lista.'},
+      {element: '#rt-actions', title: 'Acompanhamento', description: 'Cada ação com a retro de origem, responsável, prazo e situação. Só o responsável e o facilitador da retro concluem, descartam ou reabrem. As abertas também aparecem no fim da Daily, todos os dias.'},
+      {element: '#rt-history', title: 'Últimas sprints', description: 'Por sprint: as cartas em Manter, Melhorar e Experimentar, os focos e o andamento das ações. <strong>Iniciar retro</strong> abre a sala (sprint fechada e sem retro), <strong>Entrar na retro</strong> leva para a retro em andamento e o <strong>olhinho</strong> mostra como foi, só para leitura.'},
+      {title: 'Na sala', description: 'Sete etapas com cronômetro: abertura, ações anteriores, dados da sprint, visão do time (cartas viradas até a revelação, depois 3 votos por pessoa), discussão, até dois focos e plano de ação. O cronômetro mostra o tempo da retro e o de cada etapa, e alerta quando estoura. Encerrar congela os indicadores.'}
+    ]}
   };
 
   const has = screen => Boolean(TOURS[screen]);

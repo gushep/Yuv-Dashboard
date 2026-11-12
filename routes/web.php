@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\DailyController;
 use App\Http\Controllers\FeatureRequestController;
 use App\Http\Controllers\MondayController;
 use App\Http\Controllers\PlanningController;
+use App\Http\Controllers\RetrospectiveController;
 use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\ThemeController;
 use App\Http\Controllers\UserController;
@@ -92,6 +94,46 @@ Route::middleware('auth')->group(function () {
         Route::post('/api/feature-requests', [FeatureRequestController::class, 'store'])->name('feature-requests.store');
         Route::post('/api/feature-requests/{item}/files', [FeatureRequestController::class, 'attachFile'])
             ->whereNumber('item')->name('feature-requests.files.store');
+    });
+
+    // Daily Scrum (Daily Hub): ações da Daily para quem tem a tela; publicar no card exige "Atualizar cards" (conferido no serviço).
+    Route::middleware('screen:sprint-retrospective')->prefix('/api/retro')->name('retro.')->group(function () {
+        Route::get('/', [RetrospectiveController::class, 'show'])->name('show');
+        Route::get('/room', [RetrospectiveController::class, 'room'])->name('room');
+        Route::get('/sprints/{sprint}', [RetrospectiveController::class, 'review'])->whereNumber('sprint')->name('review');
+        Route::post('/retros', [RetrospectiveController::class, 'start'])->name('start');
+        Route::whereNumber(['retro', 'card', 'topic', 'action'])->group(function () {
+            Route::post('/retros/{retro}/step', [RetrospectiveController::class, 'step'])->name('step');
+            Route::post('/retros/{retro}/setup', [RetrospectiveController::class, 'setup'])->name('setup');
+            Route::post('/retros/{retro}/reveal', [RetrospectiveController::class, 'reveal'])->name('reveal');
+            Route::post('/retros/{retro}/cards', [RetrospectiveController::class, 'addCard'])->name('cards.store');
+            Route::post('/retros/{retro}/goal-vote', [RetrospectiveController::class, 'goalVote'])->name('goal-vote');
+            Route::post('/retros/{retro}/topics', [RetrospectiveController::class, 'addTopic'])->name('topics.store');
+            Route::post('/retros/{retro}/actions', [RetrospectiveController::class, 'addAction'])->name('actions.store');
+            Route::post('/retros/{retro}/close', [RetrospectiveController::class, 'close'])->name('close');
+            Route::post('/cards/{card}/vote', [RetrospectiveController::class, 'vote'])->name('cards.vote');
+            Route::post('/cards/{card}/merge', [RetrospectiveController::class, 'merge'])->name('cards.merge');
+            Route::post('/cards/{card}/delete', [RetrospectiveController::class, 'deleteCard'])->name('cards.delete');
+            Route::post('/topics/{topic}', [RetrospectiveController::class, 'updateTopic'])->name('topics.update');
+            Route::post('/actions/{action}/delete', [RetrospectiveController::class, 'deleteAction'])->name('actions.delete');
+            Route::post('/actions/{action}/complete', [RetrospectiveController::class, 'complete'])->name('actions.complete');
+            Route::post('/actions/{action}/drop', [RetrospectiveController::class, 'drop'])->name('actions.drop');
+            Route::post('/actions/{action}/keep', [RetrospectiveController::class, 'keep'])->name('actions.keep');
+            Route::post('/actions/{action}/reopen', [RetrospectiveController::class, 'reopen'])->name('actions.reopen');
+        });
+    });
+
+    Route::middleware('screen:daily-scrum')->prefix('/api/daily')->name('daily.')->group(function () {
+        Route::get('/', [DailyController::class, 'show'])->name('show');
+        Route::post('/actions', [DailyController::class, 'store'])->name('actions.store');
+        Route::whereNumber('action')->group(function () {
+            Route::post('/actions/{action}/complete', [DailyController::class, 'complete'])->name('actions.complete');
+            Route::post('/actions/{action}/reopen', [DailyController::class, 'reopen'])->name('actions.reopen');
+            Route::post('/actions/{action}/publish', [DailyController::class, 'publish'])->name('actions.publish');
+            Route::post('/actions/{action}/notice', [DailyController::class, 'notice'])->name('actions.notice');
+            Route::post('/retro-actions/{action}/complete', [DailyController::class, 'completeRetroAction'])->name('retro-actions.complete');
+            Route::post('/actions/{action}/preview', [DailyController::class, 'preview'])->name('actions.preview');
+        });
     });
 
     Route::middleware('screen:planning')->prefix('/api/planning')->name('planning.')->group(function () {

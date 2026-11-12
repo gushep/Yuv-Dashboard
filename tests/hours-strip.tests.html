@@ -23,7 +23,7 @@ const load = src => new Promise((resolve, reject) => { const script = document.c
   try {
     const dashboard = await (await fetch('../resources/views/dashboard.blade.php')).text();
     const style = document.createElement('style'); style.textContent = dashboard.match(/<style>([\s\S]*?)<\/style>/)[1]; document.head.prepend(style);
-    document.getElementById('fixture').innerHTML = dashboard.match(/<div class="topbar">[\s\S]*?<div class="topbar-right" id="tb-right"><\/div>\s*<\/div>/)[0];
+    document.getElementById('fixture').innerHTML = dashboard.match(/<div class="topbar">[\s\S]*?<div class="topbar-right" id="tb-right"><\/div>/)[0] + '</div>';
     await load('../public/sprint-rules.js'); await load('../public/capacity.js'); await load('../public/hours-strip.js');
     SprintRules.applySettings({team: [{id: '1', name: 'Ana', group: 'fullstack'}]});
     const bar = document.getElementById('tb-hours');

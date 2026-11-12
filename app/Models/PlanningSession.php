@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * Mesa da planning poker de uma sprint: aberta pelo Maestro Scrum, uma por vez para o time todo.
  */
-#[Fillable(['sprint', 'sprint_name', 'status', 'started_by', 'closed_at'])]
+#[Fillable(['sprint', 'sprint_name', 'goal', 'status', 'started_by', 'closed_at'])]
 class PlanningSession extends Model
 {
     /** @use HasFactory<PlanningSessionFactory> */

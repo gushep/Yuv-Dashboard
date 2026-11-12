@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\MondayConnection;
 use App\Models\PlanningRound;
 use App\Models\PlanningSession;
+use App\Services\DailyService;
 use App\Services\PlanningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,13 +40,18 @@ class PlanningController extends Controller
 
     public function closeTable(Request $request, PlanningSession $session): JsonResponse
     {
-        return $this->table($request, fn () => $this->planning->closeTable($this->connection(), $session));
+        $data = $request->validate(
+            ['goal' => ['required', 'string', 'max:2000']],
+            ['goal.required' => 'Informe o objetivo da sprint para encerrar a planning.', 'goal.max' => 'O objetivo da sprint deve ter no máximo 2.000 caracteres.'],
+        );
+
+        return $this->table($request, fn () => $this->planning->closeTable($this->connection(), $session, trim($data['goal'])));
     }
 
-    /** Como foi a planning de uma sprint (só leitura). */
-    public function review(int $sprint): JsonResponse
+    /** Como foi a planning de uma sprint (só leitura), com as Dailies da sprint. */
+    public function review(int $sprint, DailyService $daily): JsonResponse
     {
-        return $this->attempt(fn (): array => $this->planning->review($this->connection(), $sprint));
+        return $this->attempt(fn (): array => $this->planning->review($this->connection(), $sprint) + ['dailies' => $daily->history($sprint)]);
     }
 
     public function playCard(Request $request, PlanningSession $session): JsonResponse

@@ -280,6 +280,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="{{ URL::versioned('kpi-table.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('burndown.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('planning.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('daily.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('retro.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('users.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('item-detail.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('new-ticket.css') }}">
@@ -666,9 +668,9 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     @include('control-tower')
     @include('burndown')
     @include('planning')
-    @include('under-construction', ['screen' => 'daily-scrum', 'title' => 'Daily Scrum', 'subtitle' => 'O alinhamento diário do time', 'description' => 'Aqui o time vai acompanhar o andamento diário da sprint: o que avançou, o que vem a seguir e os impedimentos.'])
+    @include('daily')
     @include('under-construction', ['screen' => 'sprint-review', 'title' => 'Sprint Review', 'subtitle' => 'A revisão do que foi entregue na sprint', 'description' => 'Aqui o time vai apresentar o que foi entregue na sprint e registrar o retorno de quem participou da revisão.'])
-    @include('under-construction', ['screen' => 'sprint-retrospective', 'title' => 'Sprint Retrospective', 'subtitle' => 'O que manter e o que melhorar na próxima sprint', 'description' => 'Aqui o time vai registrar o que funcionou, o que melhorar e as ações combinadas para a próxima sprint.'])
+    @include('retro')
     @include('users')
 
     <!-- SEM ACESSO -->
@@ -1083,6 +1085,8 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   if(previousPage==='control-tower'&&page!=='control-tower') window.ControlTower?.leave();
   if(previousPage==='burndown'&&page!=='burndown') window.Burndown?.leave();
   if(previousPage==='planning'&&page!=='planning') window.Planning?.leave();
+  if(previousPage==='daily-scrum'&&page!=='daily-scrum') window.Daily?.leave();
+  if(previousPage==='sprint-retrospective'&&page!=='sprint-retrospective') window.Retro?.leave();
   if(previousPage==='users'&&page!=='users') window.Users?.leave();
   // Antes dos dados chegarem, guarda a sprint pedida na URL; depois, troca por uma que exista.
   if(page==='sprint'&&SPRINTS.length&&!SPRINTS.includes(sp)) sp=defaultSprint();
@@ -1098,7 +1102,7 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   setActiveNav(`nav-${page}`);
   if(page==='sprint'&&sp!==null) document.getElementById('sprintSel').value=String(sp);
   document.getElementById('page-'+page)?.classList.add('active');
-  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Tarefas','tarefas das sprints · detalhe, status e evidências'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar'],burndown:['Burndown','quanto falta implementar na sprint, dia a dia'],planning:['Sprint Planning','planning poker · estimativa em horas dos cards do Backlog do quadro Tarefas'],'daily-scrum':['Daily Scrum','Gerenciamento Ágil · em construção'],'sprint-review':['Sprint Review','Gerenciamento Ágil · em construção'],'sprint-retrospective':['Sprint Retrospective','Gerenciamento Ágil · em construção']};
+  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Tarefas','tarefas das sprints · detalhe, status e evidências'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar'],burndown:['Burndown','quanto falta implementar na sprint, dia a dia'],planning:['Sprint Planning','planning poker · estimativa em horas dos cards do Backlog do quadro Tarefas'],'daily-scrum':['Daily Scrum','Gerenciamento Ágil · alinhamento diário pessoa por pessoa'],'sprint-review':['Sprint Review','Gerenciamento Ágil · em construção'],'sprint-retrospective':['Sprint Retrospective','Gerenciamento Ágil · aprender com a sprint e acompanhar as ações']};
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
@@ -1123,6 +1127,8 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   else if(page==='control-tower') window.ControlTower?.enter(hint);
   else if(page==='burndown') window.Burndown?.enter(hint);
   else if(page==='planning') window.Planning?.enter();
+  else if(page==='daily-scrum') window.Daily?.enter(hint);
+  else if(page==='sprint-retrospective') window.Retro?.enter();
   else if(page==='users') window.Users?.enter();
   else if(page==='settings') window.enterMondaySettings?.();
   if(page==='carousel') scheduleMondayRefresh();
@@ -2107,6 +2113,8 @@ window.addEventListener('popstate',()=>{
 <script src="{{ URL::versioned('control-tower.js') }}"></script>
 <script src="{{ URL::versioned('burndown.js') }}"></script>
 <script src="{{ URL::versioned('planning.js') }}"></script>
+<script src="{{ URL::versioned('daily.js') }}"></script>
+<script src="{{ URL::versioned('retro.js') }}"></script>
 <script src="{{ URL::versioned('users.js') }}"></script>
 <script src="{{ URL::versioned('attachments.js') }}"></script>
 <script src="{{ URL::versioned('item-detail.js') }}"></script>

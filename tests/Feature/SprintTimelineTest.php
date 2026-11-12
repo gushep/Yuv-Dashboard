@@ -176,15 +176,18 @@ class SprintTimelineTest extends TestCase
                 'items_page' => ['cursor' => null, 'items' => []],
             ]]]])
             ->push(['data' => ['boards' => [['items_page' => ['items' => [
-                ['id' => '9017', 'name' => 'Sprint 17', 'column_values' => [['id' => 'timeline', 'type' => 'timeline', 'from' => '2026-09-28', 'to' => '2026-10-09']]],
+                ['id' => '9016', 'name' => 'Sprint 16', 'column_values' => [['id' => 'timeline', 'type' => 'timeline', 'from' => '2026-09-14', 'to' => '2026-09-25'], ['id' => 'sprint_completion', 'type' => 'checkbox', 'checked' => true]]],
+                ['id' => '9017', 'name' => 'Sprint 17', 'column_values' => [['id' => 'timeline', 'type' => 'timeline', 'from' => '2026-09-28', 'to' => '2026-10-09'], ['id' => 'sprint_completion', 'type' => 'checkbox', 'checked' => false]]],
                 ['id' => '9018', 'name' => 'Sprint 18', 'column_values' => []],
             ]]]]]]);
 
         $result = app(MondayService::class)->sync('token', '123', ['Sprint' => 'sprint', 'Status' => 'status']);
 
         $this->assertSame(['1' => 'Implementado', '7' => 'Parado'], $result['labels']['status']);
-        $this->assertSame(['9017' => 17, '9018' => 18], $result['sprintItems']);
-        $this->assertSame([17], array_column($result['sprints'], 'number'));
+        $this->assertSame(['9016' => 16, '9017' => 17, '9018' => 18], $result['sprintItems']);
+        $this->assertSame([16, 17], array_column($result['sprints'], 'number'));
+        // A caixa "Concluído?" do cronograma de sprints libera a retrospectiva.
+        $this->assertSame([true, false], array_column($result['sprints'], 'completed'));
     }
 
     private function timeline(): SprintTimeline

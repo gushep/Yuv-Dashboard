@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Daily Scrum · testes</title>
+<link rel="stylesheet" href="../public/capacity.css"><link rel="stylesheet" href="../public/teams.css"><link rel="stylesheet" href="../public/kpi-table.css"><link rel="stylesheet" href="../public/planning.css"><link rel="stylesheet" href="../public/daily.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0}</style>
+<main class="main"><div class="content" id="fixture"></div></main><pre id="test-result">RUNNING</pre>
+<script>
+var currentPage = 'daily-scrum';
+function canAccessScreen() { return false; }
+window.DATA = [];
+window.MONDAY_SPRINT_DATES = {20: {start: '2026-11-10', end: '2026-11-21'}};
+const row = (Id, Nome, Responsavel, Status, EstH, RealH, Tipo = 'Melhoria') => ({Id, Nome, Responsavel, Status, EstH, RealH, Tipo, Planejada: 'Planejada', Sprint: 20, Url: ''});
+DATA.push(
+  row('1', 'Relatório de jornada', 'Ana', 'Parado', 10, 4), row('2', 'Login FaceID', 'Ana', 'Em progresso', 8, 3), row('3', 'Ajuste de mapa', 'Ana', 'QA - Testes', 6, 6),
+  row('4', 'Exportar CSV', 'Ana', 'Implementado', 4, 4), row('5', 'Cerca eletrônica', 'Ana', 'Pronto para começar', 12, 0), row('6', 'Card cancelado', 'Ana', 'CANCELADO', 5, 0),
+  row('7', 'Painel de frota', 'Bruno', 'Pendente Samax', 9, 2), row('8', 'Gamificação', 'Bruno', 'Aguardando Deploy', 7, 7)
+);
+DATA[1].Prioridade = 'Baixa'; DATA[2].Prioridade = 'Crítica';
+const state = {
+  sprint: 20, date: '2026-11-12', today: '2026-11-12', goal: 'Entregar o relatório de jornada.',
+  sprints: [{number: 20, name: 'Sprint 20', start: '2026-11-10', end: '2026-11-21'}],
+  dailies: [{date: '2026-11-11', actions: 1}, {date: '2026-11-12', actions: 1}],
+  users: [{id: 1, name: 'Ana'}, {id: 2, name: 'Bruno'}],
+  statusAges: {'1': {since: '2026-11-10', workingDays: 2}, '7': {since: null, workingDays: null}},
+  canPublish: true,
+  retroActions: [
+    {id: 31, description: 'Testar dump parcial', retro: {id: 1, sprint: 18, sprintName: 'Sprint 18', facilitator: 'Gustavo'}, responsible: {id: 2, name: 'Bruno'}, dueDate: '2026-11-09', signal: 'Restore abaixo de 1h', status: 'open', late: true, lateDays: 3, canManage: true},
+    {id: 32, description: 'Dono fixo do bombeiro', retro: {id: 1, sprint: 18, sprintName: 'Sprint 18', facilitator: 'Gustavo'}, responsible: {id: 3, name: 'Carla'}, dueDate: '2026-11-24', signal: null, status: 'open', late: false, lateDays: 0, canManage: false},
+  ],
+  actions: [
+    {id: 10, description: 'Liberar ambiente de QA', origin: '2026-11-11', responsible: {id: 2, name: 'Bruno'}, item: null, status: 'pending', openedAt: '2026-11-11T12:00:00Z', openedBy: 'Gustavo', events: [], reopened: 0},
+    {id: 11, description: 'Destravar o relatório', origin: '2026-11-12', responsible: {id: 1, name: 'Ana'}, item: {id: '1', name: 'Relatório de jornada', url: ''}, status: 'done', openedAt: '2026-11-12T11:00:00Z', closedAt: '2026-11-12T12:30:00Z', closedBy: 'Ana', resolution: 'Consulta otimizada.', elapsed: '1h 30min', publishStatus: 'failed', noticeStatus: 'published', events: [], reopened: 1}
+  ]
+};
+const requests = [];
+window.mondayRequest = async (path, body) => {
+  requests.push([String(path), body]);
+  if (path === '/api/support-reserves') return {reserves: {20: 2400}, defaultMinutes: 4800};
+  if (String(path).includes('/preview')) return {html: '<p><strong>📋 DAILY SCRUM — RESOLUÇÃO DE PENDÊNCIA</strong></p>'};
+  return state;
+};
+const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    const dashboard = await (await fetch('../resources/views/dashboard.blade.php')).text();
+    const style = document.createElement('style'); style.textContent = dashboard.match(/<style>([\s\S]*?)<\/style>/)[1]; document.head.prepend(style);
+    const blade = html => html.replace(/\{\{--[\s\S]*?--\}\}/g, '').replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, '../public/$1').replace(/\{\{[\s\S]*?\}\}/g, '');
+    document.getElementById('fixture').innerHTML = blade(await (await fetch('../resources/views/daily.blade.php')).text());
+    const page = document.getElementById('page-daily-scrum'); page.dataset.url = '/api/daily'; page.classList.add('active');
+    for (const src of ['sprint-rules', 'capacity', 'hours-strip', 'kpi-table', 'daily']) await load(`../public/${src}.js`);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    SprintRules.applySettings({team: [{id: '1', name: 'Ana', group: 'fullstack'}, {id: '2', name: 'Bruno', group: 'fullstack'}]});
+
+    const columns = ['Backlog', 'Pronto para começar', 'Pendente', 'Refinar', 'Falta Escopo', 'Escopo Tecnico', 'Próx. Sprint', '', 'Parado', 'BLOQUEADO', 'Limitação Externa', 'Pendente Samax',
+      'Em progresso', 'CR - Aguardando', 'QA - Testes', 'QA - Reprovado', 'QA - Aprovado', 'Aguardando Deploy', 'Implementado', 'Despriorizado', 'Descontinuado', 'CANCELADO'].map(status => Daily.column(status));
+    check('Mapeamento dos status do Monday nas 4 colunas (Finalizado só Implementado)', columns.join() === 'pending,pending,pending,pending,pending,pending,pending,pending,blocked,blocked,blocked,blocked,progress,progress,progress,progress,progress,progress,done,,,');
+
+    // Regras de horas e gamificação (minutos; semana de 23 a 27/11 sem feriado).
+    const hoursOf = (EstH, RealH, Status) => Daily.cardHours({EstH, RealH, Status});
+    check('Card aberto: perto do limite a partir de 80% e estourado acima do estimado', hoursOf(10, 7, 'Em progresso').badge === '' && hoursOf(10, 8, 'Em progresso').badge === '⚠️ perto do limite' && hoursOf(4, 6, 'Em progresso').badge === '🔥 estourou +2h');
+    check('Entrega: adiantada até 80%, no alvo até 100% e acima do estimado depois (XP 18, 15 e 10)', [hoursOf(4, 3, 'Implementado'), hoursOf(4, 4, 'Implementado'), hoursOf(4, 5, 'Implementado')].map(item => `${item.badge}:${item.points}`).join() === '⚡ adiantado:18,🎯 no alvo:15,🐢 +25% do estimado:10');
+    check('Restante: não iniciado conta o estimado inteiro; em andamento, estimado − real', Daily.remainingOf({Status: 'Pronto para começar', EstH: 12, RealH: 0}) === 720 && Daily.remainingOf({Status: 'Em progresso', EstH: 8, RealH: 3}) === 300 && Daily.remainingOf({Status: 'Em progresso', EstH: 4, RealH: 6}) === 0 && Daily.remainingOf({Status: 'Implementado', EstH: 4, RealH: 1}) === 0);
+    const week = {start: '2026-11-23', end: '2026-11-27'};
+    check('Tendência: até 90% da capacidade restante no prazo, até 100% apertado, acima risco', [36, 38, 41].map(h => Daily.trend(h * 60, 40 * 60, week, '2026-11-23').level).join() === 'green,yellow,red' && Daily.trend(30 * 60, 40 * 60, week, '2026-11-25').level === 'red');
+
+    Daily.enter(20); await tick(50);
+    const text = id => document.getElementById(id).textContent.replace(/\s+/g, ' ');
+    check('Cabeçalho com a sprint, a Daily de hoje e o objetivo no indicador macro', document.getElementById('daily-sprint').value === '20' && document.getElementById('daily-date').value === '2026-11-12' && text('daily-macro').includes('Entregar o relatório de jornada.'));
+    const stats = [...document.querySelectorAll('.daily-stat')].map(stat => `${stat.querySelector('span').textContent} ${stat.querySelector('strong').textContent.replace(/\s+/g, ' ')}`);
+    check('Macro: impedidos, em andamento, próximos, finalizados, horas do time, tendência e XP (cancelado fora)', stats.join(' | ') === '🔴 Impedidos 2 | 🔵 Em andamento 3 | ⏭️ Próximos 1 | ✅ Finalizados 1 de 7 | ⏱️ Horas do time 56h planejadas de 160h | 📈 Tendência da sprint 🟢 No prazo | ⭐ XP da sprint 15 XP'
+      && text('daily-macro').includes('26h registradas') && text('daily-macro').includes('1 de 1 entregas no alvo (100%)'));
+    const faces = [...document.querySelectorAll('.daily-face')];
+    check('Rostos: só iniciais, primeiro nome e time; marcação de impedidos; a primeira pessoa já aberta', faces.length === 2 && faces[0].classList.contains('selected') && faces[0].querySelector('.daily-avatar').firstChild.textContent === 'A'
+      && faces[0].querySelector('.team-badge') && faces[0].querySelector('.daily-face-alert').textContent === '1' && !faces[0].querySelector('dl'));
+    const personStats = () => [...document.querySelectorAll('.daily-person-stat')].map(stat => `${stat.querySelector('span').textContent} ${stat.querySelector('strong').textContent}`).join(' | ');
+    check('Painel da pessoa: capacidade, planejado, consumido, saldo, estourados e XP', text('daily-person').includes('Ana') && personStats() === 'Capacidade 80h | Planejado 40h | Consumido 17h | Saldo 40h | Estourados 0 | ⭐ XP 15'
+      && text('daily-person').includes('50% da capacidade') && text('daily-person').includes('🟢 No prazo') && text('daily-person').includes('🏆'));
+    const counts = () => [...document.querySelectorAll('.daily-column h3 span')].map(span => span.textContent).join();
+    check('Kanban da Ana na ordem impedido, em andamento (QA conta), próximos, finalizado', counts() === '1,2,1,1' && document.querySelector('.daily-column').classList.contains('daily-blocked'));
+    check('Impedido mostra há quanto tempo, pelo histórico do Monday', text('daily-board').includes('impedido há 2 dia(s) útil(eis) · desde 10/11'));
+    check('Cards com status do Monday, horas e selos (QA no limite, entrega no alvo)', text('daily-board').includes('QA - Testes') && text('daily-board').includes('6h de 6h') && text('daily-board').includes('⚠️ perto do limite') && text('daily-board').includes('🎯 no alvo'));
+    const progressOrder = [...document.querySelectorAll('.daily-column.daily-progress .daily-card-id')].map(id => id.textContent).join();
+    check('Cards da coluna ordenados da prioridade mais crítica para a mais baixa', progressOrder === '#3,#2');
+    document.querySelector('[data-daily-card-action="1"]').click(); await tick();
+    check('+ responsabilidade no card já preenche o card e a pessoa', document.getElementById('daily-new-item').value === '1' && document.getElementById('daily-new-responsible').value === '1');
+    check('Com card escolhido, avisa que a responsabilidade será comentada no card como pendente', text('daily-new-hint').includes('comentada no card do Monday como pendente'));
+    document.getElementById('daily-new-item').value = ''; document.getElementById('daily-new-responsible').value = '';
+    document.body.focus(); document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true})); await tick();
+    check('→ passa para a próxima pessoa; sem histórico, não calcula o tempo de impedimento', document.querySelectorAll('.daily-face')[1].classList.contains('selected') && counts() === '1,1,0,0' && text('daily-board').includes('sem histórico confiável'));
+    document.querySelectorAll('.daily-face')[0].click(); await tick();
+    check('Clicar no rosto abre a pessoa', text('daily-person').includes('Ana') && counts() === '1,2,1,1');
+
+    check('Responsabilidades pendentes agrupadas por responsável; a de ontem marcada como de Daily anterior', document.querySelectorAll('#daily-actions .daily-action').length === 1 && text('daily-actions').includes('👤 Bruno') && text('daily-actions').includes('pendente de Daily anterior'));
+    document.querySelector('[data-daily-filter="all"]').click(); await tick();
+    check('Todas: mostra a concluída com a resolução, o tempo e a falha de publicação', document.querySelectorAll('#daily-actions .daily-action').length === 2 && text('daily-actions').includes('tempo de resolução 1h 30min') && text('daily-actions').includes('Falha ao publicar no Monday') && document.querySelector('[data-daily-publish="11"]') && text('daily-actions').includes('reaberta 1x')
+      && text('daily-actions').includes('💬 Avisada no card') && !document.querySelector('[data-daily-notice="11"]'));
+
+    document.querySelector('[data-daily-done="10"]').click(); await tick();
+    check('Feito abre a conclusão; sem card, não oferece publicar no Monday', document.getElementById('daily-done-dialog').open && document.getElementById('daily-publish-box').hidden);
+    document.getElementById('daily-resolution').value = 'Acesso liberado.';
+    document.getElementById('daily-done-form').dispatchEvent(new Event('submit', {cancelable: true})); await tick(20);
+    const sent = requests.find(([path]) => path === '/api/daily/actions/10/complete');
+    check('Conclusão envia a resolução sem publicar', sent && sent[1].resolution === 'Acesso liberado.' && sent[1].publish === false);
+
+    document.getElementById('daily-new-description').value = 'Revisar o escopo do mapa';
+    document.getElementById('daily-new-responsible').value = '1';
+    document.getElementById('daily-new').dispatchEvent(new Event('submit', {cancelable: true})); await tick(20);
+    const created = requests.find(([path]) => path === '/api/daily/actions');
+    check('Nova ação na Daily de hoje, com responsável e card opcional', created && created[1].sprint === 20 && created[1].description === 'Revisar o escopo do mapa' && created[1].responsible_id === '1' && created[1].item_id === null);
+
+    check('Ações das retros abertas no fim da Daily, com atraso; só responsável e facilitador concluem', text('daily-retro').includes('2 aberta(s) · 1 atrasada(s)') && text('daily-retro').includes('Retro da Sprint 18')
+      && text('daily-retro').includes('3 dia(s) atrasada') && !document.querySelector('[data-retro-done="31"]').disabled && document.querySelector('[data-retro-done="32"]').disabled);
+    document.querySelector('[data-retro-done="31"]').click(); await tick();
+    document.getElementById('daily-retro-result').value = 'Restore em 40 min'; document.getElementById('daily-retro-signal').checked = true;
+    document.querySelector('[data-retro-confirm="31"]').click(); await tick(20);
+    const retroDone = requests.find(([path]) => path === '/api/daily/retro-actions/31/complete');
+    check('Concluir pela Daily envia o resultado e o sinal', retroDone && retroDone[1].result === 'Restore em 40 min' && retroDone[1].signal_reached === true && retroDone[1].sprint === 20);
+
+    const history = Daily.historyHtml([{date: '2026-11-11', actions: state.actions}]);
+    check('Histórico das Dailies para o modo leitura da Planning', history.includes('Daily de 11/11') && history.includes('1 pendente(s)') && history.includes('resolvida em 1h 30min'));
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

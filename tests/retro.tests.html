@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Sprint Retrospective · testes</title>
+<link rel="stylesheet" href="../public/capacity.css"><link rel="stylesheet" href="../public/planning.css"><link rel="stylesheet" href="../public/retro.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0}</style>
+<main class="main"><div class="content" id="fixture"></div></main><pre id="test-result">RUNNING</pre>
+<script>
+var currentPage = 'sprint-retrospective';
+function canAccessScreen() { return false; }
+window.confirm = () => true;
+window.MONDAY_SPRINT_DATES = {19: {start: '2026-10-27', end: '2026-11-10'}};
+const row = (Id, Responsavel, Status, EstH, RealH, Tipo = 'Melhoria', Planejada = 'Planejada') => ({Id, Nome: `Card ${Id}`, Responsavel, Status, EstH, RealH, Tipo, Planejada, Sprint: 19});
+window.DATA = [row('1', 'Ana', 'Implementado', 4, 3), row('2', 'Ana', 'Implementado', 4, 6), row('3', 'Bruno', 'Em progresso', 8, 2), row('4', 'Bruno', 'Implementado', 2, 2, 'Suporte', '')];
+var SPRINTS = [17, 18, 19];
+/** Indicadores da sprint como o Dashboard calcula (spMetrics), com os números da Sprint 17 da retro em PDF para a 19. */
+function spMetrics(sprint) {
+  const done = {17: 50, 18: 30, 19: 62}[sprint];
+  const rows = DATA.filter(item => item.Sprint === sprint);
+  return {tot: sprint === 19 ? 85 : 40, done, planned: 32, plannedDone: 18, unplanned: 22, support: 31, rework: 3, reworkPct: 4, bugs: 1, drag: 9, arrastPct: 11,
+    lists: {tot: rows, done: rows.filter(item => item.Status === 'Implementado'), support: rows.filter(item => item.Tipo === 'Suporte')}};
+}
+const action = (id, extra = {}) => ({id, description: `Ação ${id}`, retro: {id: 1, sprint: 18, sprintName: 'Sprint 18', facilitator: 'Gustavo'}, responsible: {id: 2, name: 'Rafael Souza'},
+  dueDate: '2026-11-20', signal: 'Restore abaixo de 1h', focus: 1, item: null, status: 'open', late: false, lateDays: 0, result: null, signalReached: null, closedAt: null, closedBy: null, canManage: false, events: [], ...extra});
+const overview = {canFacilitate: true, today: '2026-11-12',
+  kpis: {open: 2, late: 1, done: 1, signalReached: 1, dropped: 1, total: 5, rate: 25},
+  actions: [action(1, {late: true, lateDays: 3, dueDate: '2026-11-09', canManage: true}), action(2), action(3, {status: 'done', result: 'Feito', signalReached: true}), action(4)],
+  open: null,
+  sprints: [
+    {number: 20, name: 'Sprint 20', start: '2026-11-10', end: '2026-11-24', completed: false, current: true, retro: null},
+    {number: 19, name: 'Sprint 19', start: '2026-10-27', end: '2026-11-10', completed: true, current: false, retro: null},
+    {number: 18, name: 'Sprint 18', start: '2026-10-13', end: '2026-10-27', completed: true, current: false, retro: {id: 1, status: 'closed', date: '2026-10-28', facilitator: 'Gustavo', step: 6, stepName: 'Plano de ação', cards: {keep: 5, improve: 7, try: 3}, focus: 2,
+      actions: {open: 1, late: 1, done: 1, signalReached: 1, dropped: 1, total: 4, rate: 33}}},
+  ]};
+const steps = [['Abertura', 3], ['Ações anteriores', 5], ['Dados da sprint', 7], ['Visão do time', 12], ['Discussão', 10], ['Foco', 3], ['Plano de ação', 5]].map(([name, minutes], index) => ({name, minutes, seconds: index < 3 ? minutes * 60 : index === 3 ? 13 * 60 + 20 : 0}));
+const roomRetro = {id: 7, sprint: 19, sprintName: 'Sprint 19', status: 'open', facilitator: {id: 1, name: 'Gustavo'}, canConduct: true, me: {id: 1, name: 'Gustavo'},
+  step: 3, steps, elapsedSeconds: 3 * 60 + 5 * 60 + 7 * 60 + 13 * 60 + 20, startedAt: '2026-11-12T13:00:00Z', closedAt: null,
+  goal: 'Aprender com a sprint.', rules: [{title: '🎯 Foco no processo', text: 'Sem culpados.'}], context: null, dependencies: null, sprintGoal: 'Estabilizar o Datavision.',
+  goalVotes: {yes: 2, partial: 1, no: 0, mine: 'yes'}, revealed: true, votesPerPerson: 3, votesLeft: 2,
+  cards: [
+    {id: 11, column: 'improve', author: 'Rafael', mine: false, hidden: false, text: 'Dump demora 4h', votes: 4, myVote: true, merged: [{id: 14, column: 'improve', author: 'Igor', mine: false, hidden: false, text: 'Restore lento'}]},
+    {id: 12, column: 'keep', author: 'Gustavo', mine: true, hidden: false, text: 'Força-tarefa no bombeiro', votes: 1, myVote: false, merged: []},
+    {id: 13, column: 'improve', author: 'Ana', mine: false, hidden: false, text: 'Card sem passos', votes: 6, myVote: false, merged: []},
+  ],
+  topics: [{id: 21, title: 'Dump demora 4h', question: null, notes: 'Testar dump parcial', focus: 1, column: 'improve', votes: 4}],
+  actions: [], previousActions: [action(1, {late: true, canManage: true, review: null}), action(5, {review: {type: 'continued', note: 'Novo prazo', user: 'Gustavo'}})],
+  metrics: null, dailyStats: {total: 4, done: 3, averageMinutes: 1680}, participants: [{id: 1, name: 'Gustavo'}, {id: 2, name: 'Rafael Souza'}],
+  users: [{id: 1, name: 'Gustavo'}, {id: 2, name: 'Rafael Souza'}], serverNow: '2026-11-12T13:40:00Z', stepStartedAt: '2026-11-12T13:27:00Z'};
+let room = {retro: null, canFacilitate: true};
+const requests = [];
+window.mondayRequest = async (path, body) => {
+  requests.push([String(path), body]);
+  if (path === '/api/retro') return overview;
+  if (path === '/api/retro/room') return room;
+  if (path === '/api/retro/sprints/19') return {sprint: overview.sprints[1], sprintGoal: 'Estabilizar o Datavision.', dailyStats: {total: 0, done: 0, averageMinutes: null}, retro: null};
+  if (path === '/api/retro/retros') { room = {retro: roomRetro, canFacilitate: true}; return room; }
+  if (path.startsWith('/api/retro/retros/7/')) return room;
+  if (path.startsWith('/api/retro/actions/')) return path.includes('room') || body?.from === 'room' ? room : overview;
+  return room;
+};
+const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    const dashboard = await (await fetch('../resources/views/dashboard.blade.php')).text();
+    const style = document.createElement('style'); style.textContent = dashboard.match(/<style>([\s\S]*?)<\/style>/)[1]; document.head.prepend(style);
+    const blade = html => html.replace(/\{\{--[\s\S]*?--\}\}/g, '').replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, '../public/$1').replace(/\{\{[\s\S]*?\}\}/g, '');
+    document.getElementById('fixture').innerHTML = blade(await (await fetch('../resources/views/retro.blade.php')).text());
+    const page = document.getElementById('page-sprint-retrospective'); page.dataset.url = '/api/retro'; page.dataset.roomUrl = '/api/retro/room'; page.classList.add('active');
+    for (const src of ['sprint-rules', 'capacity', 'retro']) await load(`../public/${src}.js`);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    SprintRules.applySettings({team: [{id: '1', name: 'Ana', group: 'fullstack'}, {id: '2', name: 'Bruno', group: 'fullstack'}]});
+    const text = id => document.getElementById(id).textContent.replace(/\s+/g, ' ');
+
+    // Indicadores da sprint para a etapa Dados (congelados no encerramento).
+    const metrics = Retro.metricsFor(19, {total: 4, done: 3, averageMinutes: 1680});
+    check('Indicadores: entregas com recorde e média das anteriores, escopo, planejado entregue', metrics.delivered === 62 && metrics.deliveredRecord === 50 && metrics.deliveredAverage === 40 && metrics.scope === 85 && metrics.plannedPct === 56);
+    check('Horas: suporte sobre o registrado e precisão das estimativas nas entregas', metrics.supportMinutes === 120 && metrics.registeredMinutes === 780 && metrics.supportPct === 15 && metrics.onTarget === 2 && metrics.onTargetBase === 3 && metrics.onTargetPct === 67);
+    check('Capacidade e planejado do Capacity (suporte fora, como no Capacity) e as responsabilidades da Daily', metrics.capacityMinutes === 160 * 60 && metrics.plannedMinutes === 16 * 60 && metrics.daily.done === 3);
+    check('Cronômetro em minutos e segundos', Retro.clock(800) === '13:20' && Retro.clock(59) === '0:59');
+
+    // Tela inicial
+    Retro.enter(); await tick(30);
+    const kpis = [...document.querySelectorAll('.rt-kpi')].map(kpi => `${kpi.querySelector('span').textContent} ${kpi.querySelector('strong').textContent}`);
+    check('Cards das ações: em andamento (com atrasadas), atrasadas, concluídas, taxa e geral', kpis.join(' | ') === 'Em andamento 3 | Atrasadas 1 | Concluídas 1 | Taxa de conclusão 25% | Geral 5');
+    check('Lista começa nas ações em andamento, com a atrasada destacada', document.querySelectorAll('#rt-actions .rt-action').length === 3 && document.querySelector('#rt-actions .rt-action.late') && text('rt-actions').includes('3 dia(s) atrasada'));
+    check('Só o responsável e o facilitador alteram: botões desabilitados para os demais', !document.querySelector('[data-action-mode="complete"][data-action="1"]').disabled && document.querySelector('[data-action-mode="complete"][data-action="2"]').disabled);
+    document.querySelector('[data-filter="done"]').click(); await tick();
+    check('Clicar no card filtra a lista', document.querySelectorAll('#rt-actions .rt-action').length === 1 && text('rt-actions').includes('sinal atingido'));
+    const rows = [...document.querySelectorAll('.rt-row')];
+    check('Histórico: sprint em andamento com Iniciar desabilitado até fechar no Monday', rows[0].querySelector('[data-start]').disabled && rows[0].querySelector('[data-start]').title.includes('fechada no Monday'));
+    check('Histórico: sprint fechada sem retro libera Iniciar; retro feita mostra cartas, focos e ações', !rows[1].querySelector('[data-start]').disabled && rows[2].textContent.includes('Manter 5') && rows[2].textContent.includes('2 foco(s)') && rows[2].textContent.includes('4 ação(ões)') && rows[2].querySelector('[data-review]'));
+
+    // Olhinho de sprint sem retro no app: só os dados
+    rows[1].querySelector('[data-review]').click(); await tick(30);
+    check('Olhinho sem retro mostra os dados da sprint', !document.getElementById('rt-room').hidden && text('rt-step').includes('Entregas') && text('rt-step').includes('Retro feita fora do app') === false && text('rt-room-top').includes('Retro feita fora do app'));
+    document.querySelector('[data-view="lobby"]').click(); await tick(30);
+
+    // Sala
+    document.querySelectorAll('.rt-row')[1].querySelector('[data-start]').click(); await tick(30);
+    check('Iniciar abre a sala da sprint', requests.some(([path, body]) => path === '/api/retro/retros' && body.sprint === 19) && !document.getElementById('rt-room').hidden && document.querySelectorAll('#rt-stepper button').length === 7);
+    check('Etapa atual marcada e o facilitador navega', document.querySelector('#rt-stepper [aria-current="step"]').textContent.includes('Visão do time') && !document.querySelector('#rt-stepper button').disabled);
+    check('Cronômetro: tempo da retro e alerta da etapa que estourou', text('rt-clock').includes('Retro 28:20') && !document.getElementById('rt-alert').hidden && text('rt-alert').includes('Visão do time estourou: 13:20 de 12 min'));
+    const columns = [...document.querySelectorAll('.rt-col')].map(column => column.querySelectorAll('.rt-card').length).join();
+    check('Três colunas; cartas reveladas por votos, com quem escreveu e os agrupamentos', columns === '1,2,0' && document.querySelector('.rt-col.improve .rt-card p').textContent === 'Card sem passos' && text('rt-step').includes('Rafael') && text('rt-step').includes('↳ Restore lento'));
+    check('Votos: o meu marcado e quantos restam', document.querySelector('[data-vote="11"]').getAttribute('aria-pressed') === 'true' && text('rt-step').includes('você tem 2 voto(s)'));
+    document.getElementById('rt-add-try').value = 'Dono fixo do bombeiro'; document.getElementById('rt-add-try').dispatchEvent(new Event('input', {bubbles: true}));
+    document.querySelector('[data-add-card="try"]').click(); await tick(30);
+    check('Adicionar carta envia a coluna e o texto', requests.some(([path, body]) => path === '/api/retro/retros/7/cards' && body.column === 'try' && body.text === 'Dono fixo do bombeiro'));
+
+    roomRetro.step = 1; document.querySelector('#rt-stepper [data-step="1"]').click(); await tick(30);
+    check('Ações anteriores: decisão do time e a revisão já registrada', requests.some(([path, body]) => path === '/api/retro/retros/7/step' && body.step === 1) && text('rt-step').includes('Continua: Novo prazo') && document.querySelector('.rt-seg [data-action-mode="keep"]'));
+    document.querySelector('.rt-seg [data-action-mode="keep"]').click(); await tick();
+    check('Continua abre o diálogo com prazo novo opcional', document.getElementById('rt-action-dialog').open && !document.getElementById('rt-action-due-box').hidden && document.getElementById('rt-action-signal-box').hidden);
+    document.getElementById('rt-action-due').value = '2026-11-30';
+    document.getElementById('rt-action-form').dispatchEvent(new Event('submit', {cancelable: true})); await tick(30);
+    check('Manter envia o novo prazo pela sala', requests.some(([path, body]) => path === '/api/retro/actions/1/keep' && body.due_date === '2026-11-30' && body.from === 'room'));
+
+    roomRetro.step = 2; document.querySelector('#rt-stepper [data-step="2"]').click(); await tick(30);
+    check('Dados: indicadores calculados, objetivo da sprint e voto do time', text('rt-step').includes('62') && text('rt-step').includes('Estabilizar o Datavision.') && document.querySelector('[data-goal-vote="yes"]').getAttribute('aria-pressed') === 'true');
+
+    roomRetro.step = 5; document.querySelector('#rt-stepper [data-step="5"]').click(); await tick(30);
+    check('Foco: até dois, com o tema escolhido', document.querySelectorAll('.rt-focus').length === 2 && document.querySelector('.rt-focus.set b').textContent === 'Dump demora 4h');
+
+    roomRetro.step = 6; document.querySelector('#rt-stepper [data-step="6"]').click(); await tick(30);
+    document.getElementById('rt-new-responsible').value = '2';
+    document.getElementById('rt-new-due').value = '2026-11-20';
+    const description = document.getElementById('rt-new-description');
+    description.focus(); description.value = 'Testar dump parcial'; description.dispatchEvent(new Event('input', {bubbles: true}));
+    // Chega uma atualização da sala enquanto a pessoa digita; ao pressionar o botão, o campo perde o foco.
+    Retro.onDataUpdated();
+    const addButton = document.querySelector('[data-add-action]');
+    addButton.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));
+    description.blur(); await tick(10);
+    check('Pressionar o botão depois de digitar não redesenha a sala antes do clique (o clique não se perde)', document.contains(addButton));
+    document.dispatchEvent(new PointerEvent('pointerup', {bubbles: true}));
+    addButton.click(); await tick(30);
+    check('Plano de ação: responsável, prazo e card opcional', requests.some(([path, body]) => path === '/api/retro/retros/7/actions' && body.description === 'Testar dump parcial' && body.responsible_id === 2 && body.due_date === '2026-11-20' && body.item_id === null));
+    room = {retro: null, canFacilitate: true};
+    document.querySelector('.rt-step-nav [data-close-retro]').click(); await tick(30);
+    const closed = requests.find(([path]) => path === '/api/retro/retros/7/close');
+    check('Encerrar congela os indicadores e volta à tela inicial', closed && closed[1].metrics.delivered === 62 && closed[1].metrics.daily.total === 4 && document.getElementById('rt-room').hidden);
+    Retro.leave();
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

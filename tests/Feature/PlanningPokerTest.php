@@ -100,7 +100,7 @@ class PlanningPokerTest extends TestCase
             ->assertJsonPath('sprints.0.planning', null)
             ->assertJsonPath('sprints.1.number', 18)
             ->assertJsonPath('sprints.1.current', false)
-            ->assertJsonPath('sprints.1.planning', ['open' => false, 'estimated' => 2]);
+            ->assertJsonPath('sprints.1.planning', ['open' => false, 'estimated' => 2, 'goal' => null]);
     }
 
     public function test_review_shows_how_the_planning_of_a_sprint_went_without_the_replaced_estimates(): void
@@ -168,6 +168,34 @@ class PlanningPokerTest extends TestCase
         $this->postJson(route('planning.sessions.store'), ['sprint' => 19])->assertOk()->assertJsonPath('session.id', $session->id);
     }
 
+    public function test_closing_the_planning_requires_the_sprint_goal_and_keeps_it_for_the_history(): void
+    {
+        $session = PlanningSession::factory()->create(['sprint' => 19, 'sprint_name' => 'Sprint 19']);
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->scrumMaster()->create());
+
+        $this->postJson(route('planning.sessions.close', $session), ['goal' => '  '])->assertUnprocessable()
+            ->assertJsonValidationErrors(['goal' => 'Informe o objetivo da sprint para encerrar a planning.']);
+        $this->assertSame(PlanningSession::OPEN, $session->fresh()->status);
+
+        $this->postJson(route('planning.sessions.close', $session), ['goal' => "  Entregar o relatório de jornada\npara a Wisevia.  "])->assertOk();
+
+        $this->assertSame("Entregar o relatório de jornada\npara a Wisevia.", $session->fresh()->goal);
+        $this->getJson(route('planning.history'))->assertJsonPath('sprints.0.planning.goal', "Entregar o relatório de jornada\npara a Wisevia.");
+        $this->getJson(route('planning.review', 19))->assertJsonPath('goal', "Entregar o relatório de jornada\npara a Wisevia.");
+
+        // Reaberta, a mesa traz o objetivo para ser revisto antes de encerrar de novo.
+        $this->postJson(route('planning.sessions.store'), ['sprint' => 19])->assertOk()->assertJsonPath('session.goal', "Entregar o relatório de jornada\npara a Wisevia.");
+    }
+
+    public function test_sprints_planned_before_the_goal_existed_have_no_goal(): void
+    {
+        PlanningSession::factory()->closed()->create(['sprint' => 18, 'sprint_name' => 'Sprint 18']);
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->create());
+
+        $this->getJson(route('planning.history'))->assertOk()->assertJsonPath('sprints.1.planning.goal', null);
+        $this->getJson(route('planning.review', 18))->assertOk()->assertJsonPath('goal', null);
+    }
+
     public function test_closing_the_planning_links_the_estimated_cards_to_its_sprint_on_monday(): void
     {
         $snapshot = Cache::get(MondaySnapshotService::CACHE_KEY);
@@ -182,7 +210,7 @@ class PlanningPokerTest extends TestCase
             ->push(['data' => ['change_multiple_column_values' => ['id' => '901']]]);
         $this->actingAs(User::factory()->withScreens(Screen::Planning)->scrumMaster()->create());
 
-        $this->postJson(route('planning.sessions.close', $session))->assertOk()->assertJsonPath('session', null);
+        $this->postJson(route('planning.sessions.close', $session), ['goal' => 'Entregar o relatório de jornada.'])->assertOk()->assertJsonPath('session', null);
 
         Http::assertSentCount(2);
         Http::assertSent(fn (Request $request): bool => str_contains((string) $request['query'], 'change_multiple_column_values')
@@ -200,7 +228,7 @@ class PlanningPokerTest extends TestCase
         Http::fake(['api.monday.com/v2' => Http::response(['errors' => [['message' => 'Sem permissão']]])]);
         $this->actingAs(User::factory()->withScreens(Screen::Planning)->scrumMaster()->create());
 
-        $this->postJson(route('planning.sessions.close', $session))->assertUnprocessable()
+        $this->postJson(route('planning.sessions.close', $session), ['goal' => 'Entregar o relatório de jornada.'])->assertUnprocessable()
             ->assertJsonPath('error', 'O Monday não ligou à Sprint 20: Relatório de jornada. A planning continua aberta; tente encerrar de novo.');
         $this->assertSame(PlanningSession::OPEN, $session->fresh()->status);
     }
@@ -512,7 +540,7 @@ class PlanningPokerTest extends TestCase
         $round = PlanningRound::factory()->voting()->create();
         $this->actingAs(User::factory()->withScreens(Screen::Planning)->scrumMaster()->create());
 
-        $this->postJson(route('planning.sessions.close', $round->session))->assertOk()->assertJsonPath('session', null);
+        $this->postJson(route('planning.sessions.close', $round->session), ['goal' => 'Fechar a sprint.'])->assertOk()->assertJsonPath('session', null);
 
         $this->assertSame(PlanningStatus::Canceled, $round->fresh()->status);
         $this->assertSame(PlanningSession::CLOSED, $round->session->fresh()->status);

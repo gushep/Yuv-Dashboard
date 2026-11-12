@@ -41,6 +41,21 @@
     </form>
   </dialog>
 
+  {{-- Encerrar a planning: o objetivo da sprint é obrigatório e fica registrado para o histórico e o Daily Hub. --}}
+  <dialog id="pp-close-dialog" class="kpi-modal pp-dialog" aria-labelledby="pp-close-title">
+    <form method="dialog" id="pp-close-form" novalidate>
+      <div class="kpi-modal-head"><div><div class="kpi-modal-title" id="pp-close-title">Encerrar a planning</div><div class="kpi-modal-sub" id="pp-close-sub"></div></div>
+        <button type="button" class="kpi-modal-close" data-close aria-label="Fechar">✕</button></div>
+      <div class="pp-dialog-body">
+        <label class="settings-field">Objetivo da Sprint <span class="nt-req">*</span>
+          <textarea id="pp-goal" rows="4" maxlength="2000" required placeholder="Ex.: entregar o relatório de jornada para a Wisevia e estabilizar o login por FaceID."></textarea></label>
+        <p class="pp-muted" id="pp-close-notes"></p>
+        <p class="settings-message error" id="pp-close-message" aria-live="polite"></p>
+        <div class="settings-actions"><button type="submit" id="pp-close-submit">Encerrar planning</button><button type="button" class="secondary" data-close>Cancelar</button></div>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="pp-scope-dialog" class="kpi-modal pp-dialog pp-scope-dialog" aria-labelledby="pp-scope-name">
     <div class="kpi-modal-head"><div><div class="kpi-modal-title" id="pp-scope-name"></div><div class="kpi-modal-sub" id="pp-scope-title"></div></div>
       <button type="button" class="kpi-modal-close" data-close aria-label="Fechar">✕</button></div>

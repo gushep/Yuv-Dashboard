@@ -120,6 +120,7 @@ window.Planning = (() => {
           </button>
           <div class="pp-sprint-actions">${sprintAction(sprint, data)}</div>
         </div>
+        ${sprint.planning?.goal ? `<p class="pp-sprint-goal"><strong>🎯 Objetivo da Sprint</strong>${escape(sprint.planning.goal)}</p>` : ''}
         ${table ? `<div class="pp-sprint-hours">${table}</div>` : ''}
         ${open ? renderSprintTasks(sprint) : ''}
       </div>`;
@@ -175,22 +176,25 @@ window.Planning = (() => {
     const section = el('pp-estimated');
     section.hidden = false;
     renderLoad({session: {sprintName: name}, round: null, load: review.load || [], reserveHours: review.reserveHours || 0});
+    // Objetivo da Sprint (registrado ao encerrar a planning); sprints antigas não têm.
+    const goal = `<span class="pp-review-goal"><b>🎯 Objetivo da Sprint:</b> ${review.goal ? escape(review.goal) : '<em>sem objetivo registrado</em>'}</span>`;
+    const dailies = window.Daily?.historyHtml(review.dailies || []) || '';
     if (!review.recorded) {
       // Planejada fora do app: sem cartas nem decisões; os cards da sprint com o Tempo estimado do Monday.
       const cards = review.cards || [];
       const estimate = cards.reduce((sum, card) => sum + (card.estimate || 0), 0);
       el('pp-center').innerHTML = `<p class="pp-review-banner"><strong>Planning da ${escape(name)} · somente leitura</strong>
-        <span>Planejada fora do app: sem cartas nem decisões registradas · ${cards.length} card(s) na sprint · ${hours(estimate)} estimadas no Monday</span></p>`;
+        <span>Planejada fora do app: sem cartas nem decisões registradas · ${cards.length} card(s) na sprint · ${hours(estimate)} estimadas no Monday</span>${goal}</p>`;
       section.innerHTML = `<h2>Cards da sprint · ${cards.length} card(s) · ${hours(estimate)} <small class="pp-review-hint">Tempo estimado do Monday</small></h2>
         <div class="pp-estimated-list">${cards.length ? cards.map(card => `<span class="pp-estimated-item">
           ${card.url ? `<a href="${escape(card.url)}" target="_blank" rel="noopener">${escape(card.name)}</a>` : escape(card.name)}
-          <strong>${card.estimate === null ? '—' : hours(card.estimate)}</strong><small>${escape(card.owner || 'sem responsável')}</small></span>`).join('') : '<p class="pp-muted">Nenhum card nesta sprint.</p>'}</div>`;
+          <strong>${card.estimate === null ? '—' : hours(card.estimate)}</strong><small>${escape(card.owner || 'sem responsável')}</small></span>`).join('') : '<p class="pp-muted">Nenhum card nesta sprint.</p>'}</div>${dailies}`;
       return;
     }
     el('pp-center').innerHTML = `<p class="pp-review-banner"><strong>Planning da ${escape(name)} · somente leitura</strong>
-      <span>${review.rounds.length} card(s) estimados · ${hours(total)}${review.startedBy ? ` · conduzida por ${escape(review.startedBy)}` : ''}${review.open ? ' · mesa aberta agora' : review.closedAt ? ` · encerrada em ${new Date(review.closedAt).toLocaleDateString('pt-BR')}` : ''}</span></p>`;
+      <span>${review.rounds.length} card(s) estimados · ${hours(total)}${review.startedBy ? ` · conduzida por ${escape(review.startedBy)}` : ''}${review.open ? ' · mesa aberta agora' : review.closedAt ? ` · encerrada em ${new Date(review.closedAt).toLocaleDateString('pt-BR')}` : ''}</span>${goal}</p>`;
     section.innerHTML = `<h2>Estimados nesta planning · ${review.rounds.length} card(s) · ${hours(total)}</h2>
-      <div class="pp-review-body">${reviewCards(review.rounds)}</div>`;
+      <div class="pp-review-body">${reviewCards(review.rounds)}</div>${dailies}`;
   }
 
   /** Cada card estimado com a estimativa final, a IA, a média, quem decidiu, as cartas de cada pessoa e a discussão. */
@@ -437,6 +441,35 @@ window.Planning = (() => {
   }
 
   // ── Modais ───────────────────────────────────────────────────────────────────
+  /**
+   * Encerrar a planning: pede o Objetivo da Sprint (obrigatório; ao reabrir a mesa, vem o já registrado para revisar)
+   * e avisa o que acontece com a carta na mesa e com os cards estimados.
+   */
+  function openCloseDialog() {
+    const session = state.data.session, count = new Set(state.data.estimated.map(item => item.itemId)).size;
+    el('pp-close-sub').textContent = session.sprintName;
+    el('pp-goal').value = session.goal || '';
+    el('pp-close-message').textContent = '';
+    el('pp-close-notes').textContent = [
+      state.data.round ? 'A carta que está na mesa sai sem gravar nada.' : '',
+      count ? `Os ${count} card(s) estimados serão ligados à ${session.sprintName} na coluna Sprint do Monday.` : '',
+      'A mesa pode ser reaberta pelo botão Entrar na mesa até a sprint terminar.'
+    ].filter(Boolean).join(' ');
+    el('pp-close-dialog').showModal();
+    el('pp-goal').focus();
+  }
+
+  async function submitClose(event) {
+    event.preventDefault();
+    const goal = el('pp-goal').value.trim();
+    if (!goal) { el('pp-close-message').textContent = 'Informe o objetivo da sprint para encerrar a planning.'; el('pp-goal').focus(); return; }
+    const session = state.data.session, count = new Set(state.data.estimated.map(item => item.itemId)).size;
+    if (!await act(`/sessions/${session.id}/close`, {goal})) { el('pp-close-message').textContent = state.error; return; }
+    el('pp-close-dialog').close();
+    state.view = 'lobby'; state.history = null; loadHistory();
+    if (count) alert(`Planning encerrada: ${count} card(s) ligados à ${session.sprintName}.`);
+  }
+
   function openSprintDialog() {
     const options = state.data?.sprintOptions || [];
     el('pp-sprint-select').replaceChildren(new Option('Selecione a sprint', ''), ...options.map(sprint => new Option(`${sprint.name} · ${shortDate(sprint.start)} a ${shortDate(sprint.end)}`, String(sprint.number))));
@@ -475,18 +508,7 @@ window.Planning = (() => {
     const view = target.closest('[data-view]');
     if (view) { state.view = view.dataset.view; if (state.view === 'lobby' && !state.history) loadHistory(); render(); return; }
     if (target.closest('[data-new-sprint]')) { openSprintDialog(); return; }
-    if (target.closest('[data-close-table]')) {
-      const session = state.data.session, count = new Set(state.data.estimated.map(item => item.itemId)).size;
-      const link = count ? `\n\nOs ${count} card(s) estimados serão ligados à ${session.sprintName} na coluna Sprint do Monday.` : '';
-      if (confirm(`Encerrar a planning da ${session.sprintName}? Uma carta que ainda estiver na mesa sai sem gravar nada.${link}\n\nA mesa pode ser reaberta pelo botão Entrar na mesa até a sprint terminar.`)) {
-        act(`/sessions/${session.id}/close`, {}).then(ok => {
-          if (!ok) return;
-          state.view = 'lobby'; state.history = null; loadHistory();
-          if (count) alert(`Planning encerrada: ${count} card(s) ligados à ${session.sprintName}.`);
-        });
-      }
-      return;
-    }
+    if (target.closest('[data-close-table]')) { openCloseDialog(); return; }
     const enter = target.closest('[data-enter-sprint]');
     if (enter) { act('/sessions', {sprint: Number(enter.dataset.enterSprint)}).then(ok => { if (ok) { state.view = 'table'; render(); } }); return; }
     const review = target.closest('[data-review]');
@@ -512,6 +534,7 @@ window.Planning = (() => {
 
   function onSubmit(event) {
     if (event.target.id === 'pp-sprint-form') { submitSprint(event); return; }
+    if (event.target.id === 'pp-close-form') { submitClose(event); return; }
     if (!event.target.matches('[data-bet]')) return;
     event.preventDefault();
     const value = Number(el('pp-hours').value.trim().replace(',', '.'));

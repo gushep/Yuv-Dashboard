@@ -60,6 +60,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Publica a resolução de uma ação da Daily no card do Monday: vale a permissão "Atualizar cards", sem depender
+     * da tela Tarefas (o acesso à Daily já é conferido na rota).
+     */
+    public function canPublishDailyResolutions(): bool
+    {
+        return (bool) $this->can_update_items;
+    }
+
+    /**
      * Abrir tickets exige a permissão específica e uma das telas que têm o botão Novo Ticket.
      */
     public function canCreateTickets(): bool
@@ -73,6 +82,12 @@ class User extends Authenticatable
     public function canConductPlanning(): bool
     {
         return $this->can_conduct_planning && $this->canAccessScreen(Screen::Planning);
+    }
+
+    /** Facilitador da retrospectiva: o Maestro Scrum, com acesso à tela Sprint Retrospective. */
+    public function canFacilitateRetrospectives(): bool
+    {
+        return $this->can_conduct_planning && $this->canAccessScreen(Screen::SprintRetrospective);
     }
 
     /**

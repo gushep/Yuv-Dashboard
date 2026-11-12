@@ -62,7 +62,7 @@ class PlanningService
             'canConduct' => $canConduct,
             'canEstimate' => $this->estimates($user, $session),
             'me' => ['id' => $user->id, 'name' => $user->name],
-            'session' => ['id' => $session->id, 'sprint' => $session->sprint, 'sprintName' => $session->sprint_name, 'startedBy' => $session->starter?->name],
+            'session' => ['id' => $session->id, 'sprint' => $session->sprint, 'sprintName' => $session->sprint_name, 'startedBy' => $session->starter?->name, 'goal' => $session->goal],
             'round' => $round ? [...$this->presentRound($round, $votes, $user), 'estimators' => collect($seats)->where('role', 'estimator')->count()] : null,
             'seats' => $seats,
             'estimated' => $estimated->map(fn (PlanningRound $closed): array => [
@@ -165,7 +165,7 @@ class PlanningService
                     'tasks' => $tasks->all(),
                     // Em andamento: dá para entrar (ou reabrir) a mesa até a sprint terminar; encerrada: só ver como foi.
                     'current' => $sprint['end'] >= $today,
-                    'planning' => $session ? ['open' => $session->status === PlanningSession::OPEN, 'estimated' => (int) $session->estimated_count] : null,
+                    'planning' => $session ? ['open' => $session->status === PlanningSession::OPEN, 'estimated' => (int) $session->estimated_count, 'goal' => $session->goal] : null,
                 ];
             })->values()->all();
     }
@@ -200,6 +200,7 @@ class PlanningService
         return [
             'sprint' => $sprint, 'name' => $sessions->last()?->sprint_name ?? $schedule['name'], 'startedBy' => $sessions->first()?->starter?->name,
             'recorded' => $sessions->isNotEmpty(),
+            'goal' => $sessions->last()?->goal,
             'closedAt' => $sessions->last()?->closed_at?->toIso8601String(),
             'open' => $sessions->last()?->status === PlanningSession::OPEN,
             'cards' => $cards,
@@ -248,16 +249,26 @@ class PlanningService
      * sprint da planning pela coluna Sprint do quadro Tarefas (os que já estão nela ficam como estão). Se o Monday recusar
      * algum, a mesa continua aberta para tentar de novo.
      */
-    public function closeTable(MondayConnection $connection, PlanningSession $session): void
+    public function closeTable(MondayConnection $connection, PlanningSession $session, string $goal): void
     {
         if ($session->status !== PlanningSession::OPEN) {
             throw new RuntimeException('Esta planning já foi encerrada.');
         }
+        if (trim($goal) === '') {
+            throw new RuntimeException('Informe o objetivo da sprint para encerrar a planning.');
+        }
         $this->linkEstimatedToSprint($connection, $session);
-        DB::transaction(function () use ($session): void {
+        DB::transaction(function () use ($session, $goal): void {
             $session->rounds()->whereIn('status', PlanningStatus::open())->update(['status' => PlanningStatus::Canceled, 'closed_at' => now()]);
-            $session->update(['status' => PlanningSession::CLOSED, 'closed_at' => now()]);
+            // O objetivo fica na mesa da sprint (uma só, reaberta quando preciso) e é lido pelo histórico e pelo Daily Hub.
+            $session->update(['status' => PlanningSession::CLOSED, 'closed_at' => now(), 'goal' => trim($goal)]);
         });
+    }
+
+    /** Objetivo registrado para a sprint (null quando a sprint não teve planning no app ou é anterior ao objetivo). */
+    public function goal(int $sprint): ?string
+    {
+        return PlanningSession::query()->where('sprint', $sprint)->whereNotNull('goal')->latest('id')->value('goal');
     }
 
     /**

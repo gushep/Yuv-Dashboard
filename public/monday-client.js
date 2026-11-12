@@ -347,6 +347,8 @@ async function syncMonday(force = true) {
     if (currentPage === 'raw') (isOverviewTab() ? BOARD_TABS : isBoardTab() ? [rawTab] : []).forEach(tab => loadBoardTab(tab, false));
     window.Forecast?.onDataUpdated(result);
     window.Consumption?.onDataUpdated(result);
+    window.Daily?.onDataUpdated(result);
+    window.Retro?.onDataUpdated(result);
     window.SprintRelease?.onDataUpdated(result);
     if (canAccessScreen('control-tower')) window.ControlTower?.refreshAlerts();
     window.Burndown?.refresh();

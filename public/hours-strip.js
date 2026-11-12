@@ -80,5 +80,8 @@ window.HoursStrip = (() => {
   /** Depois de cada sincronização: a reserva pode ter mudado na tela Consumo de horas. */
   async function onDataUpdated() { await loadReserves(true); render(); }
 
-  return {render, onDataUpdated, sprintShown, tableHtml, loadReserves, HIDDEN_ON};
+  /** Reserva do Bombeiro da sprint, em minutos (a salva no Consumo de horas ou o padrão). */
+  const reserveFor = sprint => state.reserves?.reserves?.[sprint] ?? state.reserves?.defaultMinutes ?? 0;
+
+  return {render, onDataUpdated, sprintShown, tableHtml, loadReserves, reserveFor, HIDDEN_ON};
 })();
