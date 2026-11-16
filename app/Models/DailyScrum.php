@@ -12,11 +12,15 @@ use Illuminate\Support\Carbon;
 
 /**
  * Daily Scrum de uma sprint num dia. É criada quando a primeira pessoa abre a Daily do dia (ou registra a primeira
- * ação); o tempo da Daily vai da primeira entrada até a última saída de quem esteve na tela.
+ * ação). O tempo conta do botão Iniciar Daily até o Encerrar Daily; retomada, o tempo dos trechos vai somando.
  *
  * @property Carbon $date
+ * @property Carbon|null $started_at
+ * @property Carbon|null $opened_at
+ * @property int $open_seconds
+ * @property Carbon|null $closed_at
  */
-#[Fillable(['sprint', 'date', 'created_by'])]
+#[Fillable(['sprint', 'date', 'created_by', 'started_at', 'started_by', 'opened_at', 'open_seconds', 'closed_at', 'closed_by'])]
 class DailyScrum extends Model
 {
     /** @use HasFactory<DailyScrumFactory> */
@@ -27,7 +31,19 @@ class DailyScrum extends Model
      */
     protected function casts(): array
     {
-        return ['sprint' => 'integer', 'date' => 'date'];
+        return ['sprint' => 'integer', 'date' => 'date', 'started_at' => 'datetime', 'opened_at' => 'datetime', 'open_seconds' => 'integer', 'closed_at' => 'datetime'];
+    }
+
+    /** Já foi iniciada pelo botão (Dailies anteriores aos botões contam o tempo pela presença na tela). */
+    public function isStarted(): bool
+    {
+        return $this->started_at !== null;
+    }
+
+    /** O tempo está correndo: iniciada (ou retomada) e ainda não encerrada. */
+    public function isRunning(): bool
+    {
+        return $this->opened_at !== null;
     }
 
     /**
@@ -46,6 +62,26 @@ class DailyScrum extends Model
     public function participants(): HasMany
     {
         return $this->hasMany(DailyParticipant::class);
+    }
+
+    /**
+     * Quem clicou em Iniciar Daily.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function starter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'started_by');
+    }
+
+    /**
+     * Quem clicou em Encerrar Daily por último.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function closer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_by');
     }
 
     /**

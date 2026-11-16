@@ -137,9 +137,11 @@ window.Planning = (() => {
     // O olhinho abre a mesa da sprint só para leitura; sem planning no app, mostra a carga do time e os cards do Monday.
     const eye = `<button type="button" class="pp-eye" data-review="${sprint.number}" title="${planning ? `Ver como foi a planning (${planning.estimated} card(s) estimados)` : 'Ver a carga do time e os cards da sprint (planejada fora do app)'}" aria-label="Ver a planning da ${escape(sprint.name)}">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button>`;
-    if (!sprint.current) return eye;
+    // Resumo: a ata da planning em PDF, só para sprint com planning registrada no app.
+    const minutes = planning ? `<button type="button" class="pp-ghost" data-planning-minutes="${sprint.number}" title="Ata da planning da ${escape(sprint.name)} em PDF">📄 Resumo</button>` : '';
+    if (!sprint.current) return `${minutes}${eye}`;
     // Em andamento: o olhinho fica ao lado de "Entrar na mesa" (ver sem entrar na mesa).
-    const peek = eye;
+    const peek = `${minutes}${eye}`;
     if (data?.session?.sprint === sprint.number) return `${peek}<button type="button" class="pp-primary" data-view="table">Entrar na mesa</button>`;
     if (conduct()) return `${peek}<button type="button" class="pp-primary" data-enter-sprint="${sprint.number}" ${state.busy || data?.session ? 'disabled' : ''} title="${data?.session ? `Encerre a planning da ${escape(data.session.sprintName)} antes` : planning ? 'Reabrir a mesa desta sprint, com as estimativas já feitas' : 'Abrir a mesa desta sprint'}">Entrar na mesa</button>`;
     return `${peek}<button type="button" class="pp-primary" disabled title="A mesa abre quando o Maestro Scrum entrar">Entrar na mesa</button>`;
@@ -160,6 +162,19 @@ window.Planning = (() => {
       state.error = error.message; state.review = null; state.view = 'lobby';
     }
     render();
+  }
+
+  /** Resumo (ata em PDF) da planning de uma sprint, com os dados do modo leitura. */
+  async function printMinutes(number, button) {
+    button.disabled = true;
+    try {
+      const data = await mondayRequest(`${base()}/sprints/${number}`);
+      CeremonyMinutes.print(CeremonyMinutes.planning(data, state.history?.find(sprint => sprint.number === number) || null));
+    } catch (error) {
+      state.error = `Não foi possível gerar o resumo: ${error.message}`; render();
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function renderReview(review) {
@@ -531,6 +546,8 @@ window.Planning = (() => {
     if (enter) { act('/sessions', {sprint: Number(enter.dataset.enterSprint)}).then(ok => { if (ok) { state.view = 'table'; render(); } }); return; }
     const review = target.closest('[data-review]');
     if (review) { openReview(Number(review.dataset.review)); return; }
+    const minutes = target.closest('[data-planning-minutes]');
+    if (minutes) { printMinutes(Number(minutes.dataset.planningMinutes), minutes); return; }
     const sprint = target.closest('[data-sprint]');
     if (sprint) { const number = Number(sprint.dataset.sprint); state.openSprint = state.openSprint === number ? null : number; render(); return; }
     const card = target.closest('[data-play]');

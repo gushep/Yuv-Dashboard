@@ -145,6 +145,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [DailyController::class, 'show'])->name('show');
         Route::post('/actions', [DailyController::class, 'store'])->name('actions.store');
         Route::post('/presence', [DailyController::class, 'presence'])->name('presence');
+        Route::get('/minutes', [DailyController::class, 'minutes'])->name('minutes');
+        Route::post('/start', [DailyController::class, 'start'])->name('start');
+        Route::post('/close', [DailyController::class, 'close'])->name('close');
         Route::whereNumber('action')->group(function () {
             Route::post('/actions/{action}/complete', [DailyController::class, 'complete'])->name('actions.complete');
             Route::post('/actions/{action}/reopen', [DailyController::class, 'reopen'])->name('actions.reopen');

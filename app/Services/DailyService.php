@@ -9,6 +9,7 @@ use App\Models\DailyScrum;
 use App\Models\MondayConnection;
 use App\Models\User;
 use App\Support\SprintRules;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -50,7 +51,7 @@ class DailyService
             $this->join($snapshot, $user, $sprint);
         }
         $dailies = DailyScrum::query()->where('sprint', $sprint)->withCount(['actions', 'actions as done_count' => fn ($query) => $query->where('status', DailyAction::DONE)])
-            ->with('participants.user')->orderBy('date')->get();
+            ->with(['participants.user', 'starter', 'closer'])->orderBy('date')->get();
         $selected = $dailies->first(fn (DailyScrum $daily): bool => $daily->date->toDateString() === $date);
         $actions = DailyAction::query()->where('sprint', $sprint)
             ->whereHas('daily', fn ($query) => $query->whereDate('date', '<=', $date))
@@ -81,7 +82,7 @@ class DailyService
      * Presença na Daily de hoje: quem está com a tela aberta agora, quem já passou por ela e o tempo da Daily. A tela
      * chama a cada poucos segundos enquanto está na Daily de hoje da sprint atual.
      *
-     * @return array{present: list<string>, attendees: list<string>, startedAt: ?string, seconds: int, live: bool}|null
+     * @return array{present: list<string>, attendees: list<string>, startedAt: ?string, seconds: int, live: bool, status: string, closedAt: ?string, startedBy: ?string, closedBy: ?string}|null
      */
     public function presence(MondayConnection $connection, User $user, int $sprint): ?array
     {
@@ -112,6 +113,143 @@ class DailyService
         return $daily;
     }
 
+    /**
+     * Iniciar Daily: o tempo começa a contar agora. Só a Daily de hoje da sprint atual. Depois de encerrada, iniciar de
+     * novo retoma: o tempo já contado fica e o novo trecho soma. Dois cliques ao mesmo tempo não reiniciam o tempo.
+     */
+    public function start(MondayConnection $connection, User $user, int $sprint): DailyScrum
+    {
+        $daily = $this->join($this->snapshots->latest($connection, PHP_INT_MAX), $user, $sprint)
+            ?? throw new RuntimeException('Só dá para iniciar a Daily de hoje da sprint atual.');
+
+        return DB::transaction(function () use ($daily, $user): DailyScrum {
+            $locked = DailyScrum::query()->lockForUpdate()->findOrFail($daily->id);
+            if (! $locked->isRunning()) {
+                $locked->update([
+                    'started_at' => $locked->started_at ?? now(), 'started_by' => $locked->started_by ?? $user->id,
+                    'opened_at' => now(), 'closed_at' => null, 'closed_by' => null,
+                ]);
+            }
+
+            return $locked;
+        });
+    }
+
+    /** Encerrar Daily: o tempo para de contar e fica registrado no histórico. Encerrar de novo não muda nada. */
+    public function close(User $user, int $sprint): DailyScrum
+    {
+        $daily = DailyScrum::query()->where('sprint', $sprint)->whereDate('date', SprintRules::today())->first();
+        if ($daily === null || ! $daily->isStarted()) {
+            throw new RuntimeException('A Daily de hoje ainda não foi iniciada.');
+        }
+
+        return DB::transaction(function () use ($daily, $user): DailyScrum {
+            $locked = DailyScrum::query()->lockForUpdate()->findOrFail($daily->id);
+            if ($locked->isRunning()) {
+                $locked->update([
+                    'open_seconds' => $locked->open_seconds + (int) $locked->opened_at->diffInSeconds(now(), true),
+                    'opened_at' => null, 'closed_at' => now(), 'closed_by' => $user->id,
+                ]);
+            }
+
+            return $locked;
+        });
+    }
+
+    /**
+     * O que mudou nos cards da sprint desde a Daily anterior, para a ata da Daily: cada card da sprint com o estado
+     * agora (ou no fim da Daily daquele dia) e o de antes (status, estimado e horas apontadas), pelo histórico do
+     * Monday, e os comentários feitos no card nesse intervalo. Só leitura: nada é gravado no app nem no Monday.
+     *
+     * Antes = fim da Daily anterior da sprint (ou o início do dia útil anterior, se não houve); agora = o momento da
+     * consulta, na Daily de hoje, ou o fim da Daily daquele dia, nas anteriores.
+     *
+     * @return array{sprint: int, date: string, from: string, to: string, fromLabel: string, historyStart: ?string, commentsAvailable: bool, cards: list<array<string, mixed>>}
+     */
+    public function minutes(MondayConnection $connection, int $sprint, string $date): array
+    {
+        $snapshot = $this->snapshots->latest($connection, PHP_INT_MAX);
+        $daily = DailyScrum::query()->where('sprint', $sprint)->whereDate('date', $date)->with('participants')->first();
+        $to = $date >= SprintRules::today() ? CarbonImmutable::now()->utc() : ($daily ? $this->meetingEnd($daily) : SprintRules::endOfDay($date));
+        $previous = DailyScrum::query()->where('sprint', $sprint)->whereDate('date', '<', $date)->with('participants')->orderByDesc('date')->first();
+        if ($previous !== null) {
+            [$from, $fromLabel] = [$this->meetingEnd($previous), 'a Daily de '.$previous->date->format('d/m')];
+        } else {
+            $day = CarbonImmutable::parse($date)->subDay();
+            while (! $day->isWeekday()) {
+                $day = $day->subDay();
+            }
+            [$from, $fromLabel] = [CarbonImmutable::parse($day->toDateString(), SprintRules::TIMEZONE)->startOfDay()->utc(), 'o início de '.$day->format('d/m')];
+        }
+
+        $timeline = SprintTimeline::fromDatabase($snapshot, $connection);
+        $before = $timeline->membersAt($sprint, $from);
+        $cards = [];
+        foreach ($timeline->membersAt($sprint, $to) as $id => $state) {
+            if (SprintRules::isRemoved($state['Status'] ?? '')) {
+                continue;
+            }
+            $earlier = $before[$id] ?? null;
+            $cards[(string) $id] = [
+                ...$timeline->summary($state), 'real' => isset($state['RealH']) ? (float) $state['RealH'] : null,
+                'before' => $earlier === null ? null : ['status' => (string) ($earlier['Status'] ?? ''), 'estimate' => isset($earlier['EstH']) ? (float) $earlier['EstH'] : null, 'real' => isset($earlier['RealH']) ? (float) $earlier['RealH'] : null],
+                'comments' => [],
+            ];
+        }
+
+        $available = true;
+        foreach ($cards === [] ? [] : $this->monday->releaseComments((string) $connection->token, array_map('strval', array_keys($cards))) as $id => $result) {
+            $available = $available && $result['available'];
+            $cards[(string) $id]['comments'] = $this->commentsBetween($result['comments'], $from, $to);
+        }
+
+        return [
+            'sprint' => $sprint, 'date' => $date, 'from' => $from->toIso8601String(), 'to' => $to->toIso8601String(), 'fromLabel' => $fromLabel,
+            'historyStart' => $timeline->historyStart()?->toIso8601String(), 'commentsAvailable' => $available, 'cards' => array_values($cards),
+        ];
+    }
+
+    /** Fim de uma Daily: o Encerrar Daily; sem ele, a última presença na tela; sem presença, o fim do dia. */
+    private function meetingEnd(DailyScrum $daily): CarbonImmutable
+    {
+        if ($daily->closed_at !== null && ! $daily->isRunning()) {
+            return CarbonImmutable::parse($daily->closed_at)->utc();
+        }
+        $lastSeen = $daily->participants->max('last_seen_at');
+
+        return $lastSeen ? CarbonImmutable::parse($lastSeen)->utc() : SprintRules::endOfDay($daily->date->toDateString());
+    }
+
+    /**
+     * Comentários (e respostas) do card feitos no intervalo, do mais antigo para o mais novo, com o texto encurtado.
+     *
+     * @param  list<array<string, mixed>>  $updates
+     * @return list<array{author: string, at: string, text: string}>
+     */
+    private function commentsBetween(array $updates, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $comments = [];
+        $add = function (?string $at, ?string $author, string $text) use (&$comments, $from, $to): void {
+            $text = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags(str_replace(['<br>', '<br/>', '<br />', '</p>'], ' ', $text)))) ?? '');
+            if ($at === null || $text === '') {
+                return;
+            }
+            $moment = CarbonImmutable::parse($at)->utc();
+            if ($moment->gt($from) && $moment->lte($to)) {
+                $comments[] = ['author' => (string) ($author ?: 'Sem nome'), 'at' => $moment->toIso8601String(), 'text' => mb_strimwidth($text, 0, 400, '…')];
+            }
+        };
+        foreach ($updates as $update) {
+            $add($update['created_at'] ?? null, $update['creator']['name'] ?? null, (string) ($update['text_body'] ?? ''));
+            foreach ($update['replies'] ?? [] as $reply) {
+                $add($reply['created_at'] ?? null, $reply['creator']['name'] ?? null, (string) ($reply['body'] ?? ''));
+            }
+        }
+        usort($comments, fn (array $a, array $b): int => $a['at'] <=> $b['at']);
+
+        return $comments;
+    }
+
     /** A Daily de hoje da sprint, criada pela primeira pessoa que abre a tela ou registra uma ação. */
     private function todayDaily(int $sprint, User $user): DailyScrum
     {
@@ -125,24 +263,41 @@ class DailyService
     }
 
     /**
-     * Presentes e tempo de uma Daily: começa na primeira entrada e termina na última saída; enquanto alguém está na tela,
-     * o tempo continua contando.
+     * Presentes e tempo de uma Daily. O tempo conta do Iniciar Daily ao Encerrar Daily (`live` enquanto corre). Status:
+     * `idle` (ainda não iniciada), `running` ou `ended`. Uma Daily que ficou sem encerrar num dia que já passou conta
+     * até a última vez que alguém esteve na tela. Dailies anteriores aos botões contam da primeira entrada à última saída.
      *
-     * @return array{present: list<string>, attendees: list<string>, startedAt: ?string, seconds: int, live: bool}
+     * @return array{present: list<string>, attendees: list<string>, startedAt: ?string, seconds: int, live: bool, status: string, closedAt: ?string, startedBy: ?string, closedBy: ?string}
      */
     public function presenceOf(DailyScrum $daily): array
     {
         $people = $daily->relationLoaded('participants') ? $daily->participants : $daily->participants()->with('user')->get();
-        if ($people->isEmpty()) {
-            return ['present' => [], 'attendees' => [], 'startedAt' => null, 'seconds' => 0, 'live' => false];
-        }
         $cut = now()->subSeconds(self::PRESENCE_SECONDS);
         $present = $people->filter(fn (DailyParticipant $person): bool => $person->last_seen_at->gte($cut));
-        $start = $people->min('first_seen_at');
-        $end = $present->isNotEmpty() ? now() : $people->max('last_seen_at');
         $names = fn ($list): array => $list->map(fn (DailyParticipant $person): ?string => $person->user?->name)->filter()->sort()->values()->all();
+        $base = ['present' => $names($present), 'attendees' => $names($people)];
+        $isToday = $daily->date->toDateString() === SprintRules::today();
 
-        return ['present' => $names($present), 'attendees' => $names($people), 'startedAt' => $start->toIso8601String(), 'seconds' => (int) $start->diffInSeconds($end, true), 'live' => $present->isNotEmpty()];
+        if ($daily->isStarted()) {
+            $running = $daily->isRunning() && $isToday;
+            $seconds = $daily->open_seconds;
+            if ($daily->isRunning()) {
+                // Esquecida aberta num dia que já passou: o trecho vai até a última presença na tela.
+                $end = $isToday ? now() : max($daily->opened_at, $people->max('last_seen_at') ?? $daily->opened_at);
+                $seconds += (int) $daily->opened_at->diffInSeconds($end, true);
+            }
+
+            return [...$base, 'startedAt' => $daily->started_at->toIso8601String(), 'seconds' => $seconds, 'live' => $running, 'status' => $running ? 'running' : 'ended',
+                'closedAt' => $daily->closed_at?->toIso8601String(), 'startedBy' => $daily->starter?->name, 'closedBy' => $daily->isRunning() ? null : $daily->closer?->name];
+        }
+        $none = ['closedAt' => null, 'startedBy' => null, 'closedBy' => null];
+        if ($isToday || $people->isEmpty()) {
+            return [...$base, 'startedAt' => null, 'seconds' => 0, 'live' => false, 'status' => 'idle', ...$none];
+        }
+        $start = $people->min('first_seen_at');
+        $end = $people->max('last_seen_at');
+
+        return [...$base, 'startedAt' => $start->toIso8601String(), 'seconds' => (int) $start->diffInSeconds($end, true), 'live' => false, 'status' => 'ended', ...$none, 'closedAt' => $end->toIso8601String()];
     }
 
     /**
@@ -397,7 +552,7 @@ class DailyService
     public function history(int $sprint): array
     {
         return DailyScrum::query()->where('sprint', $sprint)->orderBy('date')
-            ->with(['actions' => fn ($query) => $query->orderBy('opened_at'), 'actions.daily', 'actions.responsible', 'actions.opener', 'actions.closer', 'actions.events.user', 'participants.user'])
+            ->with(['actions' => fn ($query) => $query->orderBy('opened_at'), 'actions.daily', 'actions.responsible', 'actions.opener', 'actions.closer', 'actions.events.user', 'participants.user', 'starter', 'closer'])
             ->get()->map(fn (DailyScrum $daily): array => [
                 'date' => $daily->date->toDateString(),
                 ...$this->presenceOf($daily),

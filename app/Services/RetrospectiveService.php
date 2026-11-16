@@ -228,7 +228,11 @@ class RetrospectiveService
         $card->delete();
     }
 
-    /** Liga ou desliga o voto da pessoa na carta; cada pessoa tem VOTES_PER_PERSON votos por retro. */
+    /**
+     * Liga ou desliga o voto da pessoa na carta; cada pessoa tem VOTES_PER_PERSON votos por retro. Num grupo (carta
+     * principal com as agrupadas dentro), o voto vale para o grupo: quem já votou em qualquer carta do grupo não vota
+     * de novo nele, e clicar tira um único voto dela (se ela tinha votado nas duas antes de agrupar, fica com um).
+     */
     public function vote(User $user, RetrospectiveCard $card): void
     {
         DB::transaction(function () use ($user, $card): void {
@@ -237,7 +241,10 @@ class RetrospectiveService
             if ($retro->revealed_at === null) {
                 throw new RuntimeException('A votação começa depois que o facilitador revelar as cartas.');
             }
-            $existing = RetrospectiveVote::query()->where('retrospective_card_id', $card->id)->where('user_id', $user->id)->first();
+            $main = $card->merged_into_id ?? $card->id;
+            $group = RetrospectiveCard::query()->where('retrospective_id', $retro->id)
+                ->where(fn ($query) => $query->whereKey($main)->orWhere('merged_into_id', $main))->pluck('id');
+            $existing = RetrospectiveVote::query()->whereIn('retrospective_card_id', $group)->where('user_id', $user->id)->latest('id')->first();
             if ($existing !== null) {
                 $existing->delete();
 
@@ -246,7 +253,7 @@ class RetrospectiveService
             if ($this->votesUsed($retro, $user) >= self::VOTES_PER_PERSON) {
                 throw new RuntimeException('Você já usou os '.self::VOTES_PER_PERSON.' votos. Tire um voto para votar em outra carta.');
             }
-            RetrospectiveVote::query()->create(['retrospective_card_id' => $card->id, 'user_id' => $user->id]);
+            RetrospectiveVote::query()->create(['retrospective_card_id' => $main, 'user_id' => $user->id]);
         });
     }
 
@@ -262,13 +269,19 @@ class RetrospectiveService
         });
     }
 
-    /** Voto da pessoa sobre o objetivo da sprint: atingido, parcial ou não atingido. */
+    /**
+     * Voto da pessoa sobre o objetivo da sprint: atingido, parcial ou não atingido. Um voto por pessoa: votar de novo
+     * troca o voto (clicar no mesmo de novo não soma). A chave é "u{id}": chave numérica faria o PHP renumerar e
+     * acrescentar um voto a cada clique; votos gravados antes disso (chaves numéricas) contam pelo último de cada lista.
+     */
     public function goalVote(User $user, Retrospective $retro, string $vote): void
     {
         DB::transaction(function () use ($user, $retro, $vote): void {
             $locked = Retrospective::query()->lockForUpdate()->findOrFail($retro->id);
             $this->ensureOpen($locked);
-            $locked->update(['goal_votes' => [...($locked->goal_votes ?? []), (string) $user->id => $vote]]);
+            $votes = array_filter($locked->goal_votes ?? [], fn (mixed $value, int|string $key): bool => str_starts_with((string) $key, 'u'), ARRAY_FILTER_USE_BOTH);
+            $votes['u'.$user->id] = $vote;
+            $locked->update(['goal_votes' => $votes]);
         });
     }
 
@@ -578,7 +591,11 @@ class RetrospectiveService
             ->where(fn ($query) => $query->when($retro->isOpen(), fn ($inner) => $inner->where('status', RetrospectiveAction::OPEN))
                 ->orWhereHas('events', fn ($events) => $events->where('retrospective_id', $retro->id)))
             ->get();
+        // Um voto por pessoa (chave "u{id}"); retros sem nenhum voto nesse formato mostram os votos antigos como estão.
         $goalVotes = collect($retro->goal_votes ?? []);
+        if ($goalVotes->keys()->contains(fn (int|string $key): bool => str_starts_with((string) $key, 'u'))) {
+            $goalVotes = $goalVotes->filter(fn (mixed $vote, int|string $key): bool => str_starts_with((string) $key, 'u'));
+        }
         $stepSeconds = $this->stepSeconds($retro);
 
         return [
@@ -593,7 +610,7 @@ class RetrospectiveService
             'goal' => $retro->goal, 'rules' => $retro->rules, 'context' => $retro->context, 'dependencies' => $retro->dependencies,
             'sprintGoal' => $this->planning->goal($retro->sprint),
             'goalVotes' => ['yes' => $goalVotes->filter(fn ($vote) => $vote === 'yes')->count(), 'partial' => $goalVotes->filter(fn ($vote) => $vote === 'partial')->count(),
-                'no' => $goalVotes->filter(fn ($vote) => $vote === 'no')->count(), 'mine' => $goalVotes->get((string) $user->id)],
+                'no' => $goalVotes->filter(fn ($vote) => $vote === 'no')->count(), 'mine' => $goalVotes->get('u'.$user->id)],
             'revealed' => $revealed,
             'votesPerPerson' => self::VOTES_PER_PERSON,
             'votesLeft' => self::VOTES_PER_PERSON - $this->votesUsed($retro, $user),

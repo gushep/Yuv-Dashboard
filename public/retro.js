@@ -24,7 +24,7 @@ window.Retro = (() => {
   const STATUS = {open: ['blue', 'Em andamento'], late: ['red', 'Atrasada'], done: ['green', 'Concluída'], dropped: ['muted', 'Descartada']};
   const REVIEW = {done: ['green', 'Concluída'], continued: ['blue', 'Continua'], dropped: ['muted', 'Descartada'], reopened: ['yellow', 'Reaberta']};
   const state = {active: false, overview: null, room: null, review: null, view: 'lobby', filter: 'open', error: '', busy: false,
-    roomTimer: null, lobbyTimer: null, clockTimer: null, fetchedAt: 0, merging: null, dialog: null, request: 0, editingOpening: false, drafts: {}, pending: null, pointer: false};
+    roomTimer: null, lobbyTimer: null, clockTimer: null, fetchedAt: 0, merging: null, dialog: null, request: 0, editingOpening: false, drafts: {}, pending: null, pointer: false, lastInput: 0};
   const page = () => el('page-sprint-retrospective');
   const base = () => page().dataset.url.replace(/\/$/, '');
 
@@ -155,7 +155,12 @@ window.Retro = (() => {
     if (!data.retro && state.view === 'room') { state.view = 'lobby'; loadOverview(); }
   }
 
-  const typing = () => { const active = document.activeElement; return Boolean(active && el('rt-room')?.contains(active) && active.matches('input, textarea, select')); };
+  /**
+   * Digitando agora: cursor num campo da sala e uma tecla nos últimos segundos. Com o cursor parado numa caixa (como
+   * a de "Adicionar em..." depois de mandar uma carta), a sala volta a mostrar o que os outros fazem, sem tirar o foco.
+   */
+  const TYPING_MS = 2000;
+  const typing = () => { const active = document.activeElement; return Boolean(active && el('rt-room')?.contains(active) && active.matches('input, textarea, select') && Date.now() - state.lastInput < TYPING_MS); };
 
   /** Passo na sala ou numa ação: responde com a sala (tem `retro`) ou com a tela inicial (tem `kpis`). */
   async function act(path, body = {}) {
@@ -188,9 +193,9 @@ window.Retro = (() => {
     el('rt-subtitle').textContent = reviewing ? `${state.review.sprint?.name || 'Sprint'} · somente leitura`
       : retro ? `Retrospectiva da ${retro.sprintName} · facilitador ${retro.facilitator?.name || 'Maestro Scrum'}` : 'Aprender com cada sprint e acompanhar as ações até o fim';
     renderHeroActions(retro, reviewing);
-    if (reviewing) renderReview(state.review);
-    else if (retro) renderRoom(retro);
-    else renderLobby(state.overview);
+    // O redesenho mantém o cursor no campo em que a pessoa estava (as caixas são recriadas com os rascunhos).
+    const draw = () => { if (reviewing) renderReview(state.review); else if (retro) renderRoom(retro); else renderLobby(state.overview); };
+    if (window.Ceremony?.keepFocus) Ceremony.keepFocus(page(), draw); else draw();
   }
 
   function renderHeroActions(retro, reviewing) {
@@ -272,8 +277,22 @@ window.Retro = (() => {
         ${retro && window.Ceremony ? `<div class="rt-attendance">${Ceremony.attendanceHtml(retro.attendees || [], retro.durationSeconds, {live: retro.status === 'open'})}</div>` : ''}</div>
       <div class="rt-counts">${counts}</div>
       <div class="rt-prog">${progress}</div>
-      <div class="rt-row-buttons">${eye}${action}</div>
+      <div class="rt-row-buttons">${retro ? `<button type="button" class="pp-ghost" data-minutes="${sprint.number}" title="Ata da retro da ${escape(sprint.name)} em PDF">📄 Resumo</button>` : ''}${eye}${action}</div>
     </article>`;
+  }
+
+  /** Resumo (ata em PDF) da retro de uma sprint, com os dados do modo leitura e os indicadores da sprint. */
+  async function printMinutes(number, button) {
+    button.disabled = true;
+    try {
+      const data = await mondayRequest(`${base()}/sprints/${number}`);
+      const metrics = data.retro?.metrics || metricsFor(number, data.retro?.dailyStats ?? data.dailyStats ?? null);
+      CeremonyMinutes.print(CeremonyMinutes.retro(data, metrics));
+    } catch (error) {
+      state.error = `Não foi possível gerar o resumo: ${error.message}`; render();
+    } finally {
+      button.disabled = false;
+    }
   }
 
   // ── Sala ─────────────────────────────────────────────────────────────────────
@@ -531,6 +550,8 @@ window.Retro = (() => {
     if (filter) { state.filter = filter.dataset.filter; render(); return; }
     const review = target.closest('[data-review]');
     if (review) { openReview(Number(review.dataset.review)); return; }
+    const minutes = target.closest('[data-minutes]');
+    if (minutes) { printMinutes(Number(minutes.dataset.minutes), minutes); return; }
     const start = target.closest('[data-start]');
     if (start) {
       if (await act('/retros', {sprint: Number(start.dataset.start)})) { state.view = 'room'; schedule(); render(); }
@@ -616,6 +637,7 @@ window.Retro = (() => {
 
   function onInput(event) {
     const field = event.target;
+    state.lastInput = Date.now();
     if (field.matches('[data-draft]') && field.id) state.drafts[field.id] = field.value;
     if (field.id) state.focus = {id: field.id, start: field.selectionStart ?? null, end: field.selectionEnd ?? null};
   }

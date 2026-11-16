@@ -71,7 +71,7 @@ class ControlTowerTest extends TestCase
         $connection = MondayConnection::current();
         // Ana herda as 50h salvas na sprint 16; Bia é de Projetos, sem card na sprint, com o padrão de 80h.
         $connection->capacity_overrides = ['16|Ana Souza' => 50 * 60];
-        $connection->forecast_settings = ['supportReserves' => ['17' => 20 * 60]];
+        $connection->forecast_settings = ['supportReserves' => ['17' => 25 * 60]];
         $connection->metric_settings = ['capacityHours' => 80, 'team' => [
             ['id' => '1', 'name' => 'Ana Souza', 'group' => 'fullstack'],
             ['id' => '2', 'name' => 'Bia Lima', 'group' => 'projects'],
@@ -79,11 +79,12 @@ class ControlTowerTest extends TestCase
         $connection->save();
 
         $response = $this->getJson('/api/control-tower')->assertOk()
-            ->assertJsonPath('capacity.teams.fullstack', ['capacityHours' => 50, 'availableHours' => 6, 'remainingHours' => 8])
-            ->assertJsonPath('capacity.teams.projects', ['capacityHours' => 80, 'availableHours' => 16, 'remainingHours' => 0])
-            ->assertJsonPath('capacity.teams.reserveHours', 20)
-            ->assertJsonPath('capacity.availableHours', 26)
-            ->assertJsonPath('capacity.ratio', 133.3);
+            // 3 dos 10 dias úteis restam, contando hoje: Full stack (50h − Bombeiro 25h) × 3/10 = 7,5h.
+            ->assertJsonPath('capacity.teams.fullstack', ['capacityHours' => 50, 'availableHours' => 7.5, 'remainingHours' => 8])
+            ->assertJsonPath('capacity.teams.projects', ['capacityHours' => 80, 'availableHours' => 24, 'remainingHours' => 0])
+            ->assertJsonPath('capacity.teams.reserveHours', 25)
+            ->assertJsonPath('capacity.availableHours', 39)
+            ->assertJsonPath('capacity.ratio', 106.7);
 
         $this->assertSame('red', collect($response->json('signals'))->keyBy('key')['capacity']['level']);
     }

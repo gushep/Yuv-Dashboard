@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\DailyAction;
 use App\Models\DailyActionEvent;
 use App\Models\DailyScrum;
+use App\Models\MondayActivityEvent;
 use App\Models\MondayConnection;
 use App\Models\PlanningSession;
 use App\Models\User;
@@ -270,29 +271,114 @@ class DailyScrumTest extends TestCase
             ->assertJsonPath('dailies.0.actions.0.resolution', 'Resolvido na hora.');
     }
 
-    public function test_the_daily_counts_who_was_there_from_the_first_entry_to_the_last_exit(): void
+    public function test_the_daily_time_runs_from_start_to_close_while_presence_lists_who_was_there(): void
     {
         $ana = User::factory()->withScreens(Screen::DailyScrum)->create(['name' => 'Ana']);
         $bruno = User::factory()->withScreens(Screen::DailyScrum)->create(['name' => 'Bruno']);
 
+        // Abrir a tela registra a presença, mas o tempo só começa no Iniciar Daily.
         $this->actingAs($ana)->getJson(route('daily.show'))->assertOk()
-            ->assertJsonPath('presence.present', ['Ana'])->assertJsonPath('presence.live', true);
+            ->assertJsonPath('presence.present', ['Ana'])->assertJsonPath('presence.status', 'idle')->assertJsonPath('presence.seconds', 0);
+        $this->travel(3)->minutes();
+        $this->actingAs($ana)->postJson(route('daily.start'), ['sprint' => 20])->assertOk()
+            ->assertJsonPath('presence.status', 'running')->assertJsonPath('presence.live', true)->assertJsonPath('presence.seconds', 0);
         $this->travel(5)->minutes();
         $this->actingAs($bruno)->postJson(route('daily.presence'), ['sprint' => 20])->assertOk()
-            ->assertJsonPath('presence.present', ['Bruno'])
-            ->assertJsonPath('presence.attendees', ['Ana', 'Bruno'])
-            ->assertJsonPath('presence.seconds', 300);
+            ->assertJsonPath('presence.attendees', ['Ana', 'Bruno'])->assertJsonPath('presence.seconds', 300);
+        // Um segundo clique em Iniciar não zera o tempo.
+        $this->actingAs($bruno)->postJson(route('daily.start'), ['sprint' => 20])->assertOk()->assertJsonPath('presence.seconds', 300);
         $this->travel(9)->minutes();
-        $this->actingAs($bruno)->postJson(route('daily.presence'), ['sprint' => 20])->assertOk()->assertJsonPath('presence.seconds', 840);
+        $this->actingAs($bruno)->postJson(route('daily.close'), ['sprint' => 20])->assertOk()
+            ->assertJsonPath('presence.status', 'ended')->assertJsonPath('presence.live', false)->assertJsonPath('presence.seconds', 840)
+            ->assertJsonPath('presence.startedBy', 'Ana')->assertJsonPath('presence.closedBy', 'Bruno')->assertJsonPath('presence.closedAt', now()->toIso8601String());
 
-        // Todos saíram: a Daily fica com 14 minutos e não conta mais (consultado pelo histórico, que não conta presença).
+        // Encerrada, o tempo para mesmo com gente na tela.
         $this->travel(20)->minutes();
+        $this->actingAs($ana)->postJson(route('daily.presence'), ['sprint' => 20])->assertOk()
+            ->assertJsonPath('presence.present', ['Ana'])->assertJsonPath('presence.seconds', 840);
         $this->actingAs(User::factory()->withScreens(Screen::Planning)->create())->getJson(route('planning.review', 20))->assertOk()
             ->assertJsonPath('dailies.0.attendees', ['Ana', 'Bruno'])
-            ->assertJsonPath('dailies.0.present', [])
             ->assertJsonPath('dailies.0.seconds', 840)
             ->assertJsonPath('dailies.0.live', false);
+
+        // Retomada: o novo trecho soma ao tempo já registrado.
+        $this->actingAs($ana)->postJson(route('daily.start'), ['sprint' => 20])->assertOk()->assertJsonPath('presence.status', 'running');
+        $this->travel(2)->minutes();
+        $this->actingAs($ana)->postJson(route('daily.close'), ['sprint' => 20])->assertOk()->assertJsonPath('presence.seconds', 960);
         $this->assertSame(1, DailyScrum::count());
+        $this->assertSame($ana->id, DailyScrum::first()->started_by);
+        $this->assertSame($ana->id, DailyScrum::first()->closed_by);
+    }
+
+    public function test_the_minutes_show_what_changed_in_each_card_since_the_previous_daily(): void
+    {
+        $connection = MondayConnection::current();
+        $connection->column_map = [...$connection->column_map, 'RealH' => 'real_col'];
+        $connection->save();
+        // Daily de ontem encerrada às 09:15; o que mudou depois disso entra na ata de hoje.
+        DailyScrum::factory()->create(['date' => '2026-11-11', 'started_at' => '2026-11-11 12:00:00', 'closed_at' => '2026-11-11 12:15:00']);
+        $event = fn (string $column, array $before, array $after, string $at) => MondayActivityEvent::factory()->create([
+            'board_id' => '123', 'item_id' => '901', 'event' => 'update_column_value', 'column_id' => $column, 'previous_value' => $before, 'value' => $after,
+            'data' => ['pulse_id' => 901, 'pulse_name' => 'Relatório de jornada', 'column_id' => $column], 'occurred_at' => CarbonImmutable::parse($at, 'America/Sao_Paulo')->utc(),
+        ]);
+        $event('task_status', ['label' => ['text' => 'Em progresso']], ['label' => ['text' => 'Parado']], '2026-11-11 14:00');
+        $event('real_col', ['value' => '1'], ['value' => '3'], '2026-11-11 16:00');
+        Http::fake(['api.monday.com/v2' => Http::response(['data' => ['items' => [
+            ['id' => '901', 'updates' => [
+                ['id' => '1', 'text_body' => 'Travado aguardando acesso ao banco.', 'created_at' => '2026-11-11T20:00:00Z', 'creator' => ['name' => 'Ana'], 'replies' => [
+                    ['id' => '2', 'body' => '<p>Pedi o acesso para a Infra.</p>', 'created_at' => '2026-11-12T11:00:00Z', 'creator' => ['name' => 'Gustavo']],
+                ]],
+                ['id' => '3', 'text_body' => 'Comentário de antes da Daily de ontem.', 'created_at' => '2026-11-10T15:00:00Z', 'creator' => ['name' => 'Ana'], 'replies' => []],
+            ]],
+            ['id' => '902', 'updates' => []],
+        ]]])]);
+        $this->actingAs(User::factory()->withScreens(Screen::DailyScrum)->create());
+
+        $response = $this->getJson(route('daily.minutes', ['sprint' => 20, 'date' => '2026-11-12']))->assertOk()
+            ->assertJsonPath('fromLabel', 'a Daily de 11/11')
+            ->assertJsonPath('from', '2026-11-11T12:15:00+00:00')
+            ->assertJsonPath('commentsAvailable', true);
+        $cards = collect($response->json('cards'))->keyBy('id');
+        $this->assertEquals(['status' => 'Em progresso', 'estimate' => 8, 'real' => 1], $cards['901']['before']);
+        $this->assertSame('Parado', $cards['901']['status']);
+        $this->assertEquals(3, $cards['901']['real']);
+        $this->assertSame(['Ana', 'Gustavo'], array_column($cards['901']['comments'], 'author'));
+        $this->assertSame('Pedi o acesso para a Infra.', $cards['901']['comments'][1]['text']);
+        $this->assertSame('Em progresso', $cards['902']['before']['status']);
+        $this->assertSame([], $cards['902']['comments']);
+    }
+
+    public function test_without_a_previous_daily_the_minutes_start_at_the_previous_working_day(): void
+    {
+        Http::fake(['api.monday.com/v2' => Http::response(['data' => ['items' => []]])]);
+        $this->actingAs(User::factory()->withScreens(Screen::DailyScrum)->create());
+
+        // Segunda-feira: o dia útil anterior é a sexta.
+        $this->getJson(route('daily.minutes', ['sprint' => 20, 'date' => '2026-11-16']))->assertOk()
+            ->assertJsonPath('fromLabel', 'o início de 13/11')
+            ->assertJsonPath('from', '2026-11-13T03:00:00+00:00')
+            ->assertJsonPath('commentsAvailable', false);
+    }
+
+    public function test_closing_requires_a_started_daily_and_only_today_can_be_started(): void
+    {
+        $this->actingAs(User::factory()->withScreens(Screen::DailyScrum)->create());
+
+        $this->postJson(route('daily.close'), ['sprint' => 20])->assertUnprocessable()->assertJsonPath('error', 'A Daily de hoje ainda não foi iniciada.');
+        $this->postJson(route('daily.start'), ['sprint' => 19])->assertUnprocessable()->assertJsonPath('error', 'Só dá para iniciar a Daily de hoje da sprint atual.');
+        $this->assertSame(0, DailyScrum::count());
+    }
+
+    public function test_a_daily_left_running_on_a_past_day_counts_until_the_last_presence(): void
+    {
+        $daily = DailyScrum::factory()->create(['date' => '2026-11-11', 'started_at' => '2026-11-11 12:30:00', 'opened_at' => '2026-11-11 12:30:00']);
+        $daily->participants()->create(['user_id' => User::factory()->create()->id, 'first_seen_at' => '2026-11-11 12:28:00', 'last_seen_at' => '2026-11-11 12:48:00']);
+
+        $presence = app(DailyService::class)->presenceOf($daily->fresh());
+
+        $this->assertSame(1080, $presence['seconds']);
+        $this->assertSame('ended', $presence['status']);
+        $this->assertFalse($presence['live']);
     }
 
     public function test_looking_at_a_past_sprint_does_not_count_as_presence(): void

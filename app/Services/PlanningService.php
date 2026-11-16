@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\MondayActivityEvent;
 use App\Models\MondayConnection;
 use App\Models\PlanningParticipant;
 use App\Models\PlanningRound;
@@ -182,7 +183,7 @@ class PlanningService
      *
      * Sprint planejada fora do app (sem mesa registrada): a mesma tela, com a carga do time e os cards da sprint.
      *
-     * @return array{sprint: int, name: ?string, startedBy: ?string, recorded: bool, closedAt: ?string, open: bool, cards: list<array<string, mixed>>, load: list<array<string, mixed>>, reserveHours: float, rounds: list<array<string, mixed>>}
+     * @return array{sprint: int, name: ?string, startedBy: ?string, recorded: bool, closedAt: ?string, open: bool, cards: list<array<string, mixed>>, load: list<array<string, mixed>>, reserveHours: float, sprintCards: list<array<string, mixed>>, rounds: list<array<string, mixed>>}
      */
     public function review(MondayConnection $connection, int $sprint): array
     {
@@ -200,6 +201,20 @@ class PlanningService
             ->sortByDesc(fn (array $row): float => (float) ($row['EstH'] ?? 0))
             ->map(fn (array $row): array => ['name' => $row['Nome'], 'url' => ($row['Url'] ?? '') ?: null, 'owner' => ($row['Responsavel'] ?? '') ?: null, 'type' => ($row['Tipo'] ?? '') ?: null, 'estimate' => $row['EstH'] ?? null])
             ->values()->all() : [];
+        // Para a ata: os cards da sprint hoje no Monday e, de cada card estimado, o responsável e a estimativa de agora
+        // (contra os da planning) e as trocas de responsável registradas no log do Monday depois da estimativa.
+        $card = fn (array $row): array => [
+            'id' => (string) $row['Id'], 'name' => (string) ($row['Nome'] ?? ''), 'url' => ($row['Url'] ?? '') ?: null, 'owner' => ($row['Responsavel'] ?? '') ?: null,
+            'type' => ($row['Tipo'] ?? '') ?: null, 'status' => ($row['Status'] ?? '') ?: null, 'estimate' => $row['EstH'] ?? null, 'real' => $row['RealH'] ?? null,
+        ];
+        $allRows = collect($snapshot['rows'] ?? [])->filter(fn (array $row): bool => ! empty($row['Id']));
+        $sprintCards = $allRows->filter(fn (array $row): bool => (int) ($row['Sprint'] ?? 0) === $sprint && ! SprintRules::isRemoved($row['Status'] ?? null))
+            ->unique('Id')->map($card)->keyBy('id');
+        $cardsById = $sprintCards->union($allRows->unique('Id')->map($card)->keyBy('id'));
+        $ownerColumn = $connection->column_map['Responsavel'] ?? null;
+        $ownerChanges = $ownerColumn && $rounds->isNotEmpty() ? MondayActivityEvent::query()->where('board_id', (string) $connection->board_id)
+            ->where('column_id', $ownerColumn)->whereIn('item_id', $rounds->pluck('item_id')->unique()->all())
+            ->orderBy('occurred_at')->get(['item_id', 'occurred_at'])->groupBy('item_id') : collect();
 
         return [
             'sprint' => $sprint, 'name' => $sessions->last()?->sprint_name ?? $schedule['name'], 'startedBy' => $sessions->first()?->starter?->name,
@@ -212,13 +227,38 @@ class PlanningService
             'cards' => $cards,
             'load' => $this->load($connection, $sprint, $rounds),
             'reserveHours' => $connection->teamRules()->configured() ? round($connection->supportReserveMinutes($sprint) / 60, 2) : 0.0,
+            'sprintCards' => $sprintCards->values()->all(),
             'rounds' => $rounds->map(fn (PlanningRound $round): array => [
+                'itemId' => $round->item_id, 'current' => $this->currentCard($cardsById, $sprintCards, $round, $ownerChanges),
                 'name' => $round->item_name, 'url' => $round->item_url, 'owner' => $round->item_owner,
                 'aiEstimate' => $round->ai_estimate, 'average' => $round->average, 'finalEstimate' => $round->final_estimate, 'finalSource' => $round->final_source,
                 'decidedBy' => $round->decider?->name, 'note' => $round->decision_note, 'closedAt' => $round->closed_at?->toIso8601String(),
                 'votes' => $round->votes->map(fn (PlanningVote $vote): array => ['name' => $vote->user?->name ?? 'Sem nome', 'hours' => $vote->hours])
                     ->sortBy('name')->values()->all(),
             ])->all(),
+        ];
+    }
+
+    /**
+     * O card estimado como está hoje no Monday (responsável, estimativa, status e se está na sprint) e as trocas de
+     * responsável no log do Monday depois da estimativa. Card que saiu da base sincronizada vem com `found` falso.
+     *
+     * @param  Collection<string, array<string, mixed>>  $cardsById
+     * @param  Collection<string, array<string, mixed>>  $sprintCards
+     * @param  Collection<string, Collection<int, MondayActivityEvent>>  $ownerChanges
+     * @return array{found: bool, owner: ?string, estimate: mixed, status: ?string, inSprint: bool, ownerChanges: int, ownerChangedAt: ?string}
+     */
+    private function currentCard(Collection $cardsById, Collection $sprintCards, PlanningRound $round, Collection $ownerChanges): array
+    {
+        $row = $cardsById->get((string) $round->item_id);
+        $after = collect($ownerChanges->get((string) $round->item_id, []))
+            ->filter(fn (MondayActivityEvent $event): bool => $round->closed_at === null || Carbon::parse($event->occurred_at)->gt($round->closed_at));
+
+        return [
+            'found' => $row !== null, 'owner' => $row['owner'] ?? null, 'estimate' => $row['estimate'] ?? null, 'status' => $row['status'] ?? null,
+            'inSprint' => $sprintCards->has((string) $round->item_id),
+            'ownerChanges' => $after->count(),
+            'ownerChangedAt' => $after->last() ? Carbon::parse($after->last()->occurred_at)->toIso8601String() : null,
         ];
     }
 

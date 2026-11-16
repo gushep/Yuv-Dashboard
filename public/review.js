@@ -20,7 +20,7 @@ window.Review = (() => {
   const TYPES = [['improvement', 'Melhoria'], ['bug', 'Bug'], ['idea', 'Nova ideia'], ['praise', 'Elogio']];
   const GOAL = {yes: ['green', 'Objetivo atingido'], partial: ['yellow', 'Objetivo parcial'], no: ['red', 'Objetivo não atingido']};
   const state = {active: false, overview: null, room: null, review: null, view: 'lobby', error: '', busy: false, request: 0,
-    roomTimer: null, lobbyTimer: null, clockTimer: null, fetchedAt: 0, drafts: {}, pending: false, pointer: false};
+    roomTimer: null, lobbyTimer: null, clockTimer: null, fetchedAt: 0, drafts: {}, pending: false, pointer: false, lastInput: 0};
   const page = () => el('page-sprint-review');
   const base = () => page().dataset.url.replace(/\/$/, '');
   const link = item => window.ItemDetail?.link({id: item.id, name: item.name, url: item.url}) || escape(item.name);
@@ -31,7 +31,9 @@ window.Review = (() => {
     render();
   }
 
-  const typing = () => { const active = document.activeElement; return Boolean(active && el('rv-room')?.contains(active) && active.matches('input, textarea, select')); };
+  /** Digitando agora: cursor num campo da sala e uma tecla nos últimos segundos (cursor parado não segura a sala). */
+  const TYPING_MS = 2000;
+  const typing = () => { const active = document.activeElement; return Boolean(active && el('rv-room')?.contains(active) && active.matches('input, textarea, select') && Date.now() - state.lastInput < TYPING_MS); };
   /** Enquanto alguém digita ou está com o botão do mouse pressionado, a sala não é redesenhada (o clique não se perde). */
   const holding = () => typing() || state.pointer;
 
@@ -90,7 +92,9 @@ window.Review = (() => {
     if (review?.canConduct) buttons.push(`<button type="button" class="pp-danger" data-close-review ${state.busy ? 'disabled' : ''}>Encerrar review</button>`);
     if (!review && !reviewing && state.overview?.open) buttons.push(`<button type="button" class="pp-primary" data-view="room">Entrar na review da ${escape(state.overview.open.sprintName)}</button>`);
     el('rv-hero-actions').innerHTML = buttons.join('');
-    if (reviewing) renderReadOnly(state.review); else if (review) renderRoom(review); else renderLobby(state.overview);
+    // O redesenho mantém o cursor no campo em que a pessoa estava (as caixas são recriadas com os rascunhos).
+    const draw = () => { if (reviewing) renderReadOnly(state.review); else if (review) renderRoom(review); else renderLobby(state.overview); };
+    if (window.Ceremony?.keepFocus) Ceremony.keepFocus(page(), draw); else draw();
   }
 
   // ── Tela inicial ─────────────────────────────────────────────────────────────
@@ -137,8 +141,22 @@ window.Review = (() => {
         ${review && window.Ceremony ? `<div class="rt-attendance">${Ceremony.attendanceHtml(review.attendees || [], review.durationSeconds, {live: review.status === 'open'})}</div>` : ''}</div>
       <div class="rt-counts">${counts}</div>
       <div class="rt-prog">${progress}</div>
-      <div class="rt-row-buttons">${eye}${action}</div>
+      <div class="rt-row-buttons">${review ? `<button type="button" class="pp-ghost" data-minutes="${sprint.number}" title="Ata da review da ${escape(sprint.name)} em PDF">📄 Resumo</button>` : ''}${eye}${action}</div>
     </article>`;
+  }
+
+  /** Resumo (ata em PDF) da review de uma sprint, com os dados do modo leitura e os indicadores da sprint. */
+  async function printMinutes(number, button) {
+    button.disabled = true;
+    try {
+      const data = await mondayRequest(`${base()}/sprints/${number}`);
+      const metrics = data.review?.metrics || window.Retro?.metricsFor?.(number) || null;
+      CeremonyMinutes.print(CeremonyMinutes.review(data, metrics));
+    } catch (error) {
+      state.error = `Não foi possível gerar o resumo: ${error.message}`; render();
+    } finally {
+      button.disabled = false;
+    }
   }
 
   // ── Sala ─────────────────────────────────────────────────────────────────────
@@ -335,6 +353,8 @@ window.Review = (() => {
     if (view) { state.view = view.dataset.view; if (state.view === 'room') loadRoom(); else loadOverview(); schedule(); render(); return; }
     const readonly = target.closest('[data-readonly]');
     if (readonly) { openReadOnly(Number(readonly.dataset.readonly)); return; }
+    const minutes = target.closest('[data-minutes]');
+    if (minutes) { printMinutes(Number(minutes.dataset.minutes), minutes); return; }
     const start = target.closest('[data-start]');
     if (start) { if (await act('/reviews', {sprint: Number(start.dataset.start)})) { state.view = 'room'; schedule(); render(); } return; }
     const demand = target.closest('[data-demand]');
@@ -379,6 +399,7 @@ window.Review = (() => {
   }
 
   function onInput(event) {
+    state.lastInput = Date.now();
     if (event.target.matches('[data-draft]') && event.target.id) state.drafts[event.target.id] = event.target.value;
   }
 

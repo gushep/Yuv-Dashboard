@@ -107,6 +107,12 @@ const load = src => new Promise((resolve, reject) => { const script = document.c
     document.getElementById('rt-add-try').value = 'Dono fixo do bombeiro'; document.getElementById('rt-add-try').dispatchEvent(new Event('input', {bubbles: true}));
     document.querySelector('[data-add-card="try"]').click(); await tick(30);
     check('Adicionar carta envia a coluna e o texto', requests.some(([path, body]) => path === '/api/retro/retros/7/cards' && body.column === 'try' && body.text === 'Dono fixo do bombeiro'));
+    // Cursor parado na caixa depois de mandar a carta: a carta de outra pessoa aparece sem precisar clicar fora.
+    document.getElementById('rt-add-keep').focus();
+    roomRetro.cards.push({id: 14, column: 'keep', author: 'Ana', mine: false, hidden: false, text: 'Pareamento nas sextas', votes: 0, myVote: false, merged: []});
+    await tick(5600);
+    check('Com o cursor parado numa caixa, a sala mostra as cartas dos outros e o foco continua na caixa', text('rt-step').includes('Pareamento nas sextas') && document.activeElement?.id === 'rt-add-keep');
+    roomRetro.cards.pop();
 
     roomRetro.step = 1; document.querySelector('#rt-stepper [data-step="1"]').click(); await tick(30);
     check('Ações anteriores: decisão do time e a revisão já registrada', requests.some(([path, body]) => path === '/api/retro/retros/7/step' && body.step === 1) && text('rt-step').includes('Continua: Novo prazo') && document.querySelector('.rt-seg [data-action-mode="keep"]'));

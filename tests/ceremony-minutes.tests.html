@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Resumo das cerimônias (ata) · testes</title>
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0}</style>
+<main id="fixture"></main><pre id="test-result">RUNNING</pre>
+<script>
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    for (const src of ['ceremony', 'ceremony-minutes']) await load(`../public/${src}.js`);
+    const render = minutes => { const box = document.getElementById('fixture'); box.innerHTML = CeremonyMinutes.documentHtml(minutes).replace(/^[\s\S]*<body>|<\/body>[\s\S]*$/g, ''); return box.textContent.replace(/\s+/g, ' '); };
+    const section = minutes => Object.fromEntries(minutes.sections.map(item => [item.title.split(' · ')[0], item.title]));
+
+    // Sprint Planning
+    const planning = CeremonyMinutes.planning({
+      sprint: 20, name: 'Sprint 20', startedBy: 'Gustavo', recorded: true, open: false, closedAt: '2026-11-10T14:30:00Z', goal: 'Entregar o relatório de jornada.',
+      attendees: ['Ana', 'Bruno', 'Gustavo'], durationSeconds: 3720, reserveHours: 40,
+      rounds: [{itemId: '1', name: 'Relatório de jornada', owner: 'Ana', aiEstimate: 10, average: 8, finalEstimate: 8, finalSource: 'team', decidedBy: 'Gustavo', note: 'Sem integração nova.', votes: [{name: 'Ana', hours: 8}, {name: 'Bruno', hours: 8}],
+          current: {found: true, owner: 'Ana', estimate: 8, status: 'Em progresso', inSprint: true, ownerChanges: 0, ownerChangedAt: null}},
+        {itemId: '2', name: 'Login por FaceID', owner: 'Bruno', aiEstimate: 5, average: 6.5, finalEstimate: 5, finalSource: 'ai', decidedBy: 'Gustavo', note: null, votes: [{name: 'Ana', hours: 5}, {name: 'Bruno', hours: 8}],
+          current: {found: true, owner: 'Carla', estimate: 7, status: 'Pronto para começar', inSprint: true, ownerChanges: 2, ownerChangedAt: '2026-11-12T13:00:00Z'}},
+        {itemId: '3', name: 'Exportar CSV', owner: 'Bruno', aiEstimate: 2, average: 3, finalEstimate: 3, finalSource: 'team', decidedBy: 'Gustavo', note: null, votes: [],
+          current: {found: true, owner: 'Bruno', estimate: 3, status: 'Backlog', inSprint: false, ownerChanges: 0, ownerChangedAt: null}}],
+      sprintCards: [{id: '1', name: 'Relatório de jornada', owner: 'Ana', status: 'Em progresso', estimate: 8}, {id: '2', name: 'Login por FaceID', owner: 'Carla', status: 'Pronto para começar', estimate: 7},
+        {id: '7', name: 'Ajuste de filtro', owner: 'Ana', status: 'Em progresso', estimate: 4}],
+      load: [{name: 'Ana', team: 'fullstack', inSprint: 30, planned: 8, total: 38, capacity: 80, percent: 48}, {name: 'Bruno', team: 'fullstack', inSprint: 0, planned: 8, total: 8, capacity: 80, percent: 10}], cards: [],
+    }, {name: 'Sprint 20', start: '2026-11-10', end: '2026-11-21'});
+    const planningText = render(planning);
+    check('Planning: título, nome do arquivo e dados da reunião', planning.file === 'Ata Sprint Planning - Sprint 20' && planningText.includes('Ata da Sprint Planning · Sprint 20')
+      && planningText.includes('10/11/2026 a 21/11/2026') && planningText.includes('Gustavo') && planningText.includes('1h 02min') && planningText.includes('3 · Ana, Bruno, Gustavo'));
+    check('Planning: resumo com planning × IA, decisões, sprint hoje, trocas e carga', planningText.includes('3 card(s) estimado(s) na mesa · 16h na planning contra 17h da IA, −1h (-6%)')
+      && planningText.includes('Decisão: 2 pela média do time · 1 pela IA') && planningText.includes('Planning acima da IA em 1 card(s), abaixo em 1, igual em 1')
+      && planningText.includes('Sprint hoje no Monday: 3 card(s), 19h estimadas (2 estimado(s) na mesa, 1 de fora da mesa)') && planningText.includes('1 card(s) estimado(s) na mesa não estão na sprint hoje')
+      && planningText.includes('1 card(s) com troca de responsável e 1 com estimativa alterada') && planningText.includes('Carga do time: 46h de 160h de capacidade (29%)'));
+    const planningPeople = planning.sections.filter(item => item.person).map(item => item.title);
+    check('Planning: uma parte por dev, na ordem da carga, com cards e horas', planningPeople.join(' | ') === 'Ana · 2 card(s) · 12h · carga 38h de 80h (48%) | Bruno · 2 card(s) · 8h · carga 8h de 80h (10%)');
+    const anaPlanning = planning.sections.find(item => item.title.startsWith('Ana ·')).html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    const brunoPlanning = planning.sections.find(item => item.title.startsWith('Bruno ·')).html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    check('Planning: por dev, IA, média, planning e hoje no Monday; card de fora da mesa', anaPlanning.includes('Relatório de jornada estimado na mesa · Gustavo 10h 8h 8h pela média 8h Em progresso Sem integração nova.')
+      && anaPlanning.includes('Ajuste de filtro fora da mesa — — — 4h Em progresso'));
+    check('Planning: troca de responsável e card fora da sprint nas observações do dev', brunoPlanning.includes('Login por FaceID') && brunoPlanning.includes('Responsável hoje: Carla') && brunoPlanning.includes('Não está na sprint hoje'));
+    check('Planning: seções de troca de responsável e de estimativa alterada', planningText.includes('Troca de responsável depois da planning · 1') && planningText.includes('2 troca(s) · última em 12/11/2026, 10:00')
+      && planningText.includes('Estimativa alterada no Monday depois da planning · 1') && planningText.includes('+2h (+40%)'));
+    check('Planning: cartas do time por card com decisão', section(planning)['Cartas do time por card'] === 'Cartas do time por card · 3 card(s) · 16h'
+      && planningText.includes('Ana 8h, Bruno 8h') && planningText.includes('8h (média do time)') && planningText.includes('5h (IA)'));
+    check('Planning: carga do time e reserva do Bombeiro', planningText.includes('48%') && planningText.includes('Reserva do Bombeiro descontada da capacidade Full stack: 40h.'));
+
+    // Daily Scrum
+    const daily = CeremonyMinutes.daily({
+      sprint: 20, date: '2026-11-12', today: '2026-11-12', goal: 'Entregar o relatório de jornada.', sprints: [{number: 20, name: 'Sprint 20'}],
+      presence: {attendees: ['Ana', 'Bruno'], startedAt: '2026-11-12T12:30:00Z', closedAt: '2026-11-12T12:44:00Z', seconds: 840, status: 'ended', startedBy: 'Ana', closedBy: 'Bruno'},
+      actions: [
+        {description: 'Liberar ambiente de QA', origin: '2026-11-11', responsible: {name: 'Bruno'}, status: 'pending', openedBy: 'Gustavo'},
+        {description: 'Destravar o relatório', origin: '2026-11-12', responsible: {name: 'Ana'}, item: {name: 'Relatório de jornada'}, status: 'done', openedBy: 'Ana', closedAt: '2026-11-12T15:00:00Z', resolution: 'Consulta otimizada.', elapsed: '1h 30min'},
+        {description: 'Revisar o mapa', origin: '2026-11-10', responsible: {name: 'Ana'}, status: 'done', closedAt: '2026-11-11T15:00:00Z', resolution: 'Feito.', elapsed: '1d'},
+      ],
+      retroActions: [{description: 'Testar dump parcial', retro: {sprintName: 'Sprint 18'}, responsible: {name: 'Bruno'}, dueDate: '2026-11-09', late: true, lateDays: 3}],
+    }, {
+      impediments: [{name: 'Relatório de jornada', owner: 'Ana', status: 'Parado', age: '2 dia(s) útil(eis), desde 10/11/2026'}],
+      columnOf: status => ({Implementado: 'done', 'QA - Testes': 'qa', 'Em progresso': 'progress', Parado: 'blocked', Backlog: 'pending'})[status] || 'progress',
+      people: ['Bruno', 'Ana'],
+      changes: {fromLabel: 'a Daily de 11/11', from: '2026-11-11T12:15:00Z', to: '2026-11-12T12:30:00Z', historyStart: '2026-10-01T00:00:00Z', commentsAvailable: true, cards: [
+        {id: '1', name: 'Relatório de jornada', owner: 'Ana', status: 'Parado', estimate: 8, real: 3, before: {status: 'Em progresso', estimate: 8, real: 1},
+          comments: [{author: 'Ana', at: '2026-11-11T20:00:00Z', text: 'Travado aguardando acesso ao banco.'}]},
+        {id: '2', name: 'Exportar CSV', owner: 'Ana, Bruno', status: 'Implementado', estimate: 2, real: 2.5, before: {status: 'QA - Testes', estimate: 3, real: 2.5}, comments: []},
+        {id: '3', name: 'Login por FaceID', owner: 'Bruno', status: 'Em progresso', estimate: 5, real: 1, before: {status: 'Em progresso', estimate: 5, real: 0.5}, comments: []},
+        {id: '4', name: 'Mapa de calor', owner: 'Bruno', status: 'Backlog', estimate: 6, real: null, before: null, comments: []},
+        {id: '5', name: 'Ajuste de layout', owner: '', status: 'QA - Testes', estimate: 1, real: 0.5, before: {status: 'Em progresso', estimate: 1, real: 0}, comments: []},
+      ]},
+    });
+    const dailyText = render(daily);
+    const people = daily.sections.filter(item => item.person).map(item => item.title);
+    check('Daily: resumo do time desde a Daily anterior (entregas, status, horas e comentários)', dailyText.includes('Desde a Daily de 11/11') && dailyText.includes('1 card(s) entregue(s)')
+      && dailyText.includes('3 card(s) mudaram de status') && dailyText.includes('+3h apontadas') && dailyText.includes('1 comentário(s) nos cards') && !dailyText.includes('Sem mudança de status'));
+    check('Daily: uma parte por pessoa, na ordem da tela, com card compartilhado nas duas e sem responsável por último', people.join(' | ') === 'Bruno · 2 card(s) alterado(s) · +0,5h apontadas | Ana · 2 card(s) alterado(s) · +2h apontadas | Sem responsável · 1 card(s) alterado(s) · +0,5h apontadas');
+    const ana = daily.sections.find(item => item.title.startsWith('Ana')).html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    check('Daily: por pessoa, cards por situação, status antes → agora, horas apontadas, estimativa alterada e comentários', ana.includes('✅ Entregues 1') && ana.includes('🔴 Impedidos 1')
+      && ana.includes('Em progresso → Parado') && ana.includes('+2h') && ana.includes('3h de 8h') && ana.includes('QA - Testes → Implementado ✅') && ana.includes('(estimado era 3h)')
+      && ana.includes('Travado aguardando acesso ao banco.') && ana.includes('Ana · 11/11/2026, 17:00'));
+    const bruno = daily.sections.find(item => item.title.startsWith('Bruno')).html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    check('Daily: cards com mudança de status, comentário ou horas apontadas (só entrar na sprint fica fora)', bruno.includes('Exportar CSV') && bruno.includes('Login por FaceID Em progresso (sem mudança) +0,5h') && !bruno.includes('Mapa de calor') && !bruno.includes('Em aberto agora'));
+    const quiet = CeremonyMinutes.daily({sprint: 20, date: '2026-11-12', today: '2026-11-12', sprints: [], actions: []}, {columnOf: () => 'progress', changes: {fromLabel: 'o início de 11/11', from: '2026-11-11T03:00:00Z', to: '2026-11-12T12:00:00Z', historyStart: null, commentsAvailable: false,
+      cards: [{id: '9', name: 'Card parado', owner: 'Carla', status: 'Em progresso', estimate: 4, real: 1, before: {status: 'Em progresso', estimate: 4, real: 1}, comments: []}]}});
+    const quietText = render(quiet);
+    check('Daily sem mudanças: ninguém listado por pessoa, avisa quem ficou sem mudança, sem histórico e sem comentários', !quiet.sections.some(item => item.person) && quietText.includes('Sem mudança de status, comentário nem horas apontadas: Carla') && quietText.includes('Nenhum card mudou de status, recebeu comentário ou teve horas apontadas desde o início de 11/11.') && quietText.includes('não cobre todo o período') && quietText.includes('Não foi possível ler os comentários'));
+    check('Daily: dados da reunião com início, encerramento, quem iniciou e encerrou e a duração', daily.file === 'Ata Daily Scrum - Sprint 20 - 12-11-2026' && dailyText.includes('Encerrada')
+      && dailyText.includes('Iniciada por Ana') && dailyText.includes('Encerrada por Bruno') && dailyText.includes('14 min (previsto 15 min)') && dailyText.includes('2 · Ana, Bruno'));
+    const titles = section(daily);
+    check('Daily: abertas nesta Daily, resolvidas no dia e pendências anteriores (a resolvida antes do dia fica fora)', titles['Responsabilidades abertas nesta Daily'].endsWith('· 1') && titles['Resolvidas neste dia'].endsWith('· 1')
+      && titles['Pendências de Dailies anteriores'].endsWith('· 1') && dailyText.includes('Consulta otimizada.') && dailyText.includes('Liberar ambiente de QA') && !dailyText.includes('Revisar o mapa'));
+    check('Daily de hoje: impedimentos do Monday e ações das retros em aberto', dailyText.includes('Impedimentos (cards impedidos no Monday) · 1') && dailyText.includes('desde 10/11/2026') && dailyText.includes('Testar dump parcial') && dailyText.includes('3 dia(s) atrasada'));
+    const pastDaily = CeremonyMinutes.daily({sprint: 20, date: '2026-11-11', today: '2026-11-12', sprints: [], presence: null, actions: [], retroActions: [{description: 'x'}]}, {columnOf: null});
+    check('Daily anterior: sem impedimentos nem ações das retros (só a situação de hoje)', !section(pastDaily)['Impedimentos (cards impedidos no Monday)'] && !section(pastDaily)['Ações das retrospectivas em aberto']);
+
+    // Sprint Review
+    const steps = [['Abertura', 5, 240], ['Resultado da sprint', 5, 300], ['Demonstração', 30, 1500], ['Não entregue', 5, 0], ['Feedbacks', 10, 0], ['Próximos passos', 5, 0]].map(([name, minutes, seconds]) => ({name, minutes, seconds}));
+    const review = CeremonyMinutes.review({
+      sprint: {number: 20, name: 'Sprint 20', start: '2026-11-10', end: '2026-11-21'},
+      review: {sprintName: 'Sprint 20', status: 'closed', startedAt: '2026-11-21T17:00:00Z', closedAt: '2026-11-21T17:45:00Z', facilitator: {name: 'Gustavo'}, elapsedSeconds: 2040, attendees: ['Ana', 'Gustavo'],
+        sprintGoal: 'Entregar o relatório de jornada.', goalResult: 'partial', goalNote: 'Faltou o filtro.', steps,
+        items: [{name: 'Relatório de jornada', owner: 'Ana', type: 'Melhoria', epic: 'Jornada', kind: 'delivered', real: 7, estimate: 8, verdict: 'accepted', notes: 'Cliente gostou.'},
+          {name: 'Exportar CSV', owner: 'Bruno', kind: 'delivered', real: 3, estimate: 2, verdict: 'adjust', notes: null},
+          {name: 'Login por FaceID', owner: 'Bruno', kind: 'pending', status: 'Em progresso', reason: 'blocked', destination: 'next'}],
+        feedbacks: [{text: 'Filtro por período', givenBy: 'Carla', typeLabel: 'Melhoria', item: {name: 'Relatório de jornada'}, demand: {status: 'created', id: '777'}}]},
+    }, {delivered: 2, planned: 3, plannedDone: 2, plannedPct: 67, unplanned: 0, support: 1, registeredMinutes: 600, plannedMinutes: 780});
+    const reviewText = render(review);
+    check('Review: dados da reunião, objetivo e resultado', review.file === 'Ata Sprint Review - Sprint 20' && reviewText.includes('Facilitador Gustavo') && reviewText.includes('34 min (previsto 60 min)')
+      && reviewText.includes('Objetivo parcialmente atingido. Faltou o filtro.') && reviewText.includes('67% (2 de 3 planejados entregues)'));
+    check('Review: entregas com aceite e observações, não entregues com motivo e destino', reviewText.includes('1 aceita(s) · 1 com ajustes') && reviewText.includes('Cliente gostou.') && reviewText.includes('Aceito com ajustes')
+      && reviewText.includes('Impedimento') && reviewText.includes('Próxima sprint') && reviewText.includes('7h de 8h'));
+    check('Review: feedbacks, próximos passos e tempo por etapa', reviewText.includes('Virou demanda #777') && reviewText.includes('Login por FaceID · Bruno') && reviewText.includes('Filtro por período · #777') && reviewText.includes('Demonstração30 min25 min'));
+
+    // Sprint Retrospective
+    const retro = CeremonyMinutes.retro({
+      sprint: {number: 18, name: 'Sprint 18', start: '2026-10-13', end: '2026-10-24'},
+      review: {verdicts: {accepted: 3, adjust: 1, rejected: 0}, goalResult: 'yes', feedbacks: 2},
+      retro: {sprint: 18, sprintName: 'Sprint 18', status: 'closed', startedAt: '2026-10-24T17:00:00Z', closedAt: '2026-10-24T17:50:00Z', facilitator: {name: 'Gustavo'}, elapsedSeconds: 2700, attendees: ['Ana', 'Bruno', 'Gustavo'],
+        goal: 'Melhorar o fluxo.', sprintGoal: 'Entregar o mapa.', context: 'Sprint com feriado.', dependencies: 'Acesso ao banco de homologação.', revealed: true,
+        goalVotes: {yes: 2, partial: 1, no: 0}, steps: [{name: 'Abertura', minutes: 3, seconds: 180}],
+        previousActions: [{description: 'Revisar PRs em 24h', retro: {sprintName: 'Sprint 17'}, responsible: {name: 'Ana'}, status: 'done', review: {type: 'done', note: 'Virou rotina.'}}],
+        cards: [{column: 'keep', text: 'Pareamento', author: 'Ana', votes: 3, merged: [{text: 'Pair nas sextas', author: 'Bruno'}]}, {column: 'improve', text: 'Deploy lento', author: 'Bruno', votes: 5, merged: []}],
+        topics: [{title: 'Deploy lento', column: 'improve', votes: 5, notes: 'Pipeline sem cache.', focus: 1, question: null}],
+        actions: [{description: 'Cache no pipeline', responsible: {name: 'Bruno'}, dueDate: '2026-11-07', signal: 'Deploy abaixo de 10 min', focus: 1, item: null, status: 'open', late: false}]},
+    }, null);
+    const retroText = render(retro);
+    check('Retro: dados da reunião, objetivo, decisões das ações anteriores', retro.file === 'Ata Sprint Retrospective - Sprint 18' && retroText.includes('45 min (previsto 45 min)') && retroText.includes('Melhorar o fluxo.')
+      && retroText.includes('Concluída: Virou rotina.'));
+    check('Retro: dados, votos do objetivo, contexto e o resultado da Review', retroText.includes('Sim 2 · Parcial 1 · Não 0') && retroText.includes('Sprint com feriado.') && retroText.includes('3 de 4 entregas aceitas, 1 com ajustes · objetivo atingido · 2 feedback(s)')
+      && retroText.includes('Sem indicadores da sprint'));
+    check('Retro: cartas por coluna com autor, votos e agrupadas', retroText.includes('Manter · 1') && retroText.includes('Pareamento · Ana · ▲ 3') && retroText.includes('↳ Pair nas sextas') && retroText.includes('Experimentar · 0'));
+    check('Retro: discussão, focos, plano de ação e dependências', retroText.includes('Pipeline sem cache.') && retroText.includes('Foco 1: Deploy lento') && retroText.includes('Foco 2: não escolhido')
+      && retroText.includes('Deploy abaixo de 10 min') && retroText.includes('Acesso ao banco de homologação.') && section(retro)['Focos para a Sprint 19']);
+    const hidden = CeremonyMinutes.retro({sprint: {number: 18, name: 'Sprint 18'}, retro: {...retro && {}, sprint: 18, sprintName: 'Sprint 18', status: 'open', startedAt: '2026-10-24T17:00:00Z', revealed: false, goalVotes: {}, steps: [], previousActions: [], topics: [], actions: [],
+      cards: [{column: 'keep', text: null, hidden: true, author: 'Ana', votes: 0, merged: []}]}});
+    check('Retro sem revelação: a carta não aparece nem o autor', render(hidden).includes('carta não revelada') && !render(hidden).includes('· Ana'));
+
+    check('Textos escapados na ata', render(CeremonyMinutes.planning({sprint: 1, name: '<b>x</b>', recorded: true, rounds: [], load: []})).includes('<b>x</b>') && !document.querySelector('#fixture h1 b'));
+
+    // Impressão: um documento à parte com o nome da ata no título; a página volta ao título original depois.
+    const original = document.title;
+    CeremonyMinutes.print(planning);
+    const frame = document.querySelector('iframe');
+    check('Impressão em documento à parte com o nome do arquivo da ata', frame && frame.contentDocument.title === 'Ata Sprint Planning - Sprint 20' && document.title === 'Ata Sprint Planning - Sprint 20'
+      && frame.contentDocument.querySelector('h1').textContent === 'Ata da Sprint Planning · Sprint 20');
+    frame.contentWindow.print = () => {};
+    await new Promise(resolve => setTimeout(resolve, 120));
+    frame.contentWindow.dispatchEvent(new Event('afterprint'));
+    await new Promise(resolve => setTimeout(resolve, 400));
+    check('Depois de imprimir, o documento sai e a página volta ao título original', !document.querySelector('iframe') && document.title === original);
+
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

@@ -294,7 +294,8 @@ class ControlTowerService
             }
         }
         $days = SprintRules::workingDays($range['start'], $range['end']);
-        $future = count(array_filter($days, fn (string $day): bool => $day > $today));
+        // Dias úteis restantes contando hoje (como os do sinal de entrega e a tendência da Daily, que acontece de manhã).
+        $future = count(array_filter($days, fn (string $day): bool => $day >= $today));
         $overrides = $connection->capacity_overrides ?? [];
         $totals = [TeamRules::FULLSTACK => 0.0, TeamRules::PROJECTS => 0.0];
         foreach ($people as $person => $group) {

@@ -9,6 +9,7 @@ use App\Models\Retrospective;
 use App\Models\RetrospectiveAction;
 use App\Models\RetrospectiveActionEvent;
 use App\Models\RetrospectiveCard;
+use App\Models\RetrospectiveVote;
 use App\Models\User;
 use App\Screen;
 use App\Services\MondaySnapshotService;
@@ -121,6 +122,50 @@ class SprintRetrospectiveTest extends TestCase
         // Tirar um voto libera outro.
         $this->postJson(route('retro.cards.vote', $ids[0]))->assertOk()->assertJsonPath('retro.votesLeft', 1);
         $this->postJson(route('retro.cards.vote', $ids[3]))->assertOk()->assertJsonPath('retro.votesLeft', 0)->assertJsonPath('retro.cards.3.votes', 1)->assertJsonPath('retro.cards.3.myVote', true);
+    }
+
+    public function test_merged_cards_add_up_the_votes_and_each_person_only_takes_one_back(): void
+    {
+        $retro = Retrospective::factory()->create(['sprint' => 19, 'revealed_at' => now()]);
+        RetrospectiveCard::query()->insert(collect(range(1, 2))->map(fn (int $index): array => ['retrospective_id' => $retro->id, 'column' => 'improve', 'text' => "Carta {$index}", 'created_at' => now(), 'updated_at' => now()])->all());
+        [$first, $second] = RetrospectiveCard::query()->orderBy('id')->pluck('id')->all();
+        $ana = $this->member(['name' => 'Ana']);
+        $bruno = $this->member(['name' => 'Bruno']);
+        // Antes de agrupar: a Ana vota nas duas e o Bruno só na segunda.
+        $this->actingAs($ana)->postJson(route('retro.cards.vote', $first))->assertOk();
+        $this->postJson(route('retro.cards.vote', $second))->assertOk();
+        $this->actingAs($bruno)->postJson(route('retro.cards.vote', $second))->assertOk();
+
+        $this->actingAs($retro->facilitator)->postJson(route('retro.cards.merge', $second), ['target' => $first])->assertOk()
+            ->assertJsonCount(1, 'retro.cards')->assertJsonPath('retro.cards.0.votes', 3);
+
+        // O Bruno já votou no grupo (pela carta agrupada): clicar tira o voto dele, não soma outro.
+        $this->actingAs($bruno)->postJson(route('retro.cards.vote', $first))->assertOk()
+            ->assertJsonPath('retro.cards.0.votes', 2)->assertJsonPath('retro.cards.0.myVote', false)->assertJsonPath('retro.votesLeft', 3);
+        // A Ana tinha votado nas duas: clicar tira um único voto e ela continua votando no grupo.
+        $this->actingAs($ana)->postJson(route('retro.cards.vote', $first))->assertOk()
+            ->assertJsonPath('retro.cards.0.votes', 1)->assertJsonPath('retro.cards.0.myVote', true)->assertJsonPath('retro.votesLeft', 2);
+        // Votar de novo no grupo, já com voto nele, tira o último.
+        $this->postJson(route('retro.cards.vote', $first))->assertOk()->assertJsonPath('retro.cards.0.votes', 0)->assertJsonPath('retro.cards.0.myVote', false);
+        // Sem voto no grupo, vota na carta principal.
+        $this->postJson(route('retro.cards.vote', $second))->assertOk()->assertJsonPath('retro.cards.0.votes', 1);
+        $this->assertSame([$first], RetrospectiveVote::query()->where('user_id', $ana->id)->pluck('retrospective_card_id')->all());
+    }
+
+    public function test_each_person_has_one_vote_on_the_sprint_goal_and_clicking_again_does_not_add_up(): void
+    {
+        $retro = Retrospective::factory()->create(['sprint' => 19, 'goal_votes' => [0 => 'yes', 1 => 'yes', 2 => 'no']]);
+        $ana = $this->member(['name' => 'Ana']);
+
+        // Votos antigos (gravados com chaves renumeradas) continuam como estão até o primeiro voto novo.
+        $this->actingAs($ana)->getJson(route('retro.room'))->assertJsonPath('retro.goalVotes.yes', 2);
+        foreach (range(1, 3) as $click) {
+            $this->postJson(route('retro.goal-vote', $retro), ['vote' => 'yes'])->assertOk();
+        }
+        $this->postJson(route('retro.goal-vote', $retro), ['vote' => 'partial'])->assertOk()
+            ->assertJsonPath('retro.goalVotes.yes', 0)->assertJsonPath('retro.goalVotes.partial', 1)->assertJsonPath('retro.goalVotes.no', 0)->assertJsonPath('retro.goalVotes.mine', 'partial');
+        $this->actingAs($this->member())->postJson(route('retro.goal-vote', $retro), ['vote' => 'yes'])->assertOk()
+            ->assertJsonPath('retro.goalVotes.yes', 1)->assertJsonPath('retro.goalVotes.partial', 1)->assertJsonPath('retro.goalVotes.mine', 'yes');
     }
 
     public function test_steps_keep_the_time_of_each_step_and_voted_cards_become_discussion_topics(): void

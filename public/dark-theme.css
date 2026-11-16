@@ -681,6 +681,7 @@
 [data-theme=dark] .daily-stat.red strong{color:var(--red)}
 [data-theme=dark] .daily-stat.blue{border-left-color:var(--blue)}
 [data-theme=dark] .daily-stat.green{border-left-color:var(--green)}
+[data-theme=dark] .daily-stat.purple{border-left-color:var(--purple)}
 [data-theme=dark] .daily-stat.xp{border-left-color:#d4a017}
 [data-theme=dark] .daily-stat.trend-green,[data-theme=dark] .daily-person-trend.trend-green{border-left-color:var(--green)}
 [data-theme=dark] .daily-stat.trend-yellow,[data-theme=dark] .daily-person-trend.trend-yellow{border-left-color:var(--yellow)}
@@ -722,6 +723,7 @@
 [data-theme=dark] .daily-pending{border-top-color:var(--muted)}
 [data-theme=dark] .daily-blocked{border-top-color:var(--red)}
 [data-theme=dark] .daily-progress{border-top-color:var(--blue)}
+[data-theme=dark] .daily-qa{border-top-color:var(--purple)}
 [data-theme=dark] .daily-done{border-top-color:var(--green)}
 [data-theme=dark] .daily-card{border-color:var(--border);border-left-color:var(--border);background-color:var(--card)}
 [data-theme=dark] .daily-card.hours-warn{border-left-color:var(--yellow)}

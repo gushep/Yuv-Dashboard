@@ -6,9 +6,12 @@
  * Regras de tendência e gamificação (também explicadas no tour e nas dicas da tela):
  * - Card aberto: real ÷ estimado; a partir de 80% "perto do limite", acima de 100% "estourou".
  * - Card finalizado: até 80% do estimado "adiantado", até 100% "no alvo", acima "acima do estimado".
- * - Tendência (pessoa e sprint): horas que faltam nos cards abertos (não iniciado = estimado; em andamento =
- *   estimado − real) contra a capacidade que resta (capacidade × dias úteis restantes ÷ dias úteis da sprint):
- *   até 90% no prazo, até 100% apertado, acima risco de atraso.
+ * - Tendência: horas que faltam nos cards abertos (o Restante do Monday, se preenchido; senão, não iniciado =
+ *   estimado e os demais = estimado − real) contra a capacidade que resta (capacidade × dias úteis restantes,
+ *   contando hoje, ÷ dias úteis da sprint): abaixo de 90% no prazo, até 100% apertado, acima risco de atraso.
+ *   Na sprint, a mesma regra do sinal "Capacidade restante" da Torre de controle: Full stack (cards que não são só de
+ *   Projetos) contra a capacidade Full stack descontada a reserva do Bombeiro; Projetos à parte. Na pessoa, a
+ *   capacidade dela.
  * - XP: cada entrega vale 10; +5 no alvo; +8 adiantada.
  */
 window.Daily = (() => {
@@ -21,18 +24,20 @@ window.Daily = (() => {
   const dateTime = value => value ? new Date(value).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo'}) : '—';
   const state = {active: false, data: null, sprint: null, date: null, dev: null, filter: 'pending', busy: false, error: '', request: 0, doneAction: null, previewTimer: null, people: [], retroDone: null};
 
-  /** Colunas do Kanban na ordem da conversa da Daily: o que trava primeiro, depois o que anda e o que vem. */
-  const COLUMNS = [['blocked', '🔴 Impedidos'], ['progress', '🔵 Em andamento'], ['pending', '⏭️ Próximos'], ['done', '✅ Finalizados']];
+  /** Colunas do Kanban: o backlog (Próximos) primeiro, depois o que trava, o que anda, o que está em QA e o que terminou. */
+  const COLUMNS = [['pending', '⏭️ Próximos'], ['blocked', '🔴 Impedidos'], ['progress', '🔵 Em andamento'], ['qa', '🧪 Em QA'], ['done', '✅ Finalizados']];
   const PENDING_EXTRA = ['pendente', 'refinar', 'falta escopo', 'escopo tecnico', 'prox. sprint'];
   /**
-   * Status real do Monday → coluna. Finalizado é só Implementado (QA e Aguardando Deploy seguem em andamento);
-   * Pendente Samax conta como impedido; cancelado, descontinuado e despriorizado ficam fora.
+   * Status real do Monday → coluna. Em QA são os status de QA (Testes, Reprovado e Aprovado, a mesma regra dos painéis
+   * do Bombeiro e da Sprint); Finalizado é só Implementado (Aguardando Deploy segue em andamento); Pendente Samax conta
+   * como impedido; cancelado, descontinuado e despriorizado ficam fora.
    */
   function column(status) {
     const value = normalize(status);
     if (window.SprintRules.isRemoved(status)) return null;
     if (window.SprintRules.isBlocked(status) || value === 'pendente samax') return 'blocked';
     if (window.SprintRules.isDone(status)) return 'done';
+    if (window.SprintRules.isInTest(status)) return 'qa';
     if (window.SprintRules.isNotStarted(status) || PENDING_EXTRA.includes(value)) return 'pending';
     return 'progress';
   }
@@ -52,24 +57,46 @@ window.Daily = (() => {
     if (ratio >= .8) return {estimate, real, ratio, level: 'warn', badge: '⚠️ perto do limite', points: 0};
     return {estimate, real, ratio, level: 'ok', badge: '', points: 0};
   }
-  /** Horas que ainda faltam num card aberto (não iniciado = estimado inteiro; em andamento = estimado − real). */
+  /**
+   * Horas que ainda faltam num card aberto, como na Torre de controle: o Restante do Monday, se preenchido; senão, não
+   * iniciado = estimado inteiro e os demais = estimado − real. Entregue, Aguardando Deploy, QA - Aprovado e retirados = 0.
+   */
   function remainingOf(row) {
-    const key = column(row.Status);
-    if (key === 'done' || key === null) return 0;
+    if (!window.SprintRules.isOpen(row.Status)) return 0;
+    const revised = minutesOf(row.RemainingH);
+    if (revised !== null) return Math.max(0, revised);
     const estimate = minutesOf(row.EstH);
-    if (estimate === null) return 0;
-    return key === 'pending' ? estimate : Math.max(0, estimate - (minutesOf(row.RealH) ?? 0));
+    if (estimate === null || estimate <= 0) return 0;
+    return window.SprintRules.isNotStarted(row.Status) ? estimate : Math.max(0, estimate - (minutesOf(row.RealH) ?? 0));
   }
-  /** Tendência: o que falta contra a capacidade que resta na sprint. */
+  /** Tendência: o que falta contra a capacidade que resta na sprint (contando hoje). Mesmas faixas da Torre de controle. */
   function trend(remaining, capacity, dates, today) {
     const days = dates ? window.SprintRules.workingDays(dates.start, dates.end) : [];
     const left = days.filter(date => date >= today).length;
     const available = days.length ? capacity * left / days.length : 0;
     const ratio = available > 0 ? remaining / available : (remaining > 0 ? Infinity : 0);
-    const level = ratio <= .9 ? 'green' : ratio <= 1 ? 'yellow' : 'red';
+    const level = ratio < .9 ? 'green' : ratio <= 1 ? 'yellow' : 'red';
     const label = {green: '🟢 No prazo', yellow: '🟡 Apertado', red: '🔴 Risco de atraso'}[level];
     return {level, label, remaining, available, left, total: days.length,
       detail: `faltam ${hours(remaining)} nos cards abertos para ${hours(available)} de capacidade nos ${left} dia(s) útil(eis) restantes`};
+  }
+  /**
+   * Tendência da sprint com a regra do sinal "Capacidade restante" da Torre de controle: o Full stack (cards que não são
+   * só de Projetos, inclusive sem responsável) contra a capacidade Full stack descontada a reserva do Bombeiro, que não
+   * atende a sprint; Projetos aparece à parte. Antes de classificar os times, todos contam como Full stack, sem desconto.
+   */
+  function sprintTrend(cards, developers, sprint, dates, today) {
+    const configured = window.SprintRules.teamsConfigured();
+    const reserve = configured ? (window.HoursStrip?.reserveFor?.(sprint) ?? 0) : 0;
+    const totals = window.Capacity.teamTotals(developers, reserve);
+    const projectsOnly = row => { const teams = people(row.Responsavel).map(name => window.SprintRules.teamOf(name)); return teams.includes('projects') && !teams.includes('fullstack'); };
+    const remaining = list => list.reduce((sum, row) => sum + remainingOf(row), 0);
+    const fullstack = trend(remaining(cards.filter(row => !projectsOnly(row))), totals.fullstack.net, dates, today);
+    if (!configured) return {...fullstack, detail: `${fullstack.detail} (times ainda não classificados: todos contam como Full stack, sem desconto do Bombeiro)`};
+    const projects = trend(remaining(cards.filter(projectsOnly)), totals.projects.capacity, dates, today);
+    const percent = Number.isFinite(fullstack.remaining / fullstack.available) ? ` · ${Math.round(fullstack.remaining / fullstack.available * 100)}%` : '';
+    return {...fullstack, projects,
+      detail: `Full stack: faltam ${hours(fullstack.remaining)} para ${hours(fullstack.available)} de capacidade (${hours(totals.fullstack.capacity)} − Bombeiro ${hours(reserve)}) nos ${fullstack.left} dia(s) útil(eis) restantes${percent}. Projetos: faltam ${hours(projects.remaining)} para ${hours(projects.available)}.`};
   }
   /** Placar de entregas de um conjunto de cards: entregues, no alvo, adiantadas e XP. */
   function score(rows) {
@@ -159,13 +186,27 @@ window.Daily = (() => {
   const isToday = data => data.date === data.today;
   const liveSeconds = presence => (presence?.seconds || 0) + (presence?.live ? (Date.now() - state.presenceAt) / 1000 : 0);
 
-  /** Hoje: quem está na tela e o tempo da Daily contra 15 min. Dias anteriores: quem esteve e quanto durou. */
+  /**
+   * Botões do tempo da Daily de hoje: Iniciar Daily começa a contar, Encerrar Daily para; depois de encerrada,
+   * Retomar Daily volta a contar somando ao tempo já registrado.
+   */
+  function timerActions(presence) {
+    const disabled = state.busy ? 'disabled' : '';
+    if (presence?.status === 'running') return `<button type="button" class="pp-danger" data-daily-timer="close" ${disabled}>⏹ Encerrar Daily</button>`;
+    if (presence?.status === 'ended') return `<span class="cer-state">✓ Daily encerrada</span><button type="button" class="pp-ghost" data-daily-timer="start" ${disabled}>▶ Retomar Daily</button>`;
+    return `<span class="cer-state">Daily não iniciada</span><button type="button" class="pp-primary" data-daily-timer="start" ${disabled}>▶ Iniciar Daily</button>`;
+  }
+
+  /**
+   * Hoje: quem está na tela, o tempo da Daily contra 15 min e os botões Iniciar e Encerrar. Dias anteriores: quem
+   * esteve e quanto durou.
+   */
   function renderPresence(data) {
     const box = el('daily-presence');
     if (!box || !window.Ceremony) return;
     const presence = data.presence;
     if (isToday(data) && presence) {
-      box.innerHTML = Ceremony.barHtml({present: presence.present, seconds: liveSeconds(presence), label: 'Daily', targetMinutes: DAILY_MINUTES, live: presence.live});
+      box.innerHTML = Ceremony.barHtml({present: presence.present, seconds: liveSeconds(presence), label: 'Daily', targetMinutes: DAILY_MINUTES, live: true, actions: timerActions(presence)});
     } else if (presence) {
       box.innerHTML = `<div class="cer-bar">${Ceremony.attendanceHtml(presence.attendees, presence.seconds)}</div>`;
     } else {
@@ -184,7 +225,32 @@ window.Daily = (() => {
           <strong>${daily.date === data.today ? `Hoje (${day(daily.date)})` : day(daily.date)}</strong>
           ${Ceremony.attendanceHtml(daily.attendees || [], daily.seconds, {live: daily.live})}
           <span class="daily-history-actions">${daily.actions ? `${daily.actions} responsabilidade(s) · ${daily.done} resolvida(s)` : 'nenhuma responsabilidade aberta'}</span>
-        </button></li>`).join('')}</ul>` : '<p class="daily-empty">Nenhuma Daily registrada nesta sprint.</p>';
+        </button>
+        <button type="button" class="pp-ghost daily-minutes" data-daily-minutes="${daily.date}" title="Ata da Daily de ${day(daily.date)} em PDF">📄 Resumo</button></li>`).join('')}</ul>` : '<p class="daily-empty">Nenhuma Daily registrada nesta sprint.</p>';
+  }
+
+  /**
+   * Resumo (ata em PDF) da Daily de um dia: por pessoa, os cards por situação e o que mudou desde a Daily anterior
+   * (status, horas apontadas, estimativa e comentários), mais as responsabilidades. Na Daily de hoje, entram também os
+   * cards impedidos agora no Monday e as ações das retros em aberto.
+   */
+  async function printMinutes(date, button) {
+    button.disabled = true;
+    try {
+      const base = el('page-daily-scrum').dataset.url.replace(/\/$/, '');
+      const query = `?sprint=${encodeURIComponent(state.sprint)}&date=${encodeURIComponent(date)}`;
+      // A Daily do dia (responsabilidades e presença) e o que mudou nos cards desde a Daily anterior.
+      const [data, changes] = await Promise.all([mondayRequest(`${base}${query}`), mondayRequest(`${base}/minutes${query}`)]);
+      const impediments = data.date === data.today ? sprintCards(data.sprint).filter(row => column(row.Status) === 'blocked').map(row => {
+        const age = data.statusAges?.[String(row.Id)];
+        return {name: row.Nome, owner: row.Responsavel, status: row.Status, age: age?.since ? `${age.workingDays} dia(s) útil(eis), desde ${day(age.since)}` : 'sem histórico confiável'};
+      }) : null;
+      CeremonyMinutes.print(CeremonyMinutes.daily(data, {impediments, changes, columnOf: column, people: state.people}));
+    } catch (error) {
+      state.error = `Não foi possível gerar o resumo: ${error.message}`; render();
+    } finally {
+      button.disabled = false;
+    }
   }
 
   /** Enquanto a Daily de hoje está aberta, avisa a presença e atualiza quem está na tela a cada 10 segundos. */
@@ -258,19 +324,20 @@ window.Daily = (() => {
     const capacity = developers.reduce((sum, dev) => sum + dev.capacity, 0);
     const planned = developers.reduce((sum, dev) => sum + dev.totalEstimate, 0);
     const registered = developers.reduce((sum, dev) => sum + dev.registered, 0);
-    const sprintTrend = trend(cards.reduce((sum, row) => sum + remainingOf(row), 0), capacity, dates, data.today);
+    const sprintTrendResult = sprintTrend(cards, developers, data.sprint, dates, data.today);
     const sprintScore = score(cards);
     const done = count('done');
     el('daily-macro').innerHTML = `
       <div class="daily-goal"><strong>🎯 Objetivo da Sprint</strong><p>${data.goal ? escape(data.goal) : '<em>Sem objetivo registrado. Ele é informado ao encerrar a Sprint Planning.</em>'}</p></div>
       <div class="daily-macro-grid">
+        <div class="daily-stat"><span>⏭️ Próximos</span><strong>${count('pending')}</strong></div>
         <div class="daily-stat red"><span>🔴 Impedidos</span><strong>${count('blocked')}</strong></div>
         <div class="daily-stat blue"><span>🔵 Em andamento</span><strong>${count('progress')}</strong></div>
-        <div class="daily-stat"><span>⏭️ Próximos</span><strong>${count('pending')}</strong></div>
+        <div class="daily-stat purple"><span>🧪 Em QA</span><strong>${count('qa')}</strong></div>
         <div class="daily-stat green"><span>✅ Finalizados</span><strong>${done} <small>de ${cards.length}</small></strong>
           <span class="daily-bar"><span style="width:${cards.length ? done / cards.length * 100 : 0}%"></span></span></div>
         <div class="daily-stat"><span>⏱️ Horas do time</span><strong>${hours(planned)} <small>planejadas de ${hours(capacity)}</small></strong><small>${hours(registered)} registradas</small></div>
-        <div class="daily-stat trend-${sprintTrend.level}" title="${escape(sprintTrend.detail)}"><span>📈 Tendência da sprint</span><strong>${sprintTrend.label}</strong><small>${escape(sprintTrend.detail)}</small></div>
+        <div class="daily-stat trend-${sprintTrendResult.level}" title="${escape(`${sprintTrendResult.detail} Mesma regra do sinal Capacidade restante da Torre de controle.`)}"><span>📈 Tendência da sprint</span><strong>${sprintTrendResult.label}</strong><small>${escape(sprintTrendResult.detail)}</small></div>
         <div class="daily-stat xp" title="Cada entrega vale 10 XP; +5 no alvo do estimado; +8 adiantada (até 80% do estimado)"><span>⭐ XP da sprint</span><strong>${sprintScore.xp} XP</strong><small>${sprintScore.delivered ? `${sprintScore.onTarget} de ${sprintScore.delivered} entregas no alvo (${sprintScore.precision}%)` : 'nenhuma entrega ainda'}</small></div>
       </div>`;
   }
@@ -290,12 +357,36 @@ window.Daily = (() => {
   }
 
   /** Painel da pessoa na largura toda: horas na sprint, tendência e conquistas. */
+  /**
+   * Horas da pessoa na sprint, com os mesmos cards do Capacity (só os dela; cards compartilhados, em várias sprints ou
+   * sem planejamento ficam de fora, como lá), numa conta que fecha a partir da capacidade:
+   * - Capacidade: a da sprint (100%);
+   * - Planejado: estimado dos cards (% da capacidade);
+   * - Executado: tempo real apontado (% do planejado);
+   * - Pendente: o que falta do planejado = planejado − executado (% do planejado; executado acima do planejado = 0);
+   * - Saldo disponível: capacidade − planejado (% da capacidade): o espaço para encaixar mais algo na sprint;
+   *   negativo = planejado acima da capacidade.
+   * A tendência (ao lado) é outra leitura: o que falta nos cards abertos contra a capacidade dos dias que restam.
+   */
+  function personHours(dev, dates, today) {
+    const personTrend = trend(dev.rows.reduce((sum, row) => sum + remainingOf(row), 0), dev.capacity, dates, today);
+    const ofCapacity = value => dev.capacity > 0 ? Math.round(value / dev.capacity * 100) : null;
+    const ofPlanned = value => dev.totalEstimate > 0 ? Math.round(value / dev.totalEstimate * 100) : null;
+    const pending = Math.max(0, dev.totalEstimate - dev.registered);
+    const overrun = Math.max(0, dev.registered - dev.totalEstimate);
+    const balance = dev.capacity - dev.totalEstimate;
+    return {pending, overrun, balance, trend: personTrend,
+      percent: {planned: ofCapacity(dev.totalEstimate), executed: ofPlanned(dev.registered), pending: ofPlanned(pending), balance: ofCapacity(balance)}};
+  }
+
   function renderPerson(dev, mine, dates, data) {
     const panel = el('daily-person');
     if (!dev) { panel.innerHTML = ''; return; }
-    const balance = dev.capacity - dev.totalEstimate;
-    const percent = dev.capacity > 0 ? Math.round(dev.totalEstimate / dev.capacity * 100) : null;
-    const personTrend = trend(mine.reduce((sum, row) => sum + remainingOf(row), 0), dev.capacity, dates, data.today);
+    const numbers = personHours(dev, dates, data.today);
+    const percent = numbers.percent.planned;
+    const personTrend = numbers.trend;
+    const signed = value => value < 0 ? `−${hours(-value)}` : hours(value);
+    const pct = (value, of) => value === null ? '' : `${value}% ${of}`;
     const personScore = score(mine);
     const level = window.SprintRules.capacityLevel(dev.totalEstimate, dev.capacity);
     const burning = mine.filter(row => cardHours(row).level === 'over' && column(row.Status) !== 'done').length;
@@ -306,10 +397,11 @@ window.Daily = (() => {
         <div class="daily-person-trend trend-${personTrend.level}" title="${escape(personTrend.detail)}"><strong>${personTrend.label}</strong><small>${escape(personTrend.detail)}</small></div>
       </header>
       <div class="daily-person-grid">
-        ${stat('Capacidade', hours(dev.capacity), dev.inheritedFrom ? `herdada da Sprint ${dev.inheritedFrom}` : 'na sprint')}
-        ${stat('Planejado', hours(dev.totalEstimate), percent === null ? '' : `${percent}% da capacidade`, `level-${level}`)}
-        ${stat('Consumido', dev.knownReal ? hours(dev.registered) : '—', 'tempo real apontado')}
-        ${stat('Saldo', balance < 0 ? `−${hours(-balance)}` : hours(balance), 'capacidade − planejado', balance < 0 ? 'level-red' : '')}
+        ${stat('Capacidade', hours(dev.capacity), dev.inheritedFrom ? `100% · herdada da Sprint ${dev.inheritedFrom}` : '100% · na sprint')}
+        ${stat('Planejado', hours(dev.totalEstimate), pct(percent, 'da capacidade'), `level-${level}`)}
+        ${stat('Executado', hours(dev.registered), `${pct(numbers.percent.executed, 'do planejado') || 'sem planejado'} · tempo real apontado`)}
+        ${stat('Pendente', hours(numbers.pending), numbers.overrun ? `executado passou ${hours(numbers.overrun)} do planejado` : `${pct(numbers.percent.pending, 'do planejado') || 'sem planejado'} · planejado − executado`, numbers.overrun ? 'level-red' : '')}
+        ${stat('Saldo disponível', signed(numbers.balance), `${numbers.percent.balance === null ? '' : `${numbers.percent.balance}% da capacidade · `}${numbers.balance < 0 ? 'planejado acima da capacidade' : 'capacidade − planejado'}`, numbers.balance < 0 ? 'level-red' : 'level-green')}
         ${stat('Estourados', String(burning), burning ? 'cards abertos acima do estimado' : 'nenhum card acima do estimado', burning ? 'level-red' : 'level-green')}
         ${stat('⭐ XP', `${personScore.xp}`, personScore.delivered ? `${personScore.delivered} entrega(s) · ${personScore.onTarget} no alvo${personScore.early ? ` · ${personScore.early} adiantada(s)` : ''}` : 'nenhuma entrega ainda', 'xp')}
       </div>
@@ -481,6 +573,14 @@ window.Daily = (() => {
   function onClick(event) {
     const target = event.target;
     if (target.closest('[data-close]')) { target.closest('dialog')?.close(); return; }
+    const minutes = target.closest('[data-daily-minutes]');
+    if (minutes) { printMinutes(minutes.dataset.dailyMinutes, minutes); return; }
+    const timer = target.closest('[data-daily-timer]');
+    if (timer) {
+      if (timer.dataset.dailyTimer === 'close' && !confirm('Encerrar a Daily de hoje? O tempo para de contar e fica registrado no histórico.')) return;
+      act(`/${timer.dataset.dailyTimer}`, {sprint: state.sprint});
+      return;
+    }
     const dev = target.closest('[data-daily-dev]');
     if (dev) { state.dev = dev.dataset.dailyDev; render(); return; }
     const pickDate = target.closest('[data-daily-date]');
@@ -579,5 +679,5 @@ window.Daily = (() => {
     el('daily-resolution').addEventListener('input', schedulePreview);
     el('daily-publish').addEventListener('change', schedulePreview);
   });
-  return {enter, leave, onDataUpdated, column, cardHours, remainingOf, trend, score, historyHtml, sprintCards};
+  return {enter, leave, onDataUpdated, column, cardHours, remainingOf, trend, sprintTrend, personHours, score, historyHtml, sprintCards};
 })();

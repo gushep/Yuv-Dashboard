@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\MondayActivityEvent;
 use App\Models\MondayConnection;
 use App\Models\PlanningRound;
 use App\Models\PlanningSession;
@@ -154,6 +155,36 @@ class PlanningPokerTest extends TestCase
         $this->assertSame(PlanningStatus::Canceled, $replaced->fresh()->status);
 
         $this->getJson(route('planning.review', 17))->assertUnprocessable()->assertJsonPath('error', 'A Sprint 17 não está no cronograma de sprints do Monday.');
+    }
+
+    public function test_review_compares_each_estimated_card_with_its_owner_and_estimate_today_for_the_minutes(): void
+    {
+        $connection = MondayConnection::current();
+        $connection->column_map = [...$connection->column_map, 'Responsavel' => 'task_owner'];
+        $connection->save();
+        $session = PlanningSession::factory()->create(['sprint' => 19, 'sprint_name' => 'Sprint 19', 'status' => PlanningSession::CLOSED, 'closed_at' => now()]);
+        // Estimado com o Bruno como responsável; hoje o card é da Ana, com outra estimativa no Monday.
+        PlanningRound::factory()->for($session, 'session')->create([
+            'status' => PlanningStatus::Closed, 'item_id' => '10', 'item_name' => 'Relatório de frota', 'item_owner' => 'Bruno',
+            'ai_estimate' => 10, 'average' => 7, 'final_estimate' => 6, 'final_source' => 'planning', 'closed_at' => now()->subHour(),
+        ]);
+        $change = fn (string $at) => MondayActivityEvent::factory()->create(['board_id' => '123', 'item_id' => '10', 'event' => 'update_column_value', 'column_id' => 'task_owner', 'occurred_at' => CarbonImmutable::parse($at, 'America/Sao_Paulo')->utc()]);
+        $change('2026-11-10 08:00');
+        $change('2026-11-10 09:30');
+        $this->actingAs(User::factory()->withScreens(Screen::Planning)->create());
+
+        $this->getJson(route('planning.review', 19))->assertOk()
+            ->assertJsonPath('rounds.0.itemId', '10')
+            ->assertJsonPath('rounds.0.owner', 'Bruno')
+            ->assertJsonPath('rounds.0.current.owner', 'Ana')
+            ->assertJsonPath('rounds.0.current.estimate', 8)
+            ->assertJsonPath('rounds.0.current.status', 'Implementado')
+            ->assertJsonPath('rounds.0.current.inSprint', true)
+            // Só a troca depois da estimativa (09:00) conta.
+            ->assertJsonPath('rounds.0.current.ownerChanges', 1)
+            ->assertJsonPath('rounds.0.current.ownerChangedAt', '2026-11-10T12:30:00+00:00')
+            ->assertJsonCount(2, 'sprintCards')
+            ->assertJsonPath('sprintCards.1.name', 'Ajuste de filtro');
     }
 
     public function test_review_of_a_sprint_planned_outside_the_app_shows_the_team_load_and_the_sprint_cards(): void

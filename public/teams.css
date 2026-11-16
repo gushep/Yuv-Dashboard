@@ -133,12 +133,17 @@ td .team-badge{margin-left:8px}
 .team-summary-compact .team-card>small{font-size:10px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:700px){.team-summary-compact{grid-template-columns:1fr}}
 /* Resumo de horas dentro da barra superior, em todas as telas (public/hours-strip.js) */
-/* Centralizada na barra; em janelas mais estreitas, ocupa o espaço entre o título e o intervalo de sprints */
-.tb-hours{display:flex;align-items:center;justify-content:center;margin:0 auto;min-width:0;height:100%}
+/*
+ * Três colunas na barra: título (à esquerda), horas (no meio) e o restante (à direita). Título e restante dividem o
+ * espaço que sobra por igual, então as horas ficam no centro sem passar por cima do título: um subtítulo longo é cortado
+ * com reticências (o texto inteiro fica no título da dica).
+ */
+.tb-hours{display:flex;align-items:center;justify-content:center;flex:none;min-width:0;height:100%}
 .tb-hours[hidden]{display:none}
-.tb-hours:not([hidden])+.topbar-right{margin-left:0}
+.topbar:has(.tb-hours:not([hidden])) .topbar-heading{flex:1 1 0;min-width:0}
+.topbar:has(.tb-hours:not([hidden])) :is(.topbar-title,.topbar-sub){overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.tb-hours:not([hidden])+.topbar-right{flex:1 1 0;min-width:0;margin-left:0;text-align:right}
 body.consumption-view .topbar>.tb-hours:not([hidden]){display:flex}
-@media (min-width:1500px){.tb-hours{position:absolute;left:50%;top:0;transform:translateX(-50%)}.tb-hours:not([hidden])+.topbar-right{margin-left:auto}}
 /* Tabela: rótulos das linhas à esquerda, uma coluna por parte da capacidade */
 /* Cabe nos 52px da barra: cabeçalho e duas linhas (Planejado e Realizado); cada parte tem uso + Disponível */
 .tb-hours-table{display:grid;grid-template-columns:auto repeat(4,auto auto);grid-auto-rows:13px;align-items:center;row-gap:2px;padding:3px 2px;border-radius:7px;cursor:pointer;font-size:10.5px;line-height:13px;white-space:nowrap;outline-offset:1px}

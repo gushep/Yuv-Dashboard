@@ -10,6 +10,10 @@
 .cer-timer{padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-variant-numeric:tabular-nums}
 .cer-alert{padding:2px 9px;border-radius:999px;background:var(--red-bg);color:var(--red);font-size:11.5px;font-weight:700}
 .cer-bar.over .cer-timer{border-color:var(--red);color:var(--red)}
+/* Gerenciamento Ágil: a caixa de texto cresce com o texto (ceremony.js), sem rolagem interna. */
+:is(#page-planning,#page-daily-scrum,#page-sprint-review,#page-sprint-retrospective) textarea{overflow-y:hidden;resize:none;min-height:2.6em}
+.cer-actions{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;margin-left:auto}
+.cer-state{font-weight:700}
 .pp-sprint-attendance{margin:6px 0 0;padding:0 14px}
 /* Na mesa da Planning (fundo escuro fixo) */
 .pp-game .cer-bar{color:#c9d4e3}

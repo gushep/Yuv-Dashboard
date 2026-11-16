@@ -459,7 +459,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     <button type="button" class="hamburger" onclick="openSidebar()" aria-label="Abrir menu lateral">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-    <div><div class="topbar-title" id="tb-title">Dashboard</div><div class="topbar-sub" id="tb-sub">aguardando dados do Monday</div></div>
+    <div class="topbar-heading"><div class="topbar-title" id="tb-title">Dashboard</div><div class="topbar-sub" id="tb-sub">aguardando dados do Monday</div></div>
     <div class="tb-hours" id="tb-hours" role="group" aria-label="Horas da sprint: previsto e registrado contra a capacidade" hidden></div>
     <div class="topbar-right" id="tb-right"></div>
     {{-- Tour guiado da tela aberta (public/screen-tours.js); o "Tour das novidades" continua no menu lateral. --}}
@@ -1103,6 +1103,8 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
+  // Com o resumo de horas na barra, o subtítulo pode ser cortado com reticências: o texto inteiro fica na dica.
+  document.getElementById('tb-sub').title=s;
   document.getElementById('tb-right').textContent=sp?`S${sp}`:sprintRangeLabel();
   window.HoursStrip?.render();
   // Botão do tour da tela, no canto direito da barra superior: aparece quando a tela aberta tem tour.
@@ -2111,6 +2113,7 @@ window.addEventListener('popstate',()=>{
 <script src="{{ URL::versioned('control-tower.js') }}"></script>
 <script src="{{ URL::versioned('burndown.js') }}"></script>
 <script src="{{ URL::versioned('ceremony.js') }}"></script>
+<script src="{{ URL::versioned('ceremony-minutes.js') }}"></script>
 <script src="{{ URL::versioned('planning.js') }}"></script>
 <script src="{{ URL::versioned('daily.js') }}"></script>
 <script src="{{ URL::versioned('retro.js') }}"></script>

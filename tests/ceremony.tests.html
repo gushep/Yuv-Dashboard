@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Cerimônias · caixas de texto e redesenho · testes</title>
+<link rel="stylesheet" href="../public/ceremony.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0} textarea{font:14px/20px sans-serif;width:300px;padding:4px;border:1px solid #999}</style>
+<div class="page" id="page-sprint-retrospective"><div id="room"></div></div>
+<div id="outside"><textarea id="other" rows="2"></textarea></div>
+<pre id="test-result">RUNNING</pre>
+<script>
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    await load('../public/ceremony.js');
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    const room = document.getElementById('room');
+    const draw = text => { room.innerHTML = `<textarea id="notes" rows="2">${text}</textarea><input id="add" value="Nova carta">`; };
+
+    draw('');
+    await tick();
+    const field = document.getElementById('notes');
+    const initial = field.offsetHeight;
+    check('Caixa das telas do módulo sem rolagem interna e sem arrastar o tamanho', getComputedStyle(field).overflowY === 'hidden' && getComputedStyle(field).resize === 'none');
+    field.value = Array.from({length: 8}, (_, index) => `Linha ${index + 1}`).join('\n');
+    field.dispatchEvent(new Event('input', {bubbles: true}));
+    check('Digitar mais linhas aumenta a caixa até caber o texto (sem rolagem)', field.offsetHeight > initial + 100 && field.scrollHeight <= field.clientHeight + 1);
+    field.value = 'Uma linha';
+    field.dispatchEvent(new Event('input', {bubbles: true}));
+    check('Apagar linhas diminui a caixa de novo', field.offsetHeight < initial + 20);
+
+    draw('Linha 1\nLinha 2\nLinha 3\nLinha 4\nLinha 5\nLinha 6');
+    await tick();
+    const redrawn = document.getElementById('notes');
+    check('Caixa recriada por um redesenho já vem do tamanho do texto', redrawn.scrollHeight <= redrawn.clientHeight + 1 && redrawn.offsetHeight > initial + 40);
+
+    const other = document.getElementById('other');
+    other.value = Array.from({length: 8}, (_, index) => `Linha ${index + 1}`).join('\n');
+    other.dispatchEvent(new Event('input', {bubbles: true}));
+    check('Fora das telas do módulo, as caixas não mudam', other.style.height === '');
+
+    const input = document.getElementById('add');
+    input.focus(); input.setSelectionRange(2, 5);
+    Ceremony.keepFocus(document.getElementById('page-sprint-retrospective'), () => draw('Outra pessoa escreveu'));
+    const again = document.getElementById('add');
+    check('Redesenho com o cursor num campo: o foco volta ao mesmo campo, com a seleção no lugar', again !== input && document.activeElement === again && again.selectionStart === 2 && again.selectionEnd === 5);
+    document.activeElement.blur();
+    Ceremony.keepFocus(document.getElementById('page-sprint-retrospective'), () => draw('Sem foco'));
+    check('Sem campo em foco, o redesenho não puxa o foco', document.activeElement === document.body);
+
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

@@ -20,7 +20,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $revealed_at
  * @property array<int, array{title: string, text: string}> $rules
  * @property array<string, int>|null $step_seconds
- * @property array<string, string>|null $goal_votes
+ * @property array<string, string>|null $goal_votes voto de cada pessoa no objetivo da sprint, pela chave "u{id}"
  * @property array<string, mixed>|null $metrics
  */
 #[Fillable(['sprint', 'sprint_name', 'status', 'facilitator_id', 'step', 'step_started_at', 'step_seconds', 'goal', 'rules', 'context', 'dependencies', 'goal_votes', 'revealed_at', 'metrics', 'started_at', 'closed_at'])]

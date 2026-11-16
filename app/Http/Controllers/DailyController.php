@@ -35,6 +35,30 @@ class DailyController extends Controller
         return $this->attempt(fn (): array => ['presence' => $this->daily->presence($this->connection(), $request->user(), (int) $data['sprint'])]);
     }
 
+    /** Para a ata da Daily: o que mudou nos cards da sprint desde a Daily anterior (status, horas apontadas e comentários). */
+    public function minutes(Request $request): JsonResponse
+    {
+        $data = $request->validate(['sprint' => ['required', 'integer', 'min:1'], 'date' => ['required', 'date_format:Y-m-d']]);
+
+        return $this->attempt(fn (): array => $this->daily->minutes($this->connection(), (int) $data['sprint'], $data['date']));
+    }
+
+    /** Iniciar Daily (ou retomar a de hoje, depois de encerrada): o tempo da Daily começa a contar. */
+    public function start(Request $request): JsonResponse
+    {
+        $data = $request->validate(['sprint' => ['required', 'integer', 'min:1']]);
+
+        return $this->respond($request, (int) $data['sprint'], fn () => $this->daily->start($this->connection(), $request->user(), (int) $data['sprint']));
+    }
+
+    /** Encerrar Daily: o tempo da Daily de hoje para de contar. */
+    public function close(Request $request): JsonResponse
+    {
+        $data = $request->validate(['sprint' => ['required', 'integer', 'min:1']]);
+
+        return $this->respond($request, (int) $data['sprint'], fn () => $this->daily->close($request->user(), (int) $data['sprint']));
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
