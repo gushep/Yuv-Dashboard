@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Indicadores Scrum · testes</title>
+<link rel="stylesheet" href="../public/scrum-indicators.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0}</style>
+<main class="main"><div class="content" id="fixture" style="width:1200px"></div></main><pre id="test-result">RUNNING</pre>
+<script>
+window.MONDAY_SPRINT_DATES = {1: {start: '2026-08-03', end: '2026-08-14'}, 2: {start: '2026-08-17', end: '2026-08-28'}, 3: {start: '2026-08-31', end: '2026-09-11'}, 4: {start: '2026-09-14', end: '2026-09-25'},
+  5: {start: '2026-09-28', end: '2026-10-09'}, 6: {start: '2026-10-12', end: '2026-10-23'}, 7: {start: '2026-10-26', end: '2026-11-06'}, 8: {start: '2026-11-09', end: '2026-11-20'}};
+window.SPRINTS = [1, 2, 3, 4, 5, 6, 7, 8];
+window.DATA = [];
+const card = (Sprint, {done = false, est = 0, real = 0, Planejada = 'Planejada', Tipo = 'Melhoria', rework = false, Cliente = ''} = {}) =>
+  DATA.push({Sprint, Status: done ? 'Implementado' : 'Em progresso', EstH: est, RealH: real, Planejada, Tipo, Retrabalho: rework ? 1 : 0, Prioridade: 'Alta', Responsavel: 'Ana', Cliente});
+const repeat = (count, make) => { for (let index = 0; index < count; index++) make(index); };
+// Antes (sprints 1 a 4), por sprint: 10 cards; 6 planejados (4 entregues com 10h estimadas e 12h reais) e 4 não planejados sem estimativa (3 entregues); 1 com retrabalho.
+for (const sprint of [1, 2, 3, 4]) {
+  repeat(6, index => card(sprint, {done: index < 4, est: 10, real: index < 4 ? 12 : 3, rework: index === 0}));
+  repeat(4, index => card(sprint, {done: index < 3, real: 5, Planejada: 'Não Planejado'}));
+}
+// Após (sprints 5 a 7), por sprint: 20 cards; 10 planejados entregues (10h × 11h), 5 não planejados (4 entregues, 4h × 4h) e 5 de suporte entregues (2h × 2h); 1 com retrabalho; metade com cliente.
+for (const sprint of [5, 6, 7]) {
+  repeat(10, index => card(sprint, {done: true, est: 10, real: 11, rework: index === 0, Cliente: 'Yuv'}));
+  repeat(5, index => card(sprint, {done: index < 4, est: 4, real: index < 4 ? 4 : 1, Planejada: 'Não Planejado'}));
+  repeat(5, () => card(sprint, {done: true, est: 2, real: 2, Tipo: 'Suporte', Planejada: 'Não Planejado'}));
+}
+// Sprint 8 em andamento e um card cancelado (fora da conta).
+repeat(3, () => card(8, {est: 5}));
+DATA.push({Sprint: 5, Status: 'CANCELADO', EstH: 99, RealH: 99, Planejada: 'Planejada', Tipo: 'Melhoria', Retrabalho: 1, Prioridade: 'Alta', Responsavel: 'Ana'});
+let printed = false;
+window.print = () => { printed = document.body.classList.contains('si-printing'); };
+const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    const blade = html => html.replace(/\{\{--[\s\S]*?--\}\}/g, '').replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, '../public/$1').replace(/\{\{[\s\S]*?\}\}/g, '');
+    document.getElementById('fixture').innerHTML = blade(await (await fetch('../resources/views/scrum-indicators.blade.php')).text());
+    document.getElementById('page-scrum-indicators').classList.add('active');
+    for (const src of ['sprint-rules', 'scrum-indicators']) await load(`../public/${src}.js`);
+    SprintRules.today = () => '2026-11-17';
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    const text = selector => document.querySelector(selector).textContent.replace(/\s+/g, ' ').trim();
+    const round = value => value === null ? null : Math.round(value * 10) / 10;
+
+    const before = ScrumIndicators.measure([1, 2, 3, 4]), after = ScrumIndicators.measure([5, 6, 7]);
+    check('Contas do antes: médias por sprint e percentuais sobre os cards', before.donePerSprint === 7 && before.productivity === 70 && round(before.plannedDelivered) === 66.7
+      && round(before.deviation) === 20 && before.withEstimate === 60 && before.ready === 60 && before.rework === 10 && before.supportPerSprint === 0);
+    // Após: 19 de 20 entregues; desvio = (10×11 + 4×4 + 5×2) ÷ (10×10 + 4×4 + 5×2) − 1 = 136 ÷ 126 − 1.
+    check('Contas do após, sem o card cancelado', after.cardsPerSprint === 20 && after.donePerSprint === 19 && after.productivity === 95 && after.plannedDelivered === 100
+      && round(after.deviation) === 7.9 && after.ready === 100 && after.supportPerSprint === 5 && after.supportWithHours === 100 && after.rework === 5 && after.client === 50 && after.nonSupportPerSprint === 15);
+    check('Selos: ×N, p.p., % e N× menor; verde só quando melhora', ScrumIndicators.change('ratio', 7, 19, 'higher').text === '×2,7' && ScrumIndicators.change('pp', 70, 95, 'higher').text === '+25 p.p.'
+      && ScrumIndicators.change('relative', 10, 5, 'lower').text === '−50%' && ScrumIndicators.change('deviation', 20, 7.94, 'lower').text === '3× menor'
+      && ScrumIndicators.change('ratio', 0, 5, 'higher').text === 'novo' && ScrumIndicators.change('pp', 95, 70, 'higher').good === false);
+
+    ScrumIndicators.enter(); await tick(20);
+    const value = id => document.getElementById(id).value;
+    check('Padrão: as 3 últimas sprints encerradas são o após e as anteriores, o antes (a sprint em andamento fica fora)', value('si-before-from') === '1' && value('si-before-to') === '4' && value('si-after-from') === '5' && value('si-after-to') === '7');
+    check('Período por extenso', text('#si-period') === 'Antes das mudanças: Sprints 1 a 4 (4) · Após as mudanças: Sprints 5 a 7 (3)');
+    check('Manchete: crescimento das entregas por sprint', text('.si-headline strong') === '+171%' && text('.si-hero h2').startsWith('O time entrega 2,7× mais por sprint, com mais controle e menos retrabalho'));
+    const kpis = [...document.querySelectorAll('.si-kpi')].map(kpi => `${kpi.querySelector('b').textContent}|${kpi.querySelector('s').textContent}|${kpi.querySelector('.si-tag').textContent}`).join(' ; ');
+    check('Indicadores do topo, com a meta de produtividade atingida', kpis === '95%|70%|meta 90% ✓ ; 100%|67%|+33 p.p. ; 5%|10%|−50% ; +7,9%|+20%|3× menor');
+    const fronts = [...document.querySelectorAll('.si-front')].map(front => `${front.querySelector('h4').textContent}:${front.querySelector('.si-big b').textContent}:${front.querySelector('.si-badge').textContent}`);
+    check('As 8 frentes com o valor de agora e o selo', fronts.length === 8 && fronts[0] === 'Volume de entrega:19:×2,7' && fronts[4] === 'Sustentação sob controle:5:novo' && fronts[6] === 'Qualidade:5%:−50%');
+    check('Nota da sustentação: volume sem os tickets de suporte', text('.si-foot').includes('a média vai de 10 para 15 cards por sprint (+50%)'));
+    check('Gráficos: as 7 sprints, as 3 de após em azul com o número', document.querySelectorAll('.si-plot svg')[0].querySelectorAll('rect[fill="#1d6ef5"]').length === 3 && document.querySelectorAll('.si-plot svg')[0].textContent.includes('mudanças →'));
+
+    const pick = (id, sprint) => { const select = document.getElementById(id); select.value = String(sprint); select.dispatchEvent(new Event('change')); };
+    pick('si-before-from', 5); pick('si-before-to', 7); pick('si-after-from', 1); pick('si-after-to', 1); await tick();
+    check('Quando piora, o selo fica vermelho e a manchete diz menos', document.querySelector('.si-kpi .si-tag').classList.contains('bad') && text('.si-hero h2').startsWith('O time entrega 63% menos por sprint') && document.querySelectorAll('.si-badge.bad').length > 0);
+    pick('si-before-from', 1); pick('si-before-to', 5); pick('si-after-from', 5); pick('si-after-to', 7); await tick();
+    check('Períodos com sprint em comum ganham aviso', text('#si-period').includes('os dois períodos têm sprints em comum'));
+    pick('si-after-to', 8); await tick();
+    check('Sprint em andamento no período ganha aviso de parcial', text('#si-period').includes('inclui sprint em andamento'));
+    document.getElementById('si-default').click(); await tick();
+    check('Padrão volta aos períodos sugeridos', value('si-before-to') === '4' && value('si-after-from') === '5');
+
+    document.getElementById('si-print').click();
+    check('Imprimir: só o infográfico vai para a impressão', printed);
+    window.dispatchEvent(new Event('afterprint'));
+    check('Depois de imprimir, a tela volta ao normal', !document.body.classList.contains('si-printing'));
+    check('O slide se ajusta à largura da tela (16:9)', Math.abs(document.getElementById('si-frame').offsetHeight - document.getElementById('si-frame').clientWidth * 900 / 1600) <= 1);
+
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

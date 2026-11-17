@@ -36,12 +36,13 @@ class DarkThemeStylesheet
      * Ajustes que a troca automática não resolve (ex.: tooltip que usa a cor do texto como fundo).
      */
     /**
-     * Áreas com cores próprias, iguais nos dois temas (ex.: a mesa e as cartas da Planning poker): as regras cujo
-     * seletor contém uma delas não são repetidas no tema escuro.
+     * Áreas com cores próprias, iguais nos dois temas (ex.: a mesa e as cartas da Planning poker e o infográfico dos
+     * Indicadores Scrum, que é um slide de apresentação): as regras cujo seletor contém uma delas não são repetidas no
+     * tema escuro.
      *
      * @var list<string>
      */
-    public const FIXED = ['.pp-game'];
+    public const FIXED = ['.pp-game', '.si-stage'];
 
     public const EXTRA = <<<'CSS'
 :root[data-theme=dark]{color-scheme:dark}

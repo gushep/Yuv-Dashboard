@@ -19,6 +19,8 @@ enum Screen: string
     case DailyScrum = 'daily-scrum';
     case SprintReview = 'sprint-review';
     case SprintRetrospective = 'sprint-retrospective';
+    case Okrs = 'okrs';
+    case ScrumIndicators = 'scrum-indicators';
     case Firefighter = 'bombeiro';
     case SprintPanel = 'sprint-panel';
     case Carousel = 'carousel';
@@ -43,6 +45,8 @@ enum Screen: string
             self::DailyScrum => 'Daily Scrum',
             self::SprintReview => 'Sprint Review',
             self::SprintRetrospective => 'Sprint Retrospective',
+            self::Okrs => 'OKRs',
+            self::ScrumIndicators => 'Indicadores Scrum (só Maestro Scrum)',
             self::Firefighter => 'Painel do Bombeiro',
             self::SprintPanel => 'Painel da Sprint',
             self::Carousel => 'Apresentação dos Painéis',
@@ -70,6 +74,8 @@ enum Screen: string
             self::DailyScrum => 'daily-scrum',
             self::SprintReview => 'sprint-review',
             self::SprintRetrospective => 'sprint-retrospective',
+            self::Okrs => 'okrs',
+            self::ScrumIndicators => 'indicadores-scrum',
             self::Firefighter => 'bombeiro',
             self::SprintPanel => 'painel-da-sprint',
             self::Carousel => 'apresentacao',

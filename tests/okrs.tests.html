@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>OKRs do time · testes</title>
+<link rel="stylesheet" href="../public/capacity.css">
+<link rel="stylesheet" href="../public/teams.css">
+<link rel="stylesheet" href="../public/daily.css">
+<link rel="stylesheet" href="../public/okrs.css">
+<style>#test-result{position:fixed;left:0;bottom:0;max-height:40%;overflow:auto;z-index:100;background:white;font-size:10px;margin:0}</style>
+<main class="main"><div class="content" id="fixture"></div></main><pre id="test-result">RUNNING</pre>
+<script>
+var currentPage = 'okrs';
+window.MONDAY_SPRINT_DATES = {17: {start: '2026-09-29', end: '2026-10-10'}, 18: {start: '2026-10-13', end: '2026-10-24'}, 19: {start: '2026-10-27', end: '2026-11-07'}, 20: {start: '2026-11-10', end: '2026-11-21'}, 21: {start: '2026-11-24', end: '2026-12-05'}};
+window.SPRINTS = [17, 18, 19, 20, 21];
+window.DATA = [];
+const cards = (Sprint, count, {done = 0, rework = 0, real = 0, Planejada = 'Planejada', Tipo = 'Melhoria'} = {}) => {
+  for (let index = 0; index < count; index++) DATA.push({Sprint, Responsavel: 'Ana', Status: index < done ? 'Implementado' : 'Em progresso', Planejada, Tipo, Retrabalho: index < rework ? 1 : 0, EstH: real, RealH: real});
+};
+// Horas apontadas por sprint: 17 = 120h; 18 = 125h; 19 = 130h + 8h de suporte; 20 = 40h. Capacidade: Ana e Bruno, 80h cada = 160h.
+cards(17, 2, {done: 2, real: 60});
+cards(17, 3, {done: 1, Planejada: 'Não Planejado'});
+cards(18, 5, {done: 4, rework: 1, real: 25});
+cards(19, 10, {done: 9, rework: 1, real: 13});
+cards(19, 2, {done: 2, real: 4, Tipo: 'Suporte', Planejada: 'Não Planejado'});
+cards(20, 4, {done: 2, real: 10});
+DATA.push({Sprint: 20, Responsavel: 'Ana', Status: 'CANCELADO', Planejada: 'Planejada', Tipo: 'Melhoria', Retrabalho: 1, EstH: 0, RealH: 0});
+/* Mesmas contas do Dashboard (metricsOf em dashboard.blade.php), só os campos usados pelos OKRs. */
+window.metricsOf = all => {
+  const d = all.filter(x => !SprintRules.isRemoved(x.Status));
+  const sprintItems = d.filter(x => SprintRules.normalize(x.Tipo) !== 'suporte'), planned = sprintItems.filter(x => SprintRules.normalize(x.Planejada) === 'planejada');
+  return {tot: d.length, done: d.filter(x => SprintRules.isDone(x.Status)).length, rework: d.filter(x => x.Retrabalho).length,
+    planned: planned.length, unplanned: sprintItems.length - planned.length, support: d.length - sprintItems.length};
+};
+window.defaultSprint = () => 20;
+/* Impressão falsa: guarda se o infográfico estava marcado para imprimir no momento do print. */
+let printed = false;
+window.print = () => { printed = document.body.classList.contains('okr-printing'); };
+/* Reserva do Bombeiro de 16h por sprint: sai do Full stack e vira a capacidade da Sustentação (o total não muda). */
+window.HoursStrip = {reserveFor: () => 16 * 60, loadReserves: () => Promise.resolve()};
+/* Chart.js falso: guarda a configuração do gráfico para conferir. */
+const charts = [];
+window.Chart = class { constructor(context, config) { this.config = config; charts.push(this); } destroy() { this.destroyed = true; } };
+const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = reject; document.body.append(script); });
+(async () => {
+  const checks = []; const check = (name, condition) => { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw new Error(name); };
+  try {
+    const dashboard = await (await fetch('../resources/views/dashboard.blade.php')).text();
+    const style = document.createElement('style'); style.textContent = dashboard.match(/<style>([\s\S]*?)<\/style>/)[1]; document.head.prepend(style);
+    const blade = html => html.replace(/\{\{--[\s\S]*?--\}\}/g, '').replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, '../public/$1').replace(/\{\{[\s\S]*?\}\}/g, '');
+    document.getElementById('fixture').innerHTML = blade(await (await fetch('../resources/views/okrs.blade.php')).text());
+    document.getElementById('page-okrs').classList.add('active');
+    for (const src of ['sprint-rules', 'capacity', 'daily', 'okrs']) await load(`../public/${src}.js`);
+    SprintRules.today = () => '2026-11-17';
+    SprintRules.applySettings({capacityHours: 80, team: [{id: '1', name: 'Ana', group: 'fullstack'}, {id: '2', name: 'Bruno', group: 'fullstack'}]});
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    const text = id => document.getElementById(id).textContent.replace(/\s+/g, ' ');
+    const [productivity, rework, backlog] = Okrs.KEY_RESULTS;
+
+    check('Faixas: atingido na meta, amarelo até 5 pontos, vermelho fora (maior é melhor e menor é melhor)', [90, 85, 84.9].map(value => Okrs.level(productivity, value)).join() === 'green,yellow,red'
+      && [10, 15, 15.1].map(value => Okrs.level(rework, value)).join() === 'green,yellow,red' && [80, 75, 74.9].map(value => Okrs.level(backlog, value)).join() === 'green,yellow,red' && Okrs.level(backlog, null) === 'none');
+
+    Okrs.enter(); await tick(30);
+    check('Abre na sprint atual, com aviso de parcial', document.getElementById('okr-from').value === '20' && document.getElementById('okr-to').value === '20'
+      && text('okr-period').includes('Sprint 20') && text('okr-period').includes('parcial: sprint em andamento'));
+    check('A sprint 21, que ainda não começou, não aparece no filtro', ![...document.getElementById('okr-from').options].some(option => option.value === '21'));
+    const values = () => [...document.querySelectorAll('#okr-objective .okr-kr')].map(kr => `${kr.querySelector('.okr-kr-value strong').textContent}:${kr.className.match(/level-(\w+)/)[1]}`).join(' | ');
+    // Sprint 20: 2 de 4 cards entregues (o cancelado fica fora); 0 de 4 com retrabalho; 40h apontadas de 160h de capacidade.
+    check('Sprint atual: os três resultados-chave contra a meta', values() === '50%:red | 0%:green | 25%:red' && text('okr-objective').includes('1 de 3') && text('okr-objective').includes('atingidos até agora')
+      && text('okr-objective').includes('2 de 4 card(s) entregue(s)') && text('okr-objective').includes('40h de 160h consumidas da capacidade'));
+    const countsOf = index => [...document.querySelectorAll('#okr-objective .okr-kr')[index].querySelectorAll('.okr-counts div')].map(item => `${item.querySelector('dt').textContent} ${item.querySelector('dd').textContent}`).join(' | ');
+    check('Números de cards e de horas de cada resultado-chave', countsOf(0) === 'Entregues 2 | Faltam entregar 2 | Cards na sprint 4' && countsOf(1) === 'Com retrabalho 0 | Sem retrabalho 4 | Cards na sprint 4'
+      && countsOf(2) === 'Consumido 40h | Não utilizado 120h | Capacidade da sprint 160h');
+
+    const from = document.getElementById('okr-from'), to = document.getElementById('okr-to');
+    from.value = '18'; from.dispatchEvent(new Event('change'));
+    to.value = '19'; to.dispatchEvent(new Event('change')); await tick();
+    // Sprints 18 e 19 somadas: 15 de 17 cards entregues (88,2%); 2 de 17 com retrabalho (11,8%); 263h (125h + 130h + 8h de suporte) de 320h de capacidade (82,2%).
+    check('Intervalo soma tudo do período, como o Dashboard', values() === '88,2%:yellow | 11,8%:yellow | 82,2%:green' && text('okr-period').includes('Sprints 18 a 19 (2)') && !text('okr-period').includes('parcial'));
+    check('Capacidade do intervalo: soma das sprints, com o suporte apontado no consumido', countsOf(2) === 'Consumido 263h | Não utilizado 57h | Capacidade da sprint 320h');
+    // Partes, nas sprints 18 e 19: Full stack 255h de 288h (320h − 2 × 16h do Bombeiro); Sustentação 8h de 32h; Projetos sem ninguém.
+    const parts = [...document.querySelectorAll('#okr-objective .okr-part')].map(part => `${part.querySelector('.okr-part-name').textContent}:${part.querySelector('strong').textContent}:${part.querySelector('small').textContent}:${part.className.match(/level-(\w+)/)[1]}`);
+    check('Backlog preparado aberto em Full stack, Sustentação e Projetos, com a mesma meta', parts.join(' | ') === 'Full stack:88,5%:255h de 288h:green | Sustentação (Bombeiro):25%:8h de 32h:red | Projetos:—:sem capacidade:none'
+      && document.querySelectorAll('#okr-objective .okr-kr')[2].querySelector('.okr-parts') && !document.querySelectorAll('#okr-objective .okr-kr')[0].querySelector('.okr-parts'));
+    const sprintRows = [...document.querySelectorAll('#okr-sprints tbody tr')].map(row => row.querySelector('th').childNodes[0].textContent.trim());
+    check('Sprints do período, da mais recente para a mais antiga, com cada resultado-chave', sprintRows.join() === 'Sprint 19,Sprint 18' && text('okr-sprints').includes('91,7%') && text('okr-sprints').includes('11 de 12 cards')
+      && text('okr-sprints').includes('138h de 160h') && text('okr-sprints').includes('86,3%'));
+    from.value = '19'; from.dispatchEvent(new Event('change'));
+    to.value = '18'; to.dispatchEvent(new Event('change')); await tick();
+    check('De e até invertidos valem como o mesmo intervalo', text('okr-period').includes('Sprints 18 a 19'));
+
+    const months = [...document.querySelectorAll('#okr-months tbody tr')].map(row => row.querySelector('th').textContent.replace(/\s+/g, ' ').trim());
+    // Novembro: sprint 20 (começa em novembro); outubro: 18 e 19 (a 19 vai até 07/11, mas começa em outubro); setembro: 17.
+    check('Histórico por mês: cada sprint no mês em que começa, do mais recente para o mais antigo', months.length === 3 && months[0].startsWith('nov/2026 parcial') && months[0].includes('Sprint 20') && months[1].startsWith('out/2026') && months[1].includes('Sprints 18, 19') && months[2].startsWith('set/2026') && months[2].includes('Sprint 17'));
+    const october = [...document.querySelectorAll('#okr-months tbody tr')[1].querySelectorAll('.okr-cell strong')].map(cell => cell.textContent).join();
+    check('Mês soma as sprints dele (outubro: 15 de 17 entregues, 2 de 17 com retrabalho, 263h de 320h)', october === '88,2%,11,8%,82,2%');
+
+    // Crescimento: sprint 17 = 2 planejados, 3 não planejados; 18 = 5 planejados; 19 = 10 planejados e 2 de suporte; 20 = 4 planejados (em andamento).
+    const growth = [17, 18, 19, 20].map(Okrs.growthOf).map(item => `S${item.sprint}:${item.planned}/${item.unplanned}/${item.support}=${item.total}·${item.done}`).join(' ');
+    check('Crescimento: cards registrados por origem (planejado, não planejado e suporte) e entregues', growth === 'S17:2/3/0=5·3 S18:5/0/0=5·4 S19:10/0/2=12·11 S20:4/0/0=4·2');
+    check('Resumo do crescimento: última sprint encerrada contra a anterior (menos de 6 encerradas)', text('okr-growth-summary') === 'Sprint 19 contra a 18: 11 entregas por sprint contra 4 (+175%) e 12 cards registrados contra 5 (+140%).');
+    const chart = charts.filter(item => !item.destroyed && item.config.type !== 'doughnut').at(-1);
+    check('Gráfico: barras empilhadas por origem, linha de entregues no mesmo eixo e a sprint atual marcada', chart && chart.config.data.labels.join() === 'S17,S18,S19,S20*'
+      && chart.config.data.datasets.map(set => `${set.type}:${set.label}`).join() === 'line:Entregues,bar:Planejado,bar:Não planejado,bar:Suporte'
+      && chart.config.data.datasets[1].data.join() === '2,5,10,4' && chart.config.data.datasets[0].data.join() === '3,4,11,2' && chart.config.options.scales.y.stacked && !chart.config.options.scales.y1);
+    const growthRows = [...document.querySelectorAll('#okr-growth-table tbody tr')].map(row => [...row.children].map(cell => cell.textContent.replace(/\s+/g, ' ').trim()).join(' '));
+    check('Tabela do gráfico com os mesmos números, da sprint mais recente para a mais antiga', growthRows.length === 4 && growthRows[0] === 'Sprint 20 em andamento 4 0 0 4 2 50%' && growthRows[3] === 'Sprint 17 2 3 0 5 3 60%');
+    // Por pessoa, no intervalo 18–19: Ana tem todos os cards (15 de 17 entregues, 2 com retrabalho) e 263h de 160h de capacidade; Bruno só a capacidade.
+    const faces = () => [...document.querySelectorAll('#okr-faces .daily-face')].map(face => `${face.querySelector('.daily-face-name').textContent}:${face.querySelector('.okr-face-hits').textContent}${face.classList.contains('selected') ? '*' : ''}`).join(' ');
+    const personValues = () => [...document.querySelectorAll('#okr-person .okr-kr')].map(kr => `${kr.querySelector('.okr-kr-value strong').textContent}:${kr.className.match(/level-(\w+)/)[1]}`).join(' | ');
+    const personCounts = index => [...document.querySelectorAll('#okr-person .okr-kr')[index].querySelectorAll('.okr-counts div')].map(item => `${item.querySelector('dt').textContent} ${item.querySelector('dd').textContent}`).join(' | ');
+    check('Por pessoa: um rosto por pessoa com capacidade ou cards, com quantos resultados-chave atingiu; a primeira já vem escolhida', faces() === 'Ana:1 de 3* Bruno:0 de 3');
+    check('Por pessoa: os resultados-chave só com os cards e as horas dela, com o valor do time ao lado', personValues() === '88,2%:yellow | 11,8%:yellow | 164,4%:green'
+      && [...document.querySelectorAll('#okr-person .okr-team-ref')].map(item => item.textContent).join() === 'Time: 88,2%,Time: 11,8%,Time: 82,2%'
+      && personCounts(2) === 'Consumido 263h | Não utilizado excedeu 103h | Capacidade da pessoa 160h' && personCounts(0) === 'Entregues 15 | Faltam entregar 2 | Cards da pessoa 17');
+    // Ana (Full stack) fica com metade da reserva do Bombeiro (80h de 160h): 8h por sprint. Sprint: 255h de 144h; Sustentação: 8h de 16h.
+    const personParts = () => [...document.querySelectorAll('#okr-person .okr-part')].map(part => `${part.querySelector('.okr-part-name').textContent}:${part.querySelector('strong').textContent}:${part.querySelector('small').textContent}`).join(' | ');
+    check('Por pessoa: backlog preparado em duas partes, a sprint do time dela e a Sustentação', personParts() === 'Sprint (Full stack):177,1%:255h de 144h | Sustentação (Bombeiro):50%:8h de 16h');
+    const personSprints =[...document.querySelectorAll('#okr-person tbody tr')].map(row => [...row.querySelectorAll('.okr-cell strong')].map(cell => cell.textContent).join('/'));
+    check('Por pessoa: cada sprint do período (sprint 19: 138h de 80h)', personSprints.join(' ') === '91,7%/8,3%/172,5% 80%/20%/156,3%');
+    // XP da Daily no período 18–19: 15 entregas, todas no alvo (real = estimado) = 15 × 15 = 225 XP; Bruno sem entregas.
+    check('Por pessoa: o placar de XP da Daily no período, no rosto e no painel', [...document.querySelectorAll('#okr-faces .okr-face-xp')].map(item => item.textContent).join() === '⭐ 225 XP,⭐ 0 XP'
+      && document.querySelector('#okr-person .okr-person-xp strong').textContent === '225 XP' && text('okr-person').includes('15 entrega(s) · 15 no alvo · precisão 100%')
+      && text('okr-person').includes('🏆 Precisão de estimativa acima de 80%'));
+    document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight'})); await tick();
+    check('→ passa para a próxima pessoa (Bruno: sem cards, 0h de 160h)', faces() === 'Ana:1 de 3 Bruno:0 de 3*' && personValues() === '—:none | —:none | 0%:red' && text('okr-person').includes('Bruno'));
+    check('Bruno: a mesma divisão em duas partes, sem horas', personParts() === 'Sprint (Full stack):0%:0h de 144h | Sustentação (Bombeiro):0%:0h de 16h');
+    // Uma pessoa de Projetos: a sprint é Projetos (IA) e não há reserva do Bombeiro.
+    const projectsParts = Okrs.computePerson([19], {name: 'Carla', team: 'projects', capacity: 80 * 60, registered: 10 * 60, supportCapacity: 0, supportRegistered: 60}).backlog.parts;
+    check('Projetos: duas partes, Projetos (IA) e Sustentação sem reserva', projectsParts.map(part => `${part.label}:${part.part / 60}/${part.whole / 60}:${part.value}`).join(' | ') === 'Projetos (IA):9/80:11.3 | Sustentação (Bombeiro):1/0:null');
+    document.querySelector('[data-okr-step="1"]').click(); await tick();
+    check('› dá a volta para a primeira pessoa', faces() === 'Ana:1 de 3* Bruno:0 de 3');
+    document.getElementById('okr-current').click(); await tick();
+    check('Sprint atual volta para a sprint em andamento', document.getElementById('okr-from').value === '20' && document.getElementById('okr-to').value === '20');
+    // Infográfico da sprint 20: 4 cards, 2 entregues, 0 com retrabalho, 40h, 2 pessoas; a sprint 19 é o período anterior.
+    const gauges = [...document.querySelectorAll('#okr-info .okr-gauge')].map(item => `${item.querySelector('strong').textContent}:${item.className.match(/level-(\w+)/)[1]}`).join(' | ');
+    check('Infográfico: placar e um medidor por resultado-chave, na cor da situação', gauges === '50%:red | 0%:green | 25%:red' && document.querySelector('.okr-info-score strong').textContent === '1/3'
+      && document.querySelectorAll('#okr-info .okr-gauge-target').length === 3);
+    const facts = [...document.querySelectorAll('.okr-info-facts li')].map(item => `${item.querySelector('b').textContent} ${item.querySelector('small').textContent}`).join(' | ');
+    check('Infográfico: números do período', facts === '4 cards registrados | 2 cards entregues | 0 com retrabalho | 40h horas apontadas | 2 pessoas');
+    check('Infográfico: pictograma da origem dos cards (1 quadradinho por card)', document.querySelectorAll('.okr-picto i').length === 4 && text('okr-info').includes('cada ■ = 1 card'));
+    const donut = charts.filter(item => !item.destroyed && item.config.type === 'doughnut').at(-1);
+    check('Infográfico: rosca das horas por parte (Full stack, Sustentação e Projetos)', donut && donut.config.data.labels.join() === 'Full stack,Sustentação (Bombeiro),Projetos' && donut.config.data.datasets[0].data.join() === '40,0,0');
+    const highlightsText = [...document.querySelectorAll('.okr-info-highlights li')].map(item => [...item.querySelectorAll('div > *')].map(part => part.textContent.trim()).join('/')).join(' | ');
+    check('Infográfico: destaques (precisão só com 3+ entregas)', highlightsText === 'Mais XP/Ana/30 XP | Mais entregas/Ana/2 card(s) | Melhor precisão de estimativa/—/sem dados no período | Sem retrabalho/1 de 1 pessoa/Ana');
+    check('Infográfico: tendência contra o período anterior do mesmo tamanho', text('okr-info').includes('Contra o período anterior (Sprint 19)') && text('okr-info').includes('2 entregas contra 11 ▼ −82%')
+      && text('okr-info').includes('4 cards registrados contra 12 ▼ −67%') && text('okr-info').includes('produtividade 50% contra 91,7% ▼ −41,7 p.p.'));
+    document.getElementById('okr-info-print').click();
+    check('Imprimir: só o infográfico vai para a impressão', document.body.classList.contains('okr-printing') || printed);
+    window.dispatchEvent(new Event('afterprint'));
+    check('Depois de imprimir, a tela volta ao normal', !document.body.classList.contains('okr-printing'));
+    check('Como é calculado, com as metas', text('okr-method').includes('≥ 90% dos cards da sprint entregues') && text('okr-method').includes('≤ 10% dos cards com retrabalho')
+      && text('okr-method').includes('≥ 80% da capacidade da sprint utilizada') && text('okr-method').includes('linha Realizado da coluna Capacidade'));
+
+    document.getElementById('test-result').textContent = checks.join('\n') + '\nALL PASSED';
+  } catch (error) { document.getElementById('test-result').textContent = checks.join('\n') + '\nERROR ' + error.stack; }
+})();
+</script></html>

@@ -113,8 +113,16 @@ class User extends Authenticatable
         return $this->can_estimate_planning && $this->canAccessScreen(Screen::Planning);
     }
 
+    /**
+     * Acesso a uma tela liberada para a pessoa. Indicadores Scrum é só do Maestro Scrum: além da tela, exige a
+     * permissão de conduzir a planning (vale para o menu, o endereço da tela e as rotas).
+     */
     public function canAccessScreen(Screen $screen): bool
     {
+        if ($screen === Screen::ScrumIndicators && ! $this->can_conduct_planning) {
+            return false;
+        }
+
         return (bool) $this->screens?->contains($screen);
     }
 

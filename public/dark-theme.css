@@ -911,6 +911,119 @@
 [data-theme=dark] .rv-feedback small{color:var(--text2)}
 [data-theme=dark] .rv-feedback-form{border-color:var(--border)}
 [data-theme=dark] .rv-select{border-color:var(--border);background-color:var(--card);color:var(--text)}
+[data-theme=dark] .okr-period{color:var(--text2)}
+[data-theme=dark] .okr-card{border-color:var(--border);background-color:var(--card);box-shadow:var(--shadow)}
+[data-theme=dark] .okr-card h2{color:var(--text)}
+[data-theme=dark] .okr-card-head small,[data-theme=dark] .okr-empty{color:var(--muted)}
+[data-theme=dark] .okr-eyebrow{color:var(--muted)}
+[data-theme=dark] .okr-objective{border-left-color:var(--muted);background-color:color-mix(in srgb,var(--muted) 7%,var(--card))}
+[data-theme=dark] .okr-objective p{color:var(--text)}
+[data-theme=dark] .okr-objective small{color:var(--text2)}
+[data-theme=dark] .okr-kr{border-color:var(--border);border-right-color:var(--muted)}
+[data-theme=dark] .okr-kr h3{color:var(--text)}
+[data-theme=dark] .okr-kr-main small{color:var(--text2)}
+[data-theme=dark] .okr-kr-value small{color:var(--text2)}
+[data-theme=dark] .okr-bar{background-color:color-mix(in srgb,var(--muted) 18%,var(--card))}
+[data-theme=dark] .okr-bar b{background-color:var(--muted)}
+[data-theme=dark] .okr-bar i{background-color:var(--text)}
+[data-theme=dark] .okr-chip{background-color:color-mix(in srgb,var(--muted) 14%,var(--card));color:var(--text2)}
+[data-theme=dark] .okr-kr.level-green{border-right-color:var(--green)}
+[data-theme=dark] .okr-kr.level-yellow{border-right-color:var(--yellow)}
+[data-theme=dark] .okr-kr.level-red{border-right-color:var(--red)}
+[data-theme=dark] .okr-objective.level-green{border-left-color:var(--green)}
+[data-theme=dark] .okr-objective.level-yellow{border-left-color:var(--yellow)}
+[data-theme=dark] .okr-objective.level-red{border-left-color:var(--red)}
+[data-theme=dark] .okr-objective.level-green strong,[data-theme=dark] .okr-kr.level-green .okr-kr-value strong,[data-theme=dark] .okr-cell.level-green strong{color:var(--green)}
+[data-theme=dark] .okr-objective.level-yellow strong,[data-theme=dark] .okr-kr.level-yellow .okr-kr-value strong,[data-theme=dark] .okr-cell.level-yellow strong{color:var(--yellow)}
+[data-theme=dark] .okr-objective.level-red strong,[data-theme=dark] .okr-kr.level-red .okr-kr-value strong,[data-theme=dark] .okr-cell.level-red strong{color:var(--red)}
+[data-theme=dark] .okr-bar.level-green b{background-color:var(--green)}
+[data-theme=dark] .okr-bar.level-yellow b{background-color:var(--yellow)}
+[data-theme=dark] .okr-bar.level-red b{background-color:var(--red)}
+[data-theme=dark] .okr-chip.level-green{background-color:color-mix(in srgb,var(--green) 14%,var(--card));color:var(--green)}
+[data-theme=dark] .okr-chip.level-yellow{background-color:color-mix(in srgb,var(--yellow) 18%,var(--card));color:var(--yellow)}
+[data-theme=dark] .okr-chip.level-red{background-color:color-mix(in srgb,var(--red) 14%,var(--card));color:var(--red)}
+[data-theme=dark] .okr-table th,[data-theme=dark] .okr-table td{border-bottom-color:var(--border)}
+[data-theme=dark] .okr-table thead th{color:var(--text2)}
+[data-theme=dark] .okr-table thead th small{color:var(--muted)}
+[data-theme=dark] .okr-table tbody th{color:var(--text)}
+[data-theme=dark] .okr-table tbody th em{background-color:var(--blue-bg);color:var(--blue)}
+[data-theme=dark] .okr-table th small,[data-theme=dark] .okr-cell small{color:var(--muted)}
+[data-theme=dark] .okr-cell-cards{color:var(--text2)}
+[data-theme=dark] .okr-counts dt{color:var(--muted)}
+[data-theme=dark] .okr-counts dd{color:var(--text)}
+[data-theme=dark] .okr-counts .whole{border-left-color:var(--border)}
+[data-theme=dark] .okr-growth-summary{color:var(--text2)}
+[data-theme=dark] .okr-growth-summary b{color:var(--text)}
+[data-theme=dark] .okr-growth-table td small{color:var(--muted)}
+[data-theme=dark] .okr-swatch.line{background-color:var(--text)}
+[data-theme=dark] .okr-parts{border-top-color:var(--border)}
+[data-theme=dark] .okr-part-name{color:var(--text)}
+[data-theme=dark] .okr-part strong{color:var(--text2)}
+[data-theme=dark] .okr-part.level-green strong{color:var(--green)}
+[data-theme=dark] .okr-part.level-yellow strong{color:var(--yellow)}
+[data-theme=dark] .okr-part.level-red strong{color:var(--red)}
+[data-theme=dark] .okr-part small{color:var(--text2)}
+[data-theme=dark] .okr-faces{box-shadow:none}
+[data-theme=dark] .okr-person-head h3{color:var(--text)}
+[data-theme=dark] .okr-kr-value .okr-team-ref{color:var(--muted)}
+[data-theme=dark] .okr-face-xp{color:#c19434}
+[data-theme=dark] .okr-person-head .okr-person-xp{background-color:var(--card)}
+[data-theme=dark] .okr-person-head .okr-person-xp strong{color:var(--text)}
+[data-theme=dark] .okr-person-head .daily-achievement{color:#c19434}
+[data-theme=dark] .okr-person-sub{color:var(--text)}
+[data-theme=dark] .okr-info-hero{background-image:linear-gradient(120deg,color-mix(in srgb,var(--blue) 16%,var(--card)),color-mix(in srgb,var(--blue) 4%,var(--card)))}
+[data-theme=dark] .okr-info-hero h3{color:var(--text)}
+[data-theme=dark] .okr-info-hero p{color:var(--text2)}
+[data-theme=dark] .okr-info-score{background-color:var(--card);box-shadow:var(--shadow)}
+[data-theme=dark] .okr-info-score strong{color:var(--text)}
+[data-theme=dark] .okr-info-score strong small{color:var(--muted)}
+[data-theme=dark] .okr-info-score span{color:var(--text2)}
+[data-theme=dark] .okr-gauge{border-color:var(--border)}
+[data-theme=dark] .okr-gauge-track,[data-theme=dark] .okr-gauge-value{fill:none}
+[data-theme=dark] .okr-gauge-track{stroke:color-mix(in srgb,var(--muted) 18%,var(--card))}
+[data-theme=dark] .okr-gauge-value{stroke:var(--muted)}
+[data-theme=dark] .okr-gauge-target{stroke:var(--text)}
+[data-theme=dark] .okr-gauge.level-green .okr-gauge-value{stroke:var(--green)}
+[data-theme=dark] .okr-gauge.level-yellow .okr-gauge-value{stroke:var(--yellow)}
+[data-theme=dark] .okr-gauge.level-red .okr-gauge-value{stroke:var(--red)}
+[data-theme=dark] .okr-gauge>strong{color:var(--text)}
+[data-theme=dark] .okr-gauge.level-green>strong{color:var(--green)}
+[data-theme=dark] .okr-gauge.level-yellow>strong{color:var(--yellow)}
+[data-theme=dark] .okr-gauge.level-red>strong{color:var(--red)}
+[data-theme=dark] .okr-gauge figcaption b{color:var(--text)}
+[data-theme=dark] .okr-gauge figcaption span{color:var(--text2)}
+[data-theme=dark] .okr-info-facts li{background-color:color-mix(in srgb,var(--muted) 7%,var(--card))}
+[data-theme=dark] .okr-info-facts b{color:var(--text)}
+[data-theme=dark] .okr-info-facts small{color:var(--text2)}
+[data-theme=dark] .okr-info-split>section,[data-theme=dark] .okr-info-block{border-color:var(--border)}
+[data-theme=dark] .okr-info h4{color:var(--text)}
+[data-theme=dark] .okr-info-note{color:var(--muted)}
+[data-theme=dark] .okr-info-legend{color:var(--text2)}
+[data-theme=dark] .okr-info-legend b{color:var(--text)}
+[data-theme=dark] .okr-info-legend small{color:var(--muted)}
+[data-theme=dark] .okr-info-donut-center b{color:var(--text)}
+[data-theme=dark] .okr-info-donut-center small{color:var(--muted)}
+[data-theme=dark] .okr-info-highlights li{background-color:color-mix(in srgb,#d4a017 9%,var(--card))}
+[data-theme=dark] .okr-info-highlights small{color:var(--muted)}
+[data-theme=dark] .okr-info-highlights b{color:var(--text)}
+[data-theme=dark] .okr-info-highlights span{color:var(--text2)}
+[data-theme=dark] .okr-info-trend{background-color:color-mix(in srgb,var(--blue) 7%,var(--card));color:var(--text2)}
+[data-theme=dark] .okr-info-trend b{color:var(--text)}
+[data-theme=dark] .okr-info-trend em{color:var(--text)}
+[data-theme=dark] .okr-info-foot{color:var(--muted)}
+@media print{
+[data-theme=dark] body.okr-printing #okr-infographic{box-shadow:none}
+}
+[data-theme=dark] .okr-method dt{color:var(--text)}
+[data-theme=dark] .okr-method dt small{color:var(--muted)}
+[data-theme=dark] .okr-method dd{color:var(--text2)}
+[data-theme=dark] .si-range{border-color:var(--border)}
+[data-theme=dark] .si-range legend{color:var(--muted)}
+[data-theme=dark] .si-frame{box-shadow:var(--shadow)}
+[data-theme=dark] .si-frame:fullscreen{background-color:#d6e3ff}
+@media print{
+[data-theme=dark] body.si-printing .si-frame{box-shadow:none}
+}
 [data-theme=dark] .users-screens-field option:checked{background-color:var(--blue-bg2);color:var(--blue)}
 [data-theme=dark] .users-screens-tools{color:var(--text2)}
 [data-theme=dark] .users-screens-tools button,[data-theme=dark] .users-actions button{border-color:var(--border);background-color:#181818;color:var(--text2)}

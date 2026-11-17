@@ -1,0 +1,158 @@
+/* OKRs do time (public/okrs.js): objetivo, resultados-chave, sprints do período e histórico por mês. */
+.okr-filters{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.okr-period{margin:0 0 12px;font-size:13px;color:var(--text2)}
+.okr-card{margin:0 0 16px;padding:16px 18px;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:var(--shadow)}
+.okr-card h2{margin:0;font-size:15px;color:var(--text)}
+.okr-card-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0 0 10px}
+.okr-card-head small,.okr-empty{font-size:12px;color:var(--muted)}
+.okr-eyebrow{display:block;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+/* Objetivo à esquerda; resultados-chave à direita */
+#okr-objective{display:grid;grid-template-columns:minmax(220px,1fr) minmax(0,2.4fr);gap:16px;align-items:stretch}
+.okr-objective{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-left:4px solid var(--muted);border-radius:10px;background:color-mix(in srgb,var(--muted) 7%,var(--card))}
+.okr-objective p{margin:0;font-size:16px;line-height:1.4;color:var(--text)}
+.okr-objective strong{margin-top:auto;font-size:30px;line-height:1}
+.okr-objective small{font-size:12px;color:var(--text2)}
+.okr-krs{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.okr-kr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:center;padding:12px 14px;border:1px solid var(--border);border-right:4px solid var(--muted);border-radius:10px}
+.okr-kr h3{margin:2px 0;font-size:15px;color:var(--text)}
+.okr-kr-main small{font-size:12px;color:var(--text2)}
+.okr-kr-value{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right;min-width:170px}
+.okr-kr-value strong{font-size:26px;line-height:1}
+.okr-kr-value small{font-size:11.5px;color:var(--text2)}
+.okr-bar{position:relative;display:block;height:8px;margin-top:8px;border-radius:999px;background:color-mix(in srgb,var(--muted) 18%,var(--card))}
+.okr-bar b{display:block;height:100%;border-radius:inherit;background:var(--muted)}
+.okr-bar i{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--text)}
+.okr-chip{padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;background:color-mix(in srgb,var(--muted) 14%,var(--card));color:var(--text2)}
+/* Cores pela meta */
+.okr-kr.level-green{border-right-color:var(--green)}
+.okr-kr.level-yellow{border-right-color:var(--yellow)}
+.okr-kr.level-red{border-right-color:var(--red)}
+.okr-objective.level-green{border-left-color:var(--green)}
+.okr-objective.level-yellow{border-left-color:var(--yellow)}
+.okr-objective.level-red{border-left-color:var(--red)}
+.okr-objective.level-green strong,.okr-kr.level-green .okr-kr-value strong,.okr-cell.level-green strong{color:var(--green)}
+.okr-objective.level-yellow strong,.okr-kr.level-yellow .okr-kr-value strong,.okr-cell.level-yellow strong{color:var(--yellow)}
+.okr-objective.level-red strong,.okr-kr.level-red .okr-kr-value strong,.okr-cell.level-red strong{color:var(--red)}
+.okr-bar.level-green b{background:var(--green)}
+.okr-bar.level-yellow b{background:var(--yellow)}
+.okr-bar.level-red b{background:var(--red)}
+.okr-chip.level-green{background:color-mix(in srgb,var(--green) 14%,var(--card));color:var(--green)}
+.okr-chip.level-yellow{background:color-mix(in srgb,var(--yellow) 18%,var(--card));color:var(--yellow)}
+.okr-chip.level-red{background:color-mix(in srgb,var(--red) 14%,var(--card));color:var(--red)}
+/* Tabelas: sprints do período e histórico por mês */
+.okr-scroll{overflow-x:auto}
+.okr-table{width:100%;border-collapse:collapse;font-size:13px}
+.okr-table th,.okr-table td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+.okr-table thead th{font-size:11px;font-weight:700;color:var(--text2)}
+.okr-table thead th small{display:block;font-weight:500;color:var(--muted)}
+.okr-table tbody th{font-weight:700;color:var(--text);white-space:nowrap}
+.okr-table tbody th em{margin-left:4px;padding:1px 7px;border-radius:999px;background:var(--blue-bg);color:var(--blue);font-size:10.5px;font-style:normal;font-weight:700}
+.okr-table th small,.okr-cell small{display:block;font-size:11px;font-weight:400;color:var(--muted)}
+.okr-cell strong{font-size:15px}
+.okr-cell-cards{display:block;font-size:12.5px;font-weight:600;color:var(--text2)}
+/* Números de cards de cada resultado-chave */
+.okr-counts{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0 0}
+.okr-counts div{display:flex;flex-direction:column}
+.okr-counts dt{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+.okr-counts dd{margin:0;font-size:20px;font-weight:800;line-height:1.2;color:var(--text)}
+.okr-counts .whole{padding-left:18px;border-left:1px solid var(--border)}
+/* Crescimento das entregas: gráfico e tabela com os mesmos números */
+.okr-growth-summary{margin:0 0 10px;font-size:13px;color:var(--text2)}
+.okr-growth-summary b{color:var(--text)}
+.okr-chart{position:relative;height:300px;margin:0 0 12px}
+.okr-growth-table td{font-variant-numeric:tabular-nums}
+.okr-growth-table td small{color:var(--muted)}
+.okr-swatch{display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:2px;vertical-align:-1px}
+.okr-swatch.line{height:2px;width:14px;border-radius:0;background:var(--text);vertical-align:3px}
+/* Uso da capacidade por parte (Full stack, Sustentação e Projetos), abaixo do total */
+.okr-parts{display:grid;gap:6px;margin:12px 0 0;padding:10px 0 0;border-top:1px dashed var(--border);list-style:none}
+.okr-part{display:grid;grid-template-columns:150px minmax(60px,1fr) 56px minmax(96px,auto);gap:10px;align-items:center;font-size:12.5px}
+.okr-part-name{font-weight:600;color:var(--text)}
+.okr-part .okr-bar{margin:0;height:6px}
+.okr-part .okr-bar i{top:-2px;bottom:-2px}
+.okr-part strong{font-size:13px;text-align:right;color:var(--text2)}
+.okr-part.level-green strong{color:var(--green)}
+.okr-part.level-yellow strong{color:var(--yellow)}
+.okr-part.level-red strong{color:var(--red)}
+.okr-part small{font-size:11.5px;color:var(--text2);font-variant-numeric:tabular-nums}
+@media (max-width:600px){.okr-part{grid-template-columns:1fr auto}.okr-part .okr-bar{grid-column:1/-1;order:3}}
+/* OKRs por pessoa: rostos como na Daily e o painel da pessoa */
+.okr-faces{box-shadow:none}
+.okr-face-hits{font-size:10px;padding:1px 7px}
+.okr-person-grid{display:grid;grid-template-columns:minmax(200px,1fr) minmax(0,2.4fr);gap:16px;align-items:stretch}
+.okr-person-head{align-items:flex-start}
+.okr-person-head h3{margin:4px 0 0;font-size:17px;color:var(--text)}
+.okr-kr-value .okr-team-ref{color:var(--muted)}
+.okr-face-xp{font-size:10px;font-weight:700;color:#a77b0c}
+.okr-person-head .okr-person-xp{align-self:stretch;margin-top:8px;background:var(--card)}
+.okr-person-head .okr-person-xp strong{margin-top:0;font-size:17px;color:var(--text)}
+.okr-person-head .daily-achievement{margin:2px 0 0;font-size:12px;line-height:1.35;color:#a77b0c}
+.okr-person-sub{margin:16px 0 6px;font-size:13px;color:var(--text)}
+/* Infográfico do período (V1) */
+.okr-info .okr-card-head{align-items:center}
+.okr-info-print{margin-left:auto}
+.okr-info-hero{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding:22px 24px;border-radius:14px;background:linear-gradient(120deg,color-mix(in srgb,var(--blue) 16%,var(--card)),color-mix(in srgb,var(--blue) 4%,var(--card)))}
+.okr-info-hero h3{margin:4px 0 6px;font-size:26px;letter-spacing:-.01em;color:var(--text)}
+.okr-info-hero p{margin:0;max-width:640px;font-size:14px;line-height:1.45;color:var(--text2)}
+.okr-info-score{display:flex;flex-direction:column;align-items:center;min-width:150px;padding:12px 18px;border-radius:12px;background:var(--card);box-shadow:var(--shadow)}
+.okr-info-score strong{font-size:44px;line-height:1;color:var(--text)}
+.okr-info-score strong small{font-size:22px;color:var(--muted)}
+.okr-info-score span{font-size:12px;color:var(--text2);text-align:center}
+.okr-info-gauges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:16px 0}
+.okr-gauge{position:relative;margin:0;padding:14px 12px 12px;border:1px solid var(--border);border-radius:12px;text-align:center}
+.okr-gauge svg{display:block;width:100%;max-width:230px;margin:0 auto}
+.okr-gauge-track,.okr-gauge-value{fill:none;stroke-width:18;stroke-linecap:round}
+.okr-gauge-track{stroke:color-mix(in srgb,var(--muted) 18%,var(--card))}
+.okr-gauge-value{stroke:var(--muted)}
+.okr-gauge-target{stroke:var(--text);stroke-width:3;stroke-linecap:round}
+.okr-gauge.level-green .okr-gauge-value{stroke:var(--green)}
+.okr-gauge.level-yellow .okr-gauge-value{stroke:var(--yellow)}
+.okr-gauge.level-red .okr-gauge-value{stroke:var(--red)}
+.okr-gauge>strong{display:block;margin-top:-34px;font-size:30px;line-height:1;color:var(--text)}
+.okr-gauge.level-green>strong{color:var(--green)}
+.okr-gauge.level-yellow>strong{color:var(--yellow)}
+.okr-gauge.level-red>strong{color:var(--red)}
+.okr-gauge figcaption{display:flex;flex-direction:column;gap:2px;margin-top:10px}
+.okr-gauge figcaption b{font-size:13px;color:var(--text)}
+.okr-gauge figcaption span{font-size:11.5px;color:var(--text2)}
+.okr-info-facts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 16px;padding:0;list-style:none}
+.okr-info-facts li{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 8px;border-radius:12px;background:color-mix(in srgb,var(--muted) 7%,var(--card));text-align:center}
+.okr-info-facts b{font-size:26px;line-height:1.1;color:var(--text)}
+.okr-info-facts small{font-size:11.5px;color:var(--text2)}
+.okr-info-icon{font-size:22px;line-height:1}
+.okr-info-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin:0 0 16px}
+.okr-info-split>section,.okr-info-block{padding:14px 16px;border:1px solid var(--border);border-radius:12px}
+.okr-info h4{margin:0 0 10px;font-size:14px;color:var(--text)}
+.okr-picto{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;max-width:340px}
+.okr-picto i{aspect-ratio:1;border-radius:3px}
+.okr-info-note{margin:6px 0 8px;font-size:11px;color:var(--muted)}
+.okr-info-legend{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none;font-size:12.5px;color:var(--text2)}
+.okr-info-legend b{color:var(--text)}
+.okr-info-legend small{color:var(--muted)}
+.okr-info-donut{position:relative;height:180px;margin:0 0 10px}
+.okr-info-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.okr-info-donut-center b{font-size:22px;color:var(--text)}
+.okr-info-donut-center small{font-size:11px;color:var(--muted)}
+.okr-info-highlights{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0;padding:0;list-style:none}
+.okr-info-highlights li{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,#d4a017 9%,var(--card))}
+.okr-info-highlights div{display:flex;flex-direction:column;min-width:0}
+.okr-info-highlights small{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+.okr-info-highlights b{font-size:14px;color:var(--text)}
+.okr-info-highlights span{font-size:12px;color:var(--text2)}
+.okr-info-trend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:16px 0 0;padding:12px 16px;border-radius:12px;background:color-mix(in srgb,var(--blue) 7%,var(--card));font-size:13px;color:var(--text2)}
+.okr-info-trend b{color:var(--text)}
+.okr-info-trend em{font-style:normal;font-weight:700;color:var(--text)}
+.okr-info-foot{margin-top:12px;font-size:11px;color:var(--muted);text-align:right}
+@media (max-width:900px){.okr-info-gauges,.okr-info-split{grid-template-columns:1fr}.okr-info-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.okr-info-highlights{grid-template-columns:1fr 1fr}}
+/* Impressão do infográfico: só ele na página */
+@media print{
+  body.okr-printing *{visibility:hidden}
+  body.okr-printing #okr-infographic,body.okr-printing #okr-infographic *{visibility:visible}
+  body.okr-printing #okr-infographic{position:absolute;left:0;top:0;width:100%;margin:0;border:0;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body.okr-printing .okr-info-print{display:none}
+}
+.okr-method dl{display:grid;gap:10px;margin:10px 0 0}
+.okr-method dt{font-weight:700;font-size:13px;color:var(--text)}
+.okr-method dt small{font-weight:500;color:var(--muted)}
+.okr-method dd{margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--text2)}
+@media (max-width:900px){#okr-objective,.okr-person-grid{grid-template-columns:1fr}.okr-kr{grid-template-columns:1fr}.okr-kr-value{align-items:flex-start;text-align:left}}

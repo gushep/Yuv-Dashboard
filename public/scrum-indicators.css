@@ -1,0 +1,82 @@
+/* Indicadores Scrum (public/scrum-indicators.js): filtros da tela e o infográfico 16:9, que tem cores próprias nos dois temas. */
+.si-filters{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px}
+.si-range{display:flex;align-items:center;gap:8px;margin:0;padding:4px 10px 6px;border:1px solid var(--border);border-radius:10px}
+.si-range legend{padding:0 4px;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.si-actions{display:flex;flex-wrap:wrap;gap:6px}
+.si-frame{position:relative;overflow:hidden;border-radius:14px;box-shadow:var(--shadow)}
+.si-frame:fullscreen{border-radius:0;background:#0b1530}
+
+/* O slide: 1600 × 900, escalado por fit() */
+.si-stage{--ink:#0f172a;--ink2:#475569;--muted:#94a3b8;--line:#e2e8f0;--blue:#1d6ef5;--blue-soft:#dbe7fe;--before:#a7b3c4;--good:#0f9d58;--good-bg:#e3f6ec;--bad:#c2410c;--bad-bg:#fdeee5;
+  position:absolute;left:0;top:0;display:flex;flex-direction:column;width:1600px;height:900px;overflow:hidden;background:#fff;color:#0f172a;font:14px/1.4 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;transform-origin:top left}
+.si-stage .si-hero{padding:18px 34px 16px;color:#fff;background:radial-gradient(circle at 88% 0%,rgba(77,142,247,.55),transparent 42%),linear-gradient(120deg,#0b1f4d 0%,#123a8c 62%,#1d6ef5 125%)}
+.si-stage .si-hero-top{display:flex;justify-content:space-between;gap:24px;align-items:flex-start}
+.si-stage .si-eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#9cc0ff}
+.si-stage .si-hero h2{margin:4px 0;font-size:31px;line-height:1.08;letter-spacing:-.015em;color:#fff}
+.si-stage .si-hero h2 em{font-style:normal;color:#7fb0ff}
+.si-stage .si-hero p{margin:0;color:#c9d8f5;font-size:14.5px}
+.si-stage .si-chips{display:flex;gap:8px;margin-top:8px}
+.si-stage .si-chip{display:inline-flex;align-items:center;gap:7px;padding:4px 11px;border-radius:999px;font-size:12px;font-weight:700;background:rgba(255,255,255,.12);color:#e6eeff}
+.si-stage .si-chip i{width:9px;height:9px;border-radius:2px;background:#a7b3c4}
+.si-stage .si-chip i.after{background:#7fb0ff}
+.si-stage .si-headline{flex:none;text-align:right}
+.si-stage .si-headline strong{display:block;font-size:80px;line-height:.88;font-weight:900;letter-spacing:-.04em;background:linear-gradient(180deg,#fff,#9cc0ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.si-stage .si-headline span{display:block;margin-top:4px;font-size:16px;font-weight:800}
+.si-stage .si-headline small{display:block;color:#c9d8f5;font-size:13px}
+.si-stage .si-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}
+.si-stage .si-kpi{display:flex;align-items:center;gap:14px;padding:7px 16px;border-radius:14px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16)}
+.si-stage .si-kpi b{font-size:34px;line-height:1;font-weight:900;color:#fff}
+.si-stage .si-kpi h3{margin:0;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:#b9cdf3}
+.si-stage .si-kpi small{display:block;color:#c9d8f5;font-size:12.5px}
+.si-stage .si-kpi small s{color:#8fa6cf}
+.si-stage .si-tag{display:inline-block;margin-top:3px;padding:1px 8px;border-radius:999px;background:#33d17a;color:#05391d;font-size:11.5px;font-weight:900}
+.si-stage .si-tag.bad{background:#ffb38a;color:#4a1a02}
+
+.si-stage .si-body{flex:1;display:grid;grid-template-columns:1fr 520px;gap:16px;padding:16px 34px 0;min-height:0}
+.si-stage .si-section-title{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
+.si-stage .si-section-title h3{margin:0;font-size:17px;color:#0f172a}
+.si-stage .si-section-title span{color:#475569;font-size:12.5px}
+.si-stage .si-fronts{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:1fr 1fr;gap:10px;height:calc(100% - 30px)}
+.si-stage .si-front{display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:10px 13px;border:1px solid #e2e8f0;border-radius:14px;background:linear-gradient(180deg,#fff,#fbfcfe)}
+.si-stage .si-front-head{display:flex;align-items:center;gap:8px}
+.si-stage .si-icon{display:grid;place-items:center;flex:none;width:28px;height:28px;border-radius:8px;font-size:15px;background:#dbe7fe}
+.si-stage .si-front h4{margin:0;font-size:13px;line-height:1.15;color:#0f172a}
+.si-stage .si-big{display:flex;align-items:baseline;gap:7px;margin-top:3px}
+.si-stage .si-big b{font-size:32px;line-height:1;font-weight:900;letter-spacing:-.02em;color:#0f172a}
+.si-stage .si-big span{font-size:12.5px;font-weight:700;color:#475569}
+.si-stage .si-badge{align-self:flex-start;margin-top:5px;padding:2px 9px;border-radius:999px;background:#e3f6ec;color:#0f9d58;font-size:12px;font-weight:900}
+.si-stage .si-badge.bad{background:#fdeee5;color:#c2410c}
+.si-stage .si-badge.flat{background:#eef2f7;color:#475569}
+.si-stage .si-bars{display:grid;gap:2px;margin-top:auto}
+.si-stage .si-bar-caption{margin-top:5px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#94a3b8}
+.si-stage .si-bar{display:grid;grid-template-columns:38px 1fr 52px;align-items:center;gap:7px;font-size:11px;color:#475569}
+.si-stage .si-track{height:8px;border-radius:999px;background:#eef2f7;overflow:hidden}
+.si-stage .si-track span{display:block;height:100%;border-radius:999px;background:#a7b3c4}
+.si-stage .si-bar.after{color:#0f172a;font-weight:700}
+.si-stage .si-bar.after .si-track span{background:linear-gradient(90deg,#5b95fa,#1d6ef5)}
+.si-stage .si-bar em{font-style:normal;text-align:right}
+.si-stage .si-sub{margin:5px 0 0;padding-top:5px;border-top:1px dashed #e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;color:#475569}
+.si-stage .si-sub s{color:#94a3b8}
+.si-stage .si-sub b{color:#1d6ef5}
+
+.si-stage .si-charts{display:grid;grid-template-rows:1fr 1fr;gap:10px;min-height:0;padding-bottom:4px}
+.si-stage .si-box{display:flex;flex-direction:column;min-height:0;padding:10px 14px 8px;border:1px solid #e2e8f0;border-radius:14px}
+.si-stage .si-box h3{margin:0;font-size:14px;color:#0f172a}
+.si-stage .si-box h3 small{font-weight:500;color:#475569;font-size:12px}
+.si-stage .si-plot{flex:1;min-height:0}
+.si-stage .si-plot svg{display:block;width:100%;height:100%}
+.si-stage .si-legend{display:flex;gap:14px;font-size:11px;color:#475569}
+.si-stage .si-legend span{display:inline-flex;align-items:center;gap:6px}
+.si-stage .si-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
+.si-stage .si-legend i.line{height:2px;width:16px;border-radius:0}
+.si-stage .si-foot{display:flex;justify-content:space-between;gap:20px;padding:10px 34px 12px;font-size:11px;color:#475569}
+.si-stage .si-foot b{color:#0f172a}
+
+/* Impressão: só o infográfico, numa página 16:9 do tamanho do slide */
+@page si-slide{size:1600px 900px;margin:0}
+@media print{
+  body.si-printing *{visibility:hidden}
+  body.si-printing .si-stage,body.si-printing .si-stage *{visibility:visible}
+  body.si-printing .si-frame{position:static;overflow:visible;box-shadow:none;height:auto!important}
+  body.si-printing .si-stage{position:fixed;left:0!important;top:0!important;transform:none!important;page:si-slide;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}

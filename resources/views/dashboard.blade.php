@@ -278,6 +278,8 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
 <link rel="stylesheet" href="{{ URL::versioned('daily.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('retro.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('review.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('okrs.css') }}">
+<link rel="stylesheet" href="{{ URL::versioned('scrum-indicators.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('users.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('item-detail.css') }}">
 <link rel="stylesheet" href="{{ URL::versioned('new-ticket.css') }}">
@@ -314,7 +316,7 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
       <span class="nav-label">Dashboard</span>
     </button>
     @endcan
-    @php($agileScreens = ['sprint', 'planning', 'daily-scrum', 'sprint-review', 'sprint-retrospective'])
+    @php($agileScreens = ['sprint', 'planning', 'daily-scrum', 'sprint-review', 'sprint-retrospective', 'okrs', 'scrum-indicators'])
     @if(collect($agileScreens)->contains(fn ($screen) => auth()->user()->can('access-screen', $screen)))
     {{-- Gerenciamento Ágil: os eventos do Scrum num grupo recolhível; abre sozinho quando a tela aberta é dele. --}}
     <div class="nav-group" id="nav-group-agile" data-screens="{{ implode(',', $agileScreens) }}">
@@ -352,6 +354,18 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
         <button type="button" class="nav-item" onclick="navigate('sprint-retrospective')" id="nav-sprint-retrospective">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M9 12l2 2 4-4"/></svg>
           <span class="nav-label">Sprint Retrospective</span>
+        </button>
+        @endcan
+        @can('access-screen', 'okrs')
+        <button type="button" class="nav-item" onclick="navigate('okrs')" id="nav-okrs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>
+          <span class="nav-label">OKRs</span>
+        </button>
+        @endcan
+        @can('access-screen', 'scrum-indicators')
+        <button type="button" class="nav-item" onclick="navigate('scrum-indicators')" id="nav-scrum-indicators">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/><path d="M16 7h4v4"/></svg>
+          <span class="nav-label">Indicadores Scrum</span>
         </button>
         @endcan
       </div>
@@ -666,6 +680,10 @@ td.cm{color:var(--text2);font-family:'DM Mono',monospace;font-size:11px}
     @include('planning')
     @include('daily')
     @include('review')
+@include('okrs')
+    @can('access-screen', 'scrum-indicators')
+    @include('scrum-indicators')
+    @endcan
     @include('retro')
     @include('users')
 
@@ -1084,6 +1102,8 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   if(previousPage==='daily-scrum'&&page!=='daily-scrum') window.Daily?.leave();
   if(previousPage==='sprint-retrospective'&&page!=='sprint-retrospective') window.Retro?.leave();
   if(previousPage==='sprint-review'&&page!=='sprint-review') window.Review?.leave();
+  if(previousPage==='okrs'&&page!=='okrs') window.Okrs?.leave();
+  if(previousPage==='scrum-indicators'&&page!=='scrum-indicators') window.ScrumIndicators?.leave();
   if(previousPage==='users'&&page!=='users') window.Users?.leave();
   // Antes dos dados chegarem, guarda a sprint pedida na URL; depois, troca por uma que exista.
   if(page==='sprint'&&SPRINTS.length&&!SPRINTS.includes(sp)) sp=defaultSprint();
@@ -1099,7 +1119,7 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   setActiveNav(`nav-${page}`);
   if(page==='sprint'&&sp!==null) document.getElementById('sprintSel').value=String(sp);
   document.getElementById('page-'+page)?.classList.add('active');
-  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Tarefas','tarefas das sprints · detalhe, status e evidências'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar'],burndown:['Burndown','quanto falta implementar na sprint, dia a dia'],planning:['Sprint Planning','planning poker · estimativa em horas dos cards do Backlog do quadro Tarefas'],'daily-scrum':['Daily Scrum','Gerenciamento Ágil · alinhamento diário pessoa por pessoa'],'sprint-review':['Sprint Review','Gerenciamento Ágil · o que foi entregue e o que os interessados acharam'],'sprint-retrospective':['Sprint Retrospective','Gerenciamento Ágil · aprender com a sprint e acompanhar as ações']};
+  const titles={dashboard:['Dashboard',SPRINTS.length?`visão geral histórica · sprints ${SPRINTS[0]}–${SPRINTS.at(-1)}`:'aguardando dados do Monday'],sprint:[sp===null?'Sprint':`Sprint ${sp}`,`análise detalhada · comparação com sprint ${SPRINTS[SPRINTS.indexOf(sp)-1]||'—'}`],epicos:['Épicos','investimento e histórico por épico'],time:['Time','análise por desenvolvedor'],raw:['Tarefas','tarefas das sprints · detalhe, status e evidências'],bombeiro:['Painel do Bombeiro','sustentação · atualização a cada 60 segundos'],'sprint-panel':['Painel da Sprint','demandas da sprint · atualização a cada 60 segundos'],carousel:['Apresentação dos Painéis','alternância automática · Sustentação e Sprint'],capacity:['Capacity','capacidade e execução por sprint'],forecast:['Previsibilidade da sprint','demanda restante versus capacidade futura'],consumption:['Consumo de horas | Sprint e Suporte','Onde o esforço do time está sendo consumido'],release:['Release da sprint','Itens implementados, organizados automaticamente por Tipo'],settings:['Configurações','integração com Monday'],users:['Usuários','cadastro e permissões de acesso às telas'],'no-access':['Sem acesso','esta tela não está liberada para o seu usuário'],'control-tower':['Torre de controle','para onde a sprint está indo e quanto tempo resta para manobrar'],burndown:['Burndown','quanto falta implementar na sprint, dia a dia'],planning:['Sprint Planning','planning poker · estimativa em horas dos cards do Backlog do quadro Tarefas'],'daily-scrum':['Daily Scrum','Gerenciamento Ágil · alinhamento diário pessoa por pessoa'],'sprint-review':['Sprint Review','Gerenciamento Ágil · o que foi entregue e o que os interessados acharam'],'sprint-retrospective':['Sprint Retrospective','Gerenciamento Ágil · aprender com a sprint e acompanhar as ações'],okrs:['OKRs do time','Gerenciamento Ágil · se estamos atingindo os resultados-chave'],'scrum-indicators':['Indicadores Scrum','Gerenciamento Ágil · antes e depois das mudanças, no período escolhido']};
   const [t,s]=titles[page]||[page,''];
   document.getElementById('tb-title').textContent=t;
   document.getElementById('tb-sub').textContent=s;
@@ -1129,6 +1149,8 @@ function navigate(page,sp=null,{history:mode='push'}={}){
   else if(page==='daily-scrum') window.Daily?.enter(hint);
   else if(page==='sprint-retrospective') window.Retro?.enter();
   else if(page==='sprint-review') window.Review?.enter();
+  else if(page==='okrs') window.Okrs?.enter(hint);
+  else if(page==='scrum-indicators') window.ScrumIndicators?.enter();
   else if(page==='users') window.Users?.enter();
   else if(page==='settings') window.enterMondaySettings?.();
   if(page==='carousel') scheduleMondayRefresh();
@@ -2118,6 +2140,8 @@ window.addEventListener('popstate',()=>{
 <script src="{{ URL::versioned('daily.js') }}"></script>
 <script src="{{ URL::versioned('retro.js') }}"></script>
 <script src="{{ URL::versioned('review.js') }}"></script>
+<script src="{{ URL::versioned('okrs.js') }}"></script>
+<script src="{{ URL::versioned('scrum-indicators.js') }}"></script>
 <script src="{{ URL::versioned('users.js') }}"></script>
 <script src="{{ URL::versioned('attachments.js') }}"></script>
 <script src="{{ URL::versioned('item-detail.js') }}"></script>
