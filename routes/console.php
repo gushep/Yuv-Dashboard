@@ -1,6 +1,8 @@
 <?php
 
+use App\Models\McpAuditLog;
 use App\Models\MondayConnection;
+use App\Models\PassportKey;
 use App\Models\ReleaseSummary;
 use App\Models\User;
 use App\Services\BombeiroNotifier;
@@ -99,6 +101,19 @@ Artisan::command('monday:refresh', function (MondaySnapshotService $snapshots, M
 })->purpose('Atualiza os cards e os quadros das abas do Monday, copia o log de atividades e avisa o canal do Bombeiro, sem depender do dashboard aberto');
 
 Schedule::command('monday:refresh')->everyFifteenMinutes()->withoutOverlapping(30);
+
+// Auditoria do MCP: guarda 90 dias de chamadas.
+Schedule::command('model:prune', ['--model' => [McpAuditLog::class]])->daily();
+
+Artisan::command('mcp:rotate-keys {--force : Não pede confirmação}', function () {
+    if (! $this->option('force') && ! $this->confirm('Trocar as chaves invalida todos os tokens: as ferramentas de IA precisarão de nova autorização. Continuar?')) {
+        return 1;
+    }
+    PassportKey::generate();
+    $this->info('Chaves do OAuth trocadas. As ferramentas de IA conectadas pedirão nova autorização.');
+
+    return 0;
+})->purpose('Gera um novo par de chaves para assinar os tokens do OAuth do MCP');
 
 Artisan::command('release:summaries-export {sprint : Número da sprint} {--all : Inclui também os cards que já têm descrição}', function (MondaySnapshotService $snapshots, SprintReleaseService $release, int $sprint) {
     $connection = MondayConnection::current();

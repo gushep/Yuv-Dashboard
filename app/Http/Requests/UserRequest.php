@@ -37,6 +37,7 @@ class UserRequest extends FormRequest
             'can_create_tickets' => ['sometimes', 'boolean'],
             'can_conduct_planning' => ['sometimes', 'boolean'],
             'can_estimate_planning' => ['sometimes', 'boolean'],
+            'can_use_mcp' => ['sometimes', 'boolean'],
         ];
     }
 

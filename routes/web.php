@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DailyController;
 use App\Http\Controllers\FeatureRequestController;
+use App\Http\Controllers\McpConnectionController;
 use App\Http\Controllers\MondayController;
 use App\Http\Controllers\PlanningController;
 use App\Http\Controllers\RetrospectiveController;
@@ -178,4 +179,9 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::apiResource('/api/users', UserController::class)->except('show')->middleware('screen:users');
+    Route::post('/api/users/{user}/mcp-revoke', [McpConnectionController::class, 'revokeForUser'])->middleware('screen:users')->name('users.mcp-revoke');
+
+    // Ferramentas de IA conectadas pelo MCP: a pessoa vê e revoga as próprias autorizações.
+    Route::get('/ferramentas-ia', [McpConnectionController::class, 'index'])->name('mcp.connections');
+    Route::delete('/ferramentas-ia/{client}', [McpConnectionController::class, 'destroy'])->whereUuid('client')->name('mcp.connections.destroy');
 });

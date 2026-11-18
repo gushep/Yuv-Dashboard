@@ -936,6 +936,15 @@
 [data-theme=dark] .okr-objective.level-green strong,[data-theme=dark] .okr-kr.level-green .okr-kr-value strong,[data-theme=dark] .okr-cell.level-green strong{color:var(--green)}
 [data-theme=dark] .okr-objective.level-yellow strong,[data-theme=dark] .okr-kr.level-yellow .okr-kr-value strong,[data-theme=dark] .okr-cell.level-yellow strong{color:var(--yellow)}
 [data-theme=dark] .okr-objective.level-red strong,[data-theme=dark] .okr-kr.level-red .okr-kr-value strong,[data-theme=dark] .okr-cell.level-red strong{color:var(--red)}
+[data-theme=dark] .okr-objective-progress span{color:var(--text2)}
+[data-theme=dark] .okr-objective-progress small{color:var(--text2)}
+[data-theme=dark] .okr-progress{background-color:color-mix(in srgb,var(--muted) 18%,var(--card))}
+[data-theme=dark] .okr-progress b{background-color:var(--muted)}
+[data-theme=dark] .okr-progress.level-green b{background-color:var(--green)}
+[data-theme=dark] .okr-progress.level-yellow b{background-color:var(--yellow)}
+[data-theme=dark] .okr-progress.level-red b{background-color:var(--red)}
+[data-theme=dark] .okr-kr-value .okr-attainment{color:var(--text2)}
+[data-theme=dark] .okr-kr-value .okr-attainment b{color:var(--text)}
 [data-theme=dark] .okr-bar.level-green b{background-color:var(--green)}
 [data-theme=dark] .okr-bar.level-yellow b{background-color:var(--yellow)}
 [data-theme=dark] .okr-bar.level-red b{background-color:var(--red)}
@@ -978,6 +987,8 @@
 [data-theme=dark] .okr-info-score strong{color:var(--text)}
 [data-theme=dark] .okr-info-score strong small{color:var(--muted)}
 [data-theme=dark] .okr-info-score span{color:var(--text2)}
+[data-theme=dark] .okr-info-score .okr-info-progress{border-top-color:var(--border)}
+[data-theme=dark] .okr-info-score .okr-info-progress b{color:var(--text)}
 [data-theme=dark] .okr-gauge{border-color:var(--border)}
 [data-theme=dark] .okr-gauge-track,[data-theme=dark] .okr-gauge-value{fill:none}
 [data-theme=dark] .okr-gauge-track{stroke:color-mix(in srgb,var(--muted) 18%,var(--card))}

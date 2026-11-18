@@ -13,17 +13,36 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Laravel\Passport\Contracts\OAuthenticatable;
+use Laravel\Passport\HasApiTokens;
+use Laravel\Passport\RefreshToken;
+use Laravel\Passport\Token;
 
 /**
  * @property Collection<int, Screen>|null $screens
  * @property Theme $theme
+ * @property bool $can_use_mcp
  */
-#[Fillable(['name', 'email', 'password', 'screens', 'can_update_items', 'can_create_tickets', 'can_conduct_planning', 'can_estimate_planning'])]
+#[Fillable(['name', 'email', 'password', 'screens', 'can_update_items', 'can_create_tickets', 'can_conduct_planning', 'can_estimate_planning', 'can_use_mcp'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements OAuthenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
+
+    /**
+     * Sem a permissão de MCP (retirada ou usuário excluído), as ferramentas de IA autorizadas perdem o acesso na hora.
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (User $user): void {
+            if ($user->wasChanged('can_use_mcp') && ! $user->can_use_mcp) {
+                $user->revokeMcpAccess();
+            }
+        });
+        static::deleting(fn (User $user) => $user->revokeMcpAccess());
+    }
 
     /**
      * Usuário novo começa no tema claro, como a coluna do banco.
@@ -47,6 +66,7 @@ class User extends Authenticatable
             'can_create_tickets' => 'boolean',
             'can_conduct_planning' => 'boolean',
             'can_estimate_planning' => 'boolean',
+            'can_use_mcp' => 'boolean',
             'theme' => Theme::class,
         ];
     }
@@ -111,6 +131,31 @@ class User extends Authenticatable
     public function canEstimatePlanning(): bool
     {
         return $this->can_estimate_planning && $this->canAccessScreen(Screen::Planning);
+    }
+
+    /**
+     * Acesso ao MCP: autoriza ferramentas de IA (Claude, Gemini, ChatGPT) a consultar o Metrics com o login da pessoa.
+     */
+    public function canUseMcp(): bool
+    {
+        return (bool) $this->can_use_mcp;
+    }
+
+    /**
+     * Revoga os tokens de acesso e de renovação das ferramentas de IA autorizadas pela pessoa (todas, ou só a informada).
+     */
+    public function revokeMcpAccess(?string $clientId = null): int
+    {
+        $tokenIds = Token::query()->where('user_id', $this->getKey())->where('revoked', false)
+            ->when($clientId !== null, fn ($query) => $query->where('client_id', $clientId))->pluck('id');
+        if ($tokenIds->isEmpty()) {
+            return 0;
+        }
+        Token::query()->whereIn('id', $tokenIds)->update(['revoked' => true]);
+        RefreshToken::query()->whereIn('access_token_id', $tokenIds)->update(['revoked' => true]);
+        Log::info('Autorizações MCP revogadas', ['user_id' => $this->getKey(), 'client_id' => $clientId, 'tokens' => $tokenIds->count()]);
+
+        return $tokenIds->count();
     }
 
     /**

@@ -46,7 +46,7 @@ window.Users = (() => {
       const screens = user.screens.length
         ? `<div class="users-screen-list">${user.screens.map(value => `<span class="b">${escape(screenLabel(value))}</span>`).join('')}</div>`
         : '<span class="users-none">Sem acesso a nenhuma tela</span>';
-      const permissions = [user.canUpdateItems && 'Atualiza cards', user.canCreateTickets && 'Abre tickets', user.canConductPlanning && 'Maestro Scrum', user.canEstimatePlanning && 'Estima na planning'].filter(Boolean);
+      const permissions = [user.canUpdateItems && 'Atualiza cards', user.canCreateTickets && 'Abre tickets', user.canConductPlanning && 'Maestro Scrum', user.canEstimatePlanning && 'Estima na planning', user.canUseMcp && 'Acesso ao MCP'].filter(Boolean);
       const statusPermission = permissions.length ? `<div class="users-screen-list users-perm-list">${permissions.map(label => `<span class="b users-perm">${label}</span>`).join('')}</div>` : '';
       const isMe = user.id === currentUserId();
       return `<tr>
@@ -55,6 +55,7 @@ window.Users = (() => {
         <td>${screens}${statusPermission}</td>
         <td><div class="users-actions">
           <button type="button" data-edit="${user.id}">Editar</button>
+          ${user.mcpConnections ? `<button type="button" data-mcp-revoke="${user.id}" title="Revoga as ferramentas de IA conectadas por esta pessoa">Revogar IAs (${user.mcpConnections})</button>` : ''}
           ${isMe ? '' : `<button type="button" class="danger" data-delete="${user.id}">Excluir</button>`}
         </div></td>
       </tr>`;
@@ -86,6 +87,7 @@ window.Users = (() => {
     el('users-create-tickets').checked = user.canCreateTickets;
     el('users-conduct-planning').checked = user.canConductPlanning;
     el('users-estimate-planning').checked = user.canEstimatePlanning;
+    el('users-use-mcp').checked = user.canUseMcp;
     el('users-form-title').textContent = `Editar ${user.name}`;
     el('users-save').textContent = 'Salvar alterações';
     el('users-cancel').hidden = false;
@@ -112,7 +114,7 @@ window.Users = (() => {
     state.saving = true;
     el('users-save').disabled = true;
     const editing = state.editing;
-    const body = {name:el('users-name').value.trim(), email:el('users-email').value.trim(), password:el('users-password').value, screens:selectedScreens(), can_update_items:el('users-update-items').checked, can_create_tickets:el('users-create-tickets').checked, can_conduct_planning:el('users-conduct-planning').checked, can_estimate_planning:el('users-estimate-planning').checked};
+    const body = {name:el('users-name').value.trim(), email:el('users-email').value.trim(), password:el('users-password').value, screens:selectedScreens(), can_update_items:el('users-update-items').checked, can_create_tickets:el('users-create-tickets').checked, can_conduct_planning:el('users-conduct-planning').checked, can_estimate_planning:el('users-estimate-planning').checked, can_use_mcp:el('users-use-mcp').checked};
     try {
       await request(editing ? `${baseUrl()}/${editing}` : baseUrl(), editing ? 'PUT' : 'POST', body);
       resetForm();
@@ -139,6 +141,18 @@ window.Users = (() => {
     }
   }
 
+  async function revokeMcp(id) {
+    const user = state.users.find(item => item.id === id);
+    if (!user || !confirm(`Revogar as ferramentas de IA conectadas por ${user.name}? Elas precisarão de nova autorização.`)) return;
+    try {
+      await request(`${baseUrl()}/${id}/mcp-revoke`, 'POST');
+      await load();
+      message('Ferramentas de IA revogadas.', 'success');
+    } catch (error) {
+      message(error.message, 'error');
+    }
+  }
+
   function enter() { state.active = true; load(); }
   function leave() { state.active = false; }
 
@@ -153,6 +167,7 @@ window.Users = (() => {
       const button = event.target.closest('button');
       if (button?.dataset.edit) startEdit(Number(button.dataset.edit));
       if (button?.dataset.delete) remove(Number(button.dataset.delete));
+      if (button?.dataset.mcpRevoke) revokeMcp(Number(button.dataset.mcpRevoke));
     });
   });
 

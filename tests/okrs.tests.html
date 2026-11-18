@@ -57,6 +57,8 @@ const load = src => new Promise((resolve, reject) => { const script = document.c
 
     check('Faixas: atingido na meta, amarelo até 5 pontos, vermelho fora (maior é melhor e menor é melhor)', [90, 85, 84.9].map(value => Okrs.level(productivity, value)).join() === 'green,yellow,red'
       && [10, 15, 15.1].map(value => Okrs.level(rework, value)).join() === 'green,yellow,red' && [80, 75, 74.9].map(value => Okrs.level(backlog, value)).join() === 'green,yellow,red' && Okrs.level(backlog, null) === 'none');
+    check('Atingimento: valor ÷ meta com teto de 100%; retrabalho 100% até a meta e zero no dobro', [85, 90, 95].map(value => Okrs.attainment(productivity, value)).join() === '94.4,100,100'
+      && [10, 12, 20, 25].map(value => Okrs.attainment(rework, value)).join() === '100,80,0,0' && Okrs.attainment(backlog, 60) === 75 && Okrs.attainment(backlog, null) === null);
 
     Okrs.enter(); await tick(30);
     check('Abre na sprint atual, com aviso de parcial', document.getElementById('okr-from').value === '20' && document.getElementById('okr-to').value === '20'
@@ -76,6 +78,11 @@ const load = src => new Promise((resolve, reject) => { const script = document.c
     // Sprints 18 e 19 somadas: 15 de 17 cards entregues (88,2%); 2 de 17 com retrabalho (11,8%); 263h (125h + 130h + 8h de suporte) de 320h de capacidade (82,2%).
     check('Intervalo soma tudo do período, como o Dashboard', values() === '88,2%:yellow | 11,8%:yellow | 82,2%:green' && text('okr-period').includes('Sprints 18 a 19 (2)') && !text('okr-period').includes('parcial'));
     check('Capacidade do intervalo: soma das sprints, com o suporte apontado no consumido', countsOf(2) === 'Consumido 263h | Não utilizado 57h | Capacidade da sprint 320h');
+    // Atingimento: 88,2 ÷ 90 = 98%; retrabalho 11,8% = (20 − 11,8) ÷ 10 = 82%; backlog 82,2% ≥ 80 = 100%. Progresso = média = 93,3%.
+    const attainments = [...document.querySelectorAll('#okr-objective .okr-attainment b')].map(item => item.textContent).join(' | ');
+    check('Atingimento de cada resultado-chave e progresso do objetivo pela média', attainments === '98% | 82% | 100%' && document.getElementById('okr-progress-value').textContent === '93,3%'
+      && document.querySelector('#okr-objective .okr-progress').getAttribute('aria-valuenow') === '93.3' && document.querySelector('#okr-objective .okr-progress').classList.contains('level-yellow')
+      && document.querySelector('.okr-info-progress b').textContent === '93,3%');
     // Partes, nas sprints 18 e 19: Full stack 255h de 288h (320h − 2 × 16h do Bombeiro); Sustentação 8h de 32h; Projetos sem ninguém.
     const parts = [...document.querySelectorAll('#okr-objective .okr-part')].map(part => `${part.querySelector('.okr-part-name').textContent}:${part.querySelector('strong').textContent}:${part.querySelector('small').textContent}:${part.className.match(/level-(\w+)/)[1]}`);
     check('Backlog preparado aberto em Full stack, Sustentação e Projetos, com a mesma meta', parts.join(' | ') === 'Full stack:88,5%:255h de 288h:green | Sustentação (Bombeiro):25%:8h de 32h:red | Projetos:—:sem capacidade:none'
