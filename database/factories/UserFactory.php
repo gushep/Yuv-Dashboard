@@ -86,6 +86,16 @@ class UserFactory extends Factory
     }
 
     /**
+     * Acesso ao MCP: autoriza ferramentas de IA a consultar o Metrics com o login da pessoa.
+     */
+    public function mcpUser(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'can_use_mcp' => true,
+        ]);
+    }
+
+    /**
      * Indicate that the model's email address should be unverified.
      */
     public function unverified(): static

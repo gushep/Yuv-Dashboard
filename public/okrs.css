@@ -33,6 +33,17 @@
 .okr-objective.level-green strong,.okr-kr.level-green .okr-kr-value strong,.okr-cell.level-green strong{color:var(--green)}
 .okr-objective.level-yellow strong,.okr-kr.level-yellow .okr-kr-value strong,.okr-cell.level-yellow strong{color:var(--yellow)}
 .okr-objective.level-red strong,.okr-kr.level-red .okr-kr-value strong,.okr-cell.level-red strong{color:var(--red)}
+.okr-objective-progress{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:4px 10px;margin:4px 0 6px}
+.okr-objective-progress span{font-size:12px;font-weight:600;color:var(--text2)}
+.okr-objective-progress b{font-size:18px;font-variant-numeric:tabular-nums}
+.okr-objective-progress small{grid-column:1/-1;font-size:11px;color:var(--text2)}
+.okr-progress{grid-column:1/-1;display:block;height:10px;border-radius:999px;background:color-mix(in srgb,var(--muted) 18%,var(--card));overflow:hidden}
+.okr-progress b{display:block;height:100%;border-radius:inherit;background:var(--muted);transition:width .4s ease}
+.okr-progress.level-green b{background:var(--green)}
+.okr-progress.level-yellow b{background:var(--yellow)}
+.okr-progress.level-red b{background:var(--red)}
+.okr-kr-value .okr-attainment{color:var(--text2)}
+.okr-kr-value .okr-attainment b{color:var(--text)}
 .okr-bar.level-green b{background:var(--green)}
 .okr-bar.level-yellow b{background:var(--yellow)}
 .okr-bar.level-red b{background:var(--red)}
@@ -98,6 +109,8 @@
 .okr-info-score strong{font-size:44px;line-height:1;color:var(--text)}
 .okr-info-score strong small{font-size:22px;color:var(--muted)}
 .okr-info-score span{font-size:12px;color:var(--text2);text-align:center}
+.okr-info-score .okr-info-progress{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
+.okr-info-score .okr-info-progress b{color:var(--text);font-size:14px}
 .okr-info-gauges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:16px 0}
 .okr-gauge{position:relative;margin:0;padding:14px 12px 12px;border:1px solid var(--border);border-radius:12px;text-align:center}
 .okr-gauge svg{display:block;width:100%;max-width:230px;margin:0 auto}

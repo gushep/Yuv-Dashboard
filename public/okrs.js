@@ -166,6 +166,24 @@ window.Okrs = (() => {
     return gap <= 0 ? 'green' : gap <= NEAR ? 'yellow' : 'red';
   }
   const LEVEL_LABEL = {green: 'Atingido', yellow: 'Perto da meta', red: 'Não atingido', none: 'Sem dados'};
+  /**
+   * Atingimento do resultado-chave (0 a 100%, uma casa): maior é melhor = valor ÷ meta, com teto de 100%; menor é
+   * melhor = 100% até a meta, caindo em linha até 0% no dobro da meta (a mesma escala da barra).
+   */
+  function attainment(keyResult, value) {
+    if (value === null || value === undefined) return null;
+    const raw = keyResult.better === 'higher' ? Math.min(100, value / keyResult.target * 100)
+      : value <= keyResult.target ? 100 : Math.max(0, (2 * keyResult.target - value) / keyResult.target * 100);
+    return Math.round(raw * 10) / 10;
+  }
+  /** Progresso do objetivo: média do atingimento dos resultados-chave com dados (todos com peso 1). */
+  function progress(results) {
+    const values = KEY_RESULTS.map(keyResult => attainment(keyResult, results[keyResult.key].value)).filter(value => value !== null);
+    return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 10) / 10 : null;
+  }
+  const progressLevel = value => value === null ? 'none' : value >= 100 ? 'green' : value >= 90 ? 'yellow' : 'red';
+  /** Barra do progresso do objetivo, de 0 a 100%. */
+  const progressBar = value => `<span class="okr-progress level-${progressLevel(value)}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${value ?? 0}" aria-label="Progresso do objetivo"><b style="width:${value ?? 0}%"></b></span>`;
   const percent = value => value === null || value === undefined ? '—' : `${String(value).replace('.', ',')}%`;
 
   // ── Período ──────────────────────────────────────────────────────────────────
@@ -265,16 +283,17 @@ window.Okrs = (() => {
       const result = results[keyResult.key];
       return `<li class="okr-kr level-${levels[index]}">
           <div class="okr-kr-main"><span class="okr-eyebrow">Resultado-chave ${index + 1}</span><h3>${escape(keyResult.title)}</h3><small>Meta: ${escape(keyResult.goal)}</small>${bar(keyResult, result.value)}${counts(keyResult, result, Boolean(team))}${result.parts ? partsHtml(keyResult, result.parts) : ''}</div>
-          <div class="okr-kr-value"><strong>${percent(result.value)}</strong><span class="okr-chip level-${levels[index]}">${LEVEL_LABEL[levels[index]]}</span><small>${escape(detail(keyResult, result))}</small>${team ? `<small class="okr-team-ref">Time: ${percent(team[keyResult.key].value)}</small>` : ''}</div>
+          <div class="okr-kr-value"><strong>${percent(result.value)}</strong><span class="okr-chip level-${levels[index]}">${LEVEL_LABEL[levels[index]]}</span><small>${escape(detail(keyResult, result))}</small><small class="okr-attainment">Atingimento: <b>${percent(attainment(keyResult, result.value))}</b> da meta (${keyResult.better === 'higher' ? '≥' : '≤'} ${keyResult.target}%) · peso 1</small>${team ? `<small class="okr-team-ref">Time: ${percent(team[keyResult.key].value)}</small>` : ''}</div>
         </li>`;
     }).join('')}</ul>`;
   }
 
   function renderObjective(results, partial) {
-    const {levels, hit, overall} = summary(results);
+    const {levels, hit, overall} = summary(results), objectiveProgress = progress(results);
     el('okr-objective').innerHTML = `<div class="okr-objective level-${overall}">
         <span class="okr-eyebrow">Objetivo</span>
         <p>${escape(OBJECTIVE)}</p>
+        <div class="okr-objective-progress"><span>Progresso</span><b id="okr-progress-value">${percent(objectiveProgress)}</b>${progressBar(objectiveProgress)}<small>Média do atingimento dos ${KEY_RESULTS.length} resultados-chave (peso 1 cada)</small></div>
         <strong>${hit} de ${KEY_RESULTS.length}</strong><small>resultados-chave atingidos${partial ? ' até agora' : ''}</small>
       </div>
       ${krList(results, levels)}`;
@@ -319,6 +338,7 @@ window.Okrs = (() => {
           <h3>${escape(dev.name)}</h3>
           ${dev.team ? `<span class="team-badge ${escape(dev.team)}">${escape(window.SprintRules.teamLabel?.(dev.team) ?? dev.team)}</span>` : ''}
           ${xp}
+          <div class="okr-objective-progress"><span>Progresso</span><b class="okr-person-progress">${percent(progress(results))}</b>${progressBar(progress(results))}</div>
           <strong>${hit} de ${KEY_RESULTS.length}</strong><small>resultados-chave atingidos${partial ? ' até agora' : ''} · ${index + 1} de ${developers.length} pessoas</small>
         </div>
         ${krList(results, levels, teamResults)}
@@ -540,7 +560,7 @@ window.Okrs = (() => {
     box.innerHTML = `<header class="okr-info-hero">
         <div><span class="okr-eyebrow">${sprints.length === 1 ? `Sprint ${sprints[0]}` : `Sprints ${sprints[0]} a ${sprints.at(-1)}`}${first && last ? ` · ${day(first.start)} a ${day(last.end)}` : ''}${partial ? ' · parcial' : ''}</span>
           <h3>O time em números</h3><p>${escape(OBJECTIVE)}</p></div>
-        <div class="okr-info-score"><strong>${hit}<small>/${KEY_RESULTS.length}</small></strong><span>resultados-chave atingidos${partial ? ' até agora' : ''}</span></div>
+        <div class="okr-info-score"><strong>${hit}<small>/${KEY_RESULTS.length}</small></strong><span>resultados-chave atingidos${partial ? ' até agora' : ''}</span><span class="okr-info-progress">Progresso do objetivo: <b>${percent(progress(results))}</b></span></div>
       </header>
       <div class="okr-info-gauges">${KEY_RESULTS.map(keyResult => gauge(keyResult, results[keyResult.key])).join('')}</div>
       <ul class="okr-info-facts">
@@ -584,6 +604,7 @@ window.Okrs = (() => {
 
   function renderMethod() {
     el('okr-method').innerHTML = KEY_RESULTS.map(keyResult => `<div><dt>${escape(keyResult.title)} <small>meta ${escape(keyResult.goal)}</small></dt><dd>${escape(keyResult.method)}</dd></div>`).join('')
+      + `<div><dt>Atingimento e progresso do objetivo</dt><dd>Atingimento de cada resultado-chave, de 0 a 100%: produtividade e backlog = valor ÷ meta, com teto de 100% (ex.: 85% de produtividade ÷ 90 = 94,4%); retrabalho = 100% até a meta de 10%, caindo em linha até 0% quando chega a 20% (ex.: 12% de retrabalho = 80%). Progresso do objetivo = média do atingimento dos três resultados-chave, todos com peso 1. Barra do progresso: verde em 100%, amarela a partir de 90%, vermelha abaixo.</dd></div>`
       + `<div><dt>Cores</dt><dd>Verde: meta atingida. Amarelo: até ${NEAR} pontos percentuais da meta. Vermelho: fora da meta. Num intervalo ou num mês, tudo do período é somado, como no Dashboard. A sprint em andamento entra com os números parciais.</dd></div>`
       + '<div><dt>Por pessoa</dt><dd>As mesmas contas, só com os cards em que a pessoa é responsável (card com vários responsáveis conta para cada um) e com a capacidade e as horas apontadas dela no Capacity (lá, cards com vários responsáveis ou em várias sprints ficam fora das horas). As pessoas são as mesmas da Daily: quem tem capacidade ou cards no período. O backlog preparado da pessoa se abre em duas partes: a sprint do time dela (Full stack ou Projetos de IA) e a Sustentação. No Full stack, a Sustentação é a parte da reserva do Bombeiro proporcional à capacidade da pessoa e a sprint é o resto; em Projetos não há reserva.</dd></div>';
   }
@@ -621,5 +642,5 @@ window.Okrs = (() => {
     new MutationObserver(() => { if (state.active) render(); }).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
   });
 
-  return {enter, leave, onDataUpdated, compute, computePerson, developersOf, level, months, growthOf, growthSummary, KEY_RESULTS};
+  return {enter, leave, onDataUpdated, compute, computePerson, developersOf, level, attainment, progress, months, growthOf, growthSummary, KEY_RESULTS};
 })();

@@ -42,6 +42,12 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Tokens OAuth (Passport) das ferramentas de IA que acessam o MCP.
+        'api' => [
+            'driver' => 'passport',
+            'provider' => 'users',
+        ],
     ],
 
     /*

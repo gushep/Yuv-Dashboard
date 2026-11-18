@@ -38,6 +38,11 @@
         <span class="users-switch-track" aria-hidden="true"></span>
         <span class="users-switch-text"><strong>Estima na planning</strong><small>Time de desenvolvimento: joga a carta com as horas. Sem esta marca, a pessoa só assiste à mesa.</small></span>
       </label>
+      <label class="users-switch">
+        <input type="checkbox" role="switch" id="users-use-mcp">
+        <span class="users-switch-track" aria-hidden="true"></span>
+        <span class="users-switch-text"><strong>Acesso ao MCP</strong><small>Autoriza ferramentas de IA (Claude, Gemini, ChatGPT) a consultar o Metrics com o login da pessoa, só nas telas liberadas acima. Desligar corta na hora o acesso das ferramentas já conectadas.</small></span>
+      </label>
     </fieldset>
     <div class="settings-actions">
       <button type="submit" id="users-save">Cadastrar usuário</button>

@@ -306,7 +306,7 @@ GRAPHQL;
      *     attachments: list<array{id: string, name: string, url: string, extension: string, size: int, image: bool}>,
      *     updates: list<array{id: string, author: string, createdAt: string, text: string, images: list<array<string, mixed>>, assets: list<array<string, mixed>>, replies: list<array<string, mixed>>}>}
      */
-    public function itemDetails(string $token, array $boards, string $itemId): array
+    public function itemDetails(string $token, array $boards, string $itemId, bool $allUpdates = false): array
     {
         $query = <<<'GRAPHQL'
 query ($ids: [ID!]!) {
@@ -332,6 +332,9 @@ query ($ids: [ID!]!) {
 }
 GRAPHQL;
         $item = $this->boardItem($token, array_keys($boards), $query, ['ids' => [$itemId]]);
+        if ($allUpdates && count($item['updates'] ?? []) === 100) {
+            $item['updates'] = $this->allItemUpdates($token, $itemId, $item['updates']);
+        }
         $statusColumnId = $this->statusColumnId($item['board']['columns'] ?? [], $boards[(string) $item['board']['id']] ?? null);
         $assets = $this->itemAssets($token, $item);
 
@@ -397,6 +400,30 @@ GRAPHQL;
                 'replies' => array_map($comment, $update['replies'] ?? []),
             ], $item['updates'] ?? []),
         ];
+    }
+
+    /**
+     * Completa a leitura dos comentários para consultoria e prevenção de Escopos V1 duplicados.
+     *
+     * @param  list<array<string, mixed>>  $updates
+     * @return list<array<string, mixed>>
+     */
+    private function allItemUpdates(string $token, string $itemId, array $updates): array
+    {
+        $query = 'query ($ids: [ID!]!, $page: Int!) { items(ids: $ids) { updates(limit: 100, page: $page) { id body created_at creator { name } assets { id name file_extension file_size public_url url } replies { id body created_at creator { name } } } } }';
+        for ($page = 2; $page <= 100; $page++) {
+            $data = $this->query($token, $query, ['ids' => [$itemId], 'page' => $page]);
+            $batch = $data['items'][0]['updates'] ?? null;
+            if (! is_array($batch)) {
+                throw new RuntimeException('Não foi possível ler todos os comentários do card.');
+            }
+            array_push($updates, ...$batch);
+            if (count($batch) < 100) {
+                return $updates;
+            }
+        }
+
+        throw new RuntimeException('Histórico de comentários ultrapassou o limite de leitura.');
     }
 
     /**
